@@ -3,6 +3,7 @@ package edu.msrit.canteen.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
@@ -63,6 +64,15 @@ private fun Promotion.hasVisibleTarget(catalog: CustomerCatalogSource): Boolean 
         categoryIds.any { it in seller.categoryIds }
 }
 
+private fun Promotion.eligibilityLabel(catalog: CustomerCatalogSource): String {
+    val sellerItems = catalog.visibleItems(sellerId)
+    val names = sellerItems.filter { it.id in itemIds }.map { it.name }
+    if (names.isNotEmpty()) return "For ${names.take(2).joinToString(" · ")}"
+    val categories = catalog.categories.filter { it.id in categoryIds }.map { it.name }
+    if (categories.isNotEmpty()) return "For ${categories.take(2).joinToString(" · ")}"
+    return "Seller feature · preview only"
+}
+
 @Composable
 fun CustomerPromotionsScreen(onBack: () -> Unit, onPromotion: (String) -> Unit,
                              source: PromotionSource = DevelopmentPromotions,
@@ -74,7 +84,7 @@ fun CustomerPromotionsScreen(onBack: () -> Unit, onPromotion: (String) -> Unit,
         CatalogHeader("Offers", onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
             RitText("Good things on the menu", RitType.heading)
-            RitText("Explore sample seller promotions and featured food.", RitType.body, colors.muted)
+            RitText("Discover seller specials and featured food.", RitType.body, colors.muted)
             Spacer(Modifier.height(10.dp))
             RitStatusIndicator("Demo offers · not redeemable")
             Spacer(Modifier.height(14.dp))
@@ -98,29 +108,30 @@ internal fun PromotionCard(promotion: Promotion, sellerName: String, now: Instan
                            catalog: CustomerCatalogSource = PreviewCatalog, modifier: Modifier = Modifier) {
     val colors = RitThemeTokens.colors
     val status = promotion.statusAt(now)
-    val item = catalog.items.find { it.id in promotion.itemIds } ?: catalog.items.find {
+    val item = catalog.items.find { it.sellerId == promotion.sellerId && it.id in promotion.itemIds } ?: catalog.items.find {
         it.sellerId == promotion.sellerId && it.categoryId in promotion.categoryIds }
     Column(modifier.fillMaxWidth().border(1.dp, colors.outline, RoundedCornerShape(RitRadii.card))
         .background(colors.card, RoundedCornerShape(RitRadii.card))
         .clickable(role = Role.Button, onClick = onClick).padding(12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            FoodPhotoContent(item?.photo, "${item?.name ?: promotion.title} illustrative offer image",
-                Modifier.width(102.dp).height(112.dp), item?.localImageUri)
-            Column(Modifier.weight(1f)) {
+        FoodPhotoContent(item?.photo, "${item?.name ?: promotion.title} illustrative offer image",
+            Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(RitRadii.small)), item?.localImageUri)
+        Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
                 RitText(offerBenefit(promotion), RitType.heading, colors.accent,
                     modifier = Modifier.testTag("offer_benefit_${promotion.id}"))
                 RitText(promotion.title.replace(" · demo", ""), RitType.title)
                 RitText(sellerName, RitType.small, colors.muted)
-                Spacer(Modifier.height(7.dp))
+                Spacer(Modifier.height(8.dp))
+                RitText(promotion.eligibilityLabel(catalog), RitType.body, colors.foreground,
+                    modifier = Modifier.testTag("offer_eligibility_${promotion.id}"))
+                Spacer(Modifier.height(6.dp))
                 RitText(when (status) {
                     PromotionStatus.ACTIVE -> "Ends ${offerDate.format(promotion.endsAt)}"
                     PromotionStatus.UPCOMING -> "Starts ${offerDate.format(promotion.startsAt)}"
                     PromotionStatus.EXPIRED -> "Ended ${offerDate.format(promotion.endsAt)}"
                 }, RitType.small, colors.muted)
-            }
         }
-        Spacer(Modifier.height(10.dp))
-        RitText("View Offer →", RitType.label, colors.accent)
+        Spacer(Modifier.height(12.dp))
+        RitSecondaryButton("View Offer", onClick, Modifier.fillMaxWidth().testTag("offer_action_${promotion.id}"))
     }
 }
 
@@ -158,7 +169,8 @@ fun CustomerPromotionDetailScreen(id: String, onBack: () -> Unit, onSeller: (Str
                     Spacer(Modifier.height(18.dp))
                     RitText("Related preview food", RitType.title)
                 }
-                val related = catalog.visibleItems().filter { it.id in promotion.itemIds || it.categoryId in promotion.categoryIds }
+                val related = catalog.visibleItems(sellerId = promotion.sellerId)
+                    .filter { it.id in promotion.itemIds || it.categoryId in promotion.categoryIds }
                 if (related.isEmpty()) item { RitText("No currently visible related items.", RitType.body, colors.muted) }
                 else items(related, key = { it.id }) { food ->
                     RitSecondaryButton(food.name, { onFood(food.id) },

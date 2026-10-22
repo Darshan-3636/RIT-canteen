@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -142,6 +143,9 @@ fun dietaryLabel(item: MenuItem): String = when (item.dietary) {
     Dietary.NOT_SPECIFIED -> "Dietary info not provided"
 }
 
+fun sellerOrderingBadge(seller: Seller): String =
+    if (seller.isMainCanteen && seller.capabilities.futureIndividualPrepared) "Individual & Bulk" else "Bulk Only"
+
 @Composable
 fun CatalogFavoriteButton(name: String, selected: Boolean, onClick: () -> Unit, tag: String) {
     val colors = RitThemeTokens.colors
@@ -158,49 +162,65 @@ fun CatalogFavoriteButton(name: String, selected: Boolean, onClick: () -> Unit, 
 fun CatalogFoodCard(item: MenuItem, seller: Seller, onClick: () -> Unit, modifier: Modifier = Modifier,
                     isFavorite: Boolean = false, onFavoriteClick: (() -> Unit)? = null) {
     val colors = RitThemeTokens.colors
-    Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(RitRadii.card)).border(1.dp, colors.outline, RoundedCornerShape(RitRadii.card))
-            .background(colors.card).clickable(role = Role.Button, onClick = onClick).padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    val shape = RoundedCornerShape(RitRadii.card)
+    Column(
+        modifier.fillMaxWidth().clip(shape).border(1.dp, colors.outline, shape)
+            .background(colors.card).clickable(role = Role.Button, onClick = onClick),
     ) {
-        FoodPhotoContent(item.photo, item.name + " illustrative preview image", Modifier.size(104.dp).clip(RoundedCornerShape(14.dp)), item.localImageUri)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            RitText(item.name, RitType.label, maxLines = 1)
-            RitText("${seller.name} · ${dietaryLabel(item)}", RitType.small, colors.muted, maxLines = 1)
-            RitText(item.description, RitType.small, colors.muted, maxLines = 2)
-            Spacer(Modifier.height(6.dp))
-            RitText(item.price.display, RitType.label, colors.accent)
-            RitText(eligibilityLabel(seller, item), RitType.small, colors.muted, maxLines = 1)
+        Box(Modifier.fillMaxWidth().height(158.dp)) {
+            FoodPhotoContent(item.photo, item.name + " illustrative preview image",
+                Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = RitRadii.card, topEnd = RitRadii.card)), item.localImageUri)
+            CatalogPill(eligibilityLabel(seller, item), Modifier.align(Alignment.BottomStart).padding(10.dp))
+            if (onFavoriteClick != null) {
+                Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+                    CatalogFavoriteButton(item.name, isFavorite, onFavoriteClick, "favorite_item_${item.id}")
+                }
+            }
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            if (onFavoriteClick != null) CatalogFavoriteButton(item.name, isFavorite, onFavoriteClick, "favorite_item_${item.id}")
-            RitIcon(RitIconKind.Arrow, colors.accent, size = 17.dp)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                RitText(item.name, RitType.title, maxLines = 1)
+                RitText("${seller.name} · ${dietaryLabel(item)}", RitType.small, colors.muted, maxLines = 1)
+                Spacer(Modifier.height(5.dp))
+                RitText(item.description, RitType.small, colors.muted, maxLines = 2)
+            }
+            Spacer(Modifier.width(12.dp))
+            RitText(item.price.display, RitType.label, colors.accent)
         }
     }
 }
 
 @Composable
 fun CatalogSellerCard(seller: Seller, categoryNames: String, onClick: () -> Unit,
-                      isFavorite: Boolean = false, onFavoriteClick: (() -> Unit)? = null) {
+                      isFavorite: Boolean = false, onFavoriteClick: (() -> Unit)? = null,
+                      modifier: Modifier = Modifier) {
     val colors = RitThemeTokens.colors
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(RitRadii.card)).border(1.dp, colors.outline, RoundedCornerShape(RitRadii.card))
-        .background(colors.card).clickable(role = Role.Button, onClick = onClick)) {
-        SellerPhotoContent(seller.photo, Modifier.fillMaxWidth().height(120.dp), seller.localImageUri)
+        .background(colors.card).clickable(role = Role.Button, onClick = onClick).then(modifier)) {
+        Box(Modifier.fillMaxWidth().height(158.dp)) {
+            SellerPhotoContent(seller.photo, Modifier.fillMaxSize(), seller.localImageUri)
+            CatalogPill(if (seller.isMainCanteen) "Main Canteen" else "Campus seller",
+                Modifier.align(Alignment.BottomStart).padding(10.dp))
+        }
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RitText(seller.name, RitType.title, modifier = Modifier.weight(1f))
                 if (onFavoriteClick != null) CatalogFavoriteButton(seller.name, isFavorite, onFavoriteClick, "favorite_seller_${seller.id}")
-                RitIcon(RitIconKind.Arrow, colors.accent, size = 18.dp)
             }
             Spacer(Modifier.height(3.dp))
             RitText(seller.description, RitType.body, colors.muted, maxLines = 2)
             Spacer(Modifier.height(8.dp))
-            CatalogPill(if (seller.capabilities.futureIndividualPrepared) "Individual prepared food planned + Bulk" else "Bulk orders only")
+            CatalogPill(sellerOrderingBadge(seller))
             Spacer(Modifier.height(8.dp))
             RitText(categoryNames, RitType.small, colors.muted, maxLines = 2)
             RitText(seller.hours?.display?.let { "Demo hours: $it · live status unverified" }
                 ?: "Hours and live availability not verified", RitType.small, colors.muted, maxLines = 2)
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RitText("View Menu", RitType.label, colors.accent)
+                Spacer(Modifier.width(5.dp))
+                RitIcon(RitIconKind.Arrow, colors.accent, size = 17.dp)
+            }
         }
     }
 }

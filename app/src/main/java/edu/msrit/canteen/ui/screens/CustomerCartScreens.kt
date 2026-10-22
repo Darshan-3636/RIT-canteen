@@ -3,7 +3,10 @@ package edu.msrit.canteen.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -71,14 +75,19 @@ fun RitConfirmDialog(title: String, body: String, onDismiss: () -> Unit, onConfi
 private fun QuantityStepper(name: String, quantity: Int, onChange: (Int) -> Unit, tag: String) {
     val colors = RitThemeTokens.colors
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        RitText("−", RitType.title, colors.accent, Modifier.clickable(role = Role.Button) { onChange(quantity - 1) }
-            .semantics { contentDescription = "Remove one $name" }.padding(horizontal = 12.dp, vertical = 9.dp)
-            .testTag("${tag}_minus"))
+        Box(Modifier.size(48.dp).clip(CircleShape).background(colors.surface)
+            .clickable(role = Role.Button) { onChange(quantity - 1) }
+            .semantics { contentDescription = "Remove one $name" }.testTag("${tag}_minus"),
+            contentAlignment = Alignment.Center) {
+            RitText("−", RitType.title, colors.accent)
+        }
         RitText("$quantity", RitType.label, modifier = Modifier.testTag("${tag}_quantity"))
-        RitText("+", RitType.title, colors.accent, Modifier.clickable(role = Role.Button) {
-            if (quantity < Int.MAX_VALUE) onChange(quantity + 1)
-        }.semantics { contentDescription = "Add one $name" }.padding(horizontal = 12.dp, vertical = 9.dp)
-            .testTag("${tag}_plus"))
+        Box(Modifier.size(48.dp).clip(CircleShape).background(colors.surface)
+            .clickable(role = Role.Button) { if (quantity < Int.MAX_VALUE) onChange(quantity + 1) }
+            .semantics { contentDescription = "Add one $name" }.testTag("${tag}_plus"),
+            contentAlignment = Alignment.Center) {
+            RitText("+", RitType.title, colors.accent)
+        }
     }
 }
 
@@ -191,11 +200,13 @@ private fun CartLine(name: String, price: String, photo: edu.msrit.canteen.custo
     Row(Modifier.fillMaxWidth().padding(vertical = 5.dp).border(1.dp, colors.outline,
         RoundedCornerShape(RitRadii.card)).background(colors.card, RoundedCornerShape(RitRadii.card))
         .padding(12.dp).testTag("cart_line_$tag"), verticalAlignment = Alignment.CenterVertically) {
-        FoodPhotoContent(photo, "$name illustrative food photo", Modifier.width(70.dp).height(70.dp), localImageUri)
+        FoodPhotoContent(photo, "$name illustrative food photo",
+            Modifier.width(84.dp).height(84.dp).clip(RoundedCornerShape(RitRadii.small)), localImageUri)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             RitText(name, RitType.label)
-            RitText("$price each · ${displayPaise(totalPaise)}", RitType.small, colors.muted)
+            RitText("$price each", RitType.small, colors.muted)
+            RitText("Line total  ${displayPaise(totalPaise)}", RitType.label)
             QuantityStepper(name, quantity, onQuantity, tag)
         }
     }

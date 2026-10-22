@@ -27,6 +27,7 @@ import edu.msrit.canteen.customer.IndividualOrderPreview
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.QuoteStage
 import edu.msrit.canteen.ui.components.CatalogHeader
+import edu.msrit.canteen.ui.components.CatalogPill
 import edu.msrit.canteen.ui.components.RitBottomItem
 import edu.msrit.canteen.ui.components.RitBottomNavigation
 import edu.msrit.canteen.ui.components.RitChip
@@ -46,7 +47,7 @@ private fun bulkPrimaryState(record: BulkRequestRecord): String = when (record.t
     QuoteStage.COUNTEROFFER -> if (record.latest.actor == edu.msrit.canteen.customer.QuoteActor.SELLER)
         "Review seller's updated offer" else "Waiting for seller's response"
     QuoteStage.AGREED_AWAITING_PAYMENT -> "Agreed · payment unavailable"
-    QuoteStage.PAID_CONFIRMED -> "Scheduled · paid SAMPLE fixture"
+    QuoteStage.PAID_CONFIRMED -> "Demo state · no actual payment"
     QuoteStage.EXPIRED -> "Offer expired"
     QuoteStage.REJECTED -> "Seller declined"
     QuoteStage.WITHDRAWN -> "Request withdrawn"
@@ -69,9 +70,9 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
         }
         LazyColumn(Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp)) {
             item {
-                RitText("Demo activity", RitType.heading)
-                RitText("Sample history and local previews only. No order here was submitted by this app to a live seller.",
-                    RitType.small, colors.muted)
+                RitText("Your activity", RitType.heading)
+                RitText("Demo only · nothing submitted or charged", RitType.small, colors.muted,
+                    Modifier.testTag("orders_demo_disclosure"))
                 Spacer(Modifier.height(14.dp))
             }
             if (tab != OrdersTab.BULK) {
@@ -109,8 +110,9 @@ private fun OrderCard(title: String, status: String, detail: String, foot: Strin
         RoundedCornerShape(RitRadii.card)).background(colors.card, RoundedCornerShape(RitRadii.card))
         .clickable(onClick = onClick).testTag(tag).padding(16.dp)) {
         RitText(title, RitType.label)
-        Spacer(Modifier.height(3.dp))
-        RitText(status, RitType.title, colors.accent)
+        Spacer(Modifier.height(6.dp))
+        CatalogPill(status)
+        Spacer(Modifier.height(8.dp))
         RitText(detail, RitType.body)
         Spacer(Modifier.height(5.dp))
         RitText(foot, RitType.small, colors.muted)
