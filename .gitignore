@@ -1,0 +1,14 @@
+.gradle/
+.kotlin/
+.idea/
+build/
+app/build/
+local.properties
+*.iml
+*.apk
+*.aab
+
+# Local design source material and device captures are not part of the public code repo.
+finalized assets/
+docs/verification/
+RIT_Canteen_Prototype_1_PRD.md
