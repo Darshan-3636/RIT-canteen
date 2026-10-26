@@ -4,6 +4,8 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
@@ -54,14 +56,18 @@ class SellerDailyOperationsPresentationUiTest {
 
         rule.onNodeWithTag("seller_daily_reply_summary").assertExists()
         rule.onNodeWithTag("seller_daily_pickup_summary").assertExists()
+        rule.onNodeWithTag("seller_daily_overview_list")
+            .performScrollToNode(hasTestTag("seller_daily_reply_card_DEMO-MAIN-NEW"))
         rule.onNodeWithTag("seller_daily_reply_card_DEMO-MAIN-NEW").assertExists()
-        rule.onNodeWithContentDescription(
+        rule.onAllNodesWithContentDescription(
             "Masala Dosa request preview image",
             useUnmergedTree = true,
-        ).assertExists()
+        )[0].assertExists()
 
         rule.onNodeWithTag("seller_daily_reply_card_DEMO-MAIN-NEW").performClick()
         assertEquals("DEMO-MAIN-NEW", openedRequest.get())
+        rule.onNodeWithTag("seller_daily_overview_list")
+            .performScrollToNode(hasTestTag("seller_daily_pickup_summary"))
         rule.onNodeWithTag("seller_daily_pickup_summary").performClick()
         assertEquals(true, openedSchedule.get())
 
@@ -81,6 +87,8 @@ class SellerDailyOperationsPresentationUiTest {
         )
 
         rule.onNodeWithTag("seller_daily_reply_summary").assertExists()
+        rule.onNodeWithTag("seller_daily_overview_list")
+            .performScrollToNode(hasTestTag("seller_daily_reply_card_DEMO-NC-NEW"))
         rule.onNodeWithTag("seller_daily_reply_card_DEMO-NC-NEW").assertExists()
         rule.onNodeWithText("Review and reply", useUnmergedTree = true).assertDoesNotExist()
         rule.onNodeWithContentDescription(
@@ -118,10 +126,16 @@ class SellerDailyOperationsPresentationUiTest {
 
         rule.onNodeWithTag("seller_daily_request_detail").assertExists()
         rule.onNodeWithTag("seller_detail_summary").assertExists()
-        rule.onNodeWithContentDescription("Seller needs to respond", substring = true).assertExists()
+        rule.onAllNodesWithContentDescription("Seller needs to respond", substring = true)[0].assertExists()
+        rule.onNodeWithTag("seller_daily_detail_list")
+            .performScrollToNode(hasTestTag("seller_detail_journey"))
         rule.onNodeWithTag("seller_detail_journey").assertExists()
+        rule.onNodeWithTag("seller_daily_detail_list")
+            .performScrollToNode(hasTestTag("seller_detail_approval_facts"))
         rule.onNodeWithContentDescription("Seller approval for revision 3: not recorded for this revision").assertExists()
         rule.onNodeWithContentDescription("Customer approval for revision 3: not recorded for this revision").assertExists()
+        rule.onNodeWithTag("seller_daily_detail_list")
+            .performScrollToNode(hasTestTag("seller_detail_primary_action"))
         rule.onNodeWithTag("seller_detail_primary_action").performScrollTo().performClick()
         assertEquals(true, continued.get())
     }
@@ -129,14 +143,22 @@ class SellerDailyOperationsPresentationUiTest {
     @Test fun waitingAndUnpaidStatesHaveNoSellerReplyAction() {
         val waiting = records.first { it.reference == "DEMO-NC-WAITING" }
         renderDetail(waiting, canRespond = true)
-        rule.onNodeWithText("Waiting for customer").performScrollTo().assertExists()
+        rule.onNodeWithTag("seller_daily_detail_list")
+            .performScrollToNode(hasTestTag("seller_detail_next_step"))
+        rule.onAllNodesWithText("Waiting for customer")[0].assertExists()
         rule.onNodeWithTag("seller_detail_primary_action").assertDoesNotExist()
+        rule.onNodeWithTag("seller_daily_detail_list")
+            .performScrollToNode(hasTestTag("seller_detail_approval_facts"))
         rule.onNodeWithContentDescription("Seller approval for revision 2: recorded").assertExists()
         rule.onNodeWithContentDescription("Customer approval for revision 2: not recorded for this revision").assertExists()
+    }
 
+    @Test fun unpaidStateNeverClaimsPaymentOrOffersSellerReply() {
         val unpaid = records.first { it.reference == "DEMO-NC-UNPAID" }
         renderDetail(unpaid, canRespond = true)
-        rule.onNodeWithText("Payment not yet verified").performScrollTo().assertExists()
+        rule.onNodeWithTag("seller_daily_detail_list")
+            .performScrollToNode(hasTestTag("seller_detail_next_step"))
+        rule.onAllNodesWithText("Payment not yet verified")[0].assertExists()
         rule.onNodeWithTag("seller_detail_primary_action").assertDoesNotExist()
         rule.onNodeWithText("Do not treat this as paid.", substring = true).assertExists()
     }
@@ -149,12 +171,19 @@ class SellerDailyOperationsPresentationUiTest {
             canRespond = true,
             onReviewSpecialPickup = { decisionOpened.set(true) },
         )
-        rule.onNodeWithText("Pickup requires explicit exception approval").performScrollTo().assertExists()
+        rule.onNodeWithTag("seller_daily_detail_list")
+            .performScrollToNode(hasTestTag("seller_detail_primary_action"))
+        rule.onAllNodesWithText("Pickup requires explicit exception approval")[0].assertExists()
         rule.onNodeWithTag("seller_detail_primary_action").performScrollTo().performClick()
         assertEquals(true, decisionOpened.get())
+    }
 
+    @Test fun staffSeesSpecialPickupAsReadOnly() {
+        val special = records.first { it.reference == "DEMO-NC-SPECIAL" }
         renderDetail(special, canRespond = false)
-        rule.onNodeWithText("Seller response needed").performScrollTo().assertExists()
+        rule.onNodeWithTag("seller_daily_detail_list")
+            .performScrollToNode(hasTestTag("seller_detail_next_step"))
+        rule.onAllNodesWithText("Seller response needed")[0].assertExists()
         rule.onNodeWithTag("seller_detail_primary_action").assertDoesNotExist()
     }
 
@@ -164,9 +193,15 @@ class SellerDailyOperationsPresentationUiTest {
             thread = request.thread.copy(expiresAt = now.minusMinutes(1)),
         )
         renderDetail(expired, canRespond = true)
-        rule.onNodeWithText("Quote expired").performScrollTo().assertExists()
+        rule.onNodeWithTag("seller_daily_detail_list")
+            .performScrollToNode(hasTestTag("seller_detail_next_step"))
+        rule.onAllNodesWithText("Quote expired")[0].assertExists()
         rule.onNodeWithTag("seller_detail_primary_action").assertDoesNotExist()
+    }
 
+    @Test fun expiredRequestIsOmittedFromPickupSchedule() {
+        val request = records.first { it.reference == "DEMO-NC-NEW" }
+        val expired = request.copy(thread = request.thread.copy(expiresAt = now.minusMinutes(1)))
         rule.setContent {
             RitTheme(darkTheme = false) {
                 SellerPickupSchedulePresentation(
@@ -214,10 +249,12 @@ class SellerDailyOperationsPresentationUiTest {
         rule.onNodeWithTag("seller_counteroffer_preview").assertExists()
         rule.onNodeWithTag("seller_counteroffer_summary").assertExists()
         rule.onNodeWithTag("seller_counteroffer_line_north-lunch").performScrollTo().assertExists()
-        rule.onNodeWithContentDescription("Before:", substring = true).assertExists()
-        rule.onNodeWithContentDescription("Proposed:", substring = true).assertExists()
-        rule.onNodeWithText("No approvals are recorded for revision 4").performScrollTo().assertExists()
-        rule.onNodeWithTag("seller_counteroffer_continue").performScrollTo().performClick()
+        rule.onAllNodesWithContentDescription("Before:", substring = true)[0].assertExists()
+        rule.onAllNodesWithContentDescription("Proposed:", substring = true)[0].assertExists()
+        rule.onNodeWithTag("seller_counteroffer_preview_list")
+            .performScrollToNode(hasTestTag("seller_counteroffer_continue"))
+        rule.onNodeWithText("No approvals are recorded for revision 4").assertExists()
+        rule.onNodeWithTag("seller_counteroffer_continue").performClick()
         assertEquals(true, continued.get())
     }
 
@@ -249,8 +286,10 @@ class SellerDailyOperationsPresentationUiTest {
             }
         }
 
-        rule.onNodeWithText("Pickup requires explicit exception approval").performScrollTo().assertExists()
-        rule.onNodeWithTag("seller_counteroffer_review_special").performScrollTo().performClick()
+        rule.onNodeWithTag("seller_counteroffer_preview_list")
+            .performScrollToNode(hasTestTag("seller_counteroffer_review_special"))
+        rule.onAllNodesWithText("Pickup requires explicit exception approval")[0].assertExists()
+        rule.onNodeWithTag("seller_counteroffer_review_special").performClick()
         assertEquals(true, specialReviewOpened.get())
         assertEquals(false, continued.get())
     }
@@ -280,7 +319,7 @@ class SellerDailyOperationsPresentationUiTest {
         rule.onNodeWithTag("seller_schedule_day_${firstUpcoming.latest.pickup.toLocalDate()}")
             .performScrollTo().assertExists()
         rule.onNodeWithTag("seller_schedule_request_DEMO-NC-PAID-UNVERIFIED").assertDoesNotExist()
-        rule.onNodeWithContentDescription("Requested pickup", substring = true).assertExists()
+        rule.onAllNodesWithContentDescription("Requested pickup", substring = true)[0].assertExists()
         rule.onNodeWithTag("seller_schedule_request_${firstUpcoming.reference}").performScrollTo().performClick()
         assertEquals(firstUpcoming.reference, opened.get())
     }

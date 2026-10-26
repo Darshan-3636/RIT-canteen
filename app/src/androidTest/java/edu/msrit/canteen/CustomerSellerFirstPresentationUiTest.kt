@@ -71,8 +71,8 @@ class CustomerSellerFirstPresentationUiTest {
             }
         }
 
-        rule.onNodeWithTag("offer_benefit_dosa-spotlight").assertExists()
-        rule.onNodeWithTag("offer_eligibility_dosa-spotlight").assertExists()
-        rule.onNodeWithTag("offer_action_dosa-spotlight").assertExists()
+        rule.onNodeWithTag("offer_benefit_dosa-spotlight", useUnmergedTree = true).assertExists()
+        rule.onNodeWithTag("offer_eligibility_dosa-spotlight", useUnmergedTree = true).assertExists()
+        rule.onNodeWithTag("offer_action_dosa-spotlight", useUnmergedTree = true).assertExists()
     }
 }

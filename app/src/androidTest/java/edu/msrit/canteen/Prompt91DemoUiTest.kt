@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -59,7 +60,9 @@ class Prompt91DemoUiTest {
 
     @Test fun choosingAnotherSellerOnlyChangesTheBulkCartAfterConfirmation() {
         hub("debug_seed_carts")
-        back()
+        rule.onNodeWithTag("customer_cart").assertExists()
+        rule.onNodeWithContentDescription("Back").performClick()
+        rule.onNodeWithTag("debug_testing_hub").assertExists()
         hub("debug_open_home")
         rule.onNodeWithTag("choose_seller_card_main-canteen").performScrollTo().performClick()
         rule.onNodeWithTag("seller_menu_item_masala-dosa").performScrollTo().performClick()

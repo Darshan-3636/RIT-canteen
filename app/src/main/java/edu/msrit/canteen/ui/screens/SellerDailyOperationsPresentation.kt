@@ -264,7 +264,6 @@ fun SellerDailyOperationsOverview(
                         catalog = catalog,
                         onOpenRequest = onOpenRequest,
                         cardTag = "seller_daily_reply_card_${record.reference}",
-                        modifier = Modifier.testTag("seller_daily_reply_${record.reference}"),
                     )
                 }
                 if (needsReply.size > MAX_PRIORITY_REQUESTS) {
@@ -304,7 +303,6 @@ fun SellerDailyOperationsOverview(
                         catalog = catalog,
                         onOpenRequest = onOpenRequest,
                         cardTag = "seller_daily_pickup_card_${record.reference}",
-                        modifier = Modifier.testTag("seller_daily_pickup_${record.reference}"),
                     )
                 }
             }
