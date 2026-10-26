@@ -261,9 +261,9 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                         SalesBarChart(grouped, formatRange(range), grouping = grouping)
                         if (grouping != TrendGrouping.DAILY) {
                             Spacer(Modifier.height(10.dp))
-                            RitText("${if (grouping == TrendGrouping.WEEKLY) "Weeks start on Monday. The" else "The"} first and last " +
-                                "$noun${if (grouped.size > 1) "s" else ""} may only partly fall in this range.",
-                                RitType.small, RitThemeTokens.colors.muted)
+                            val which = if (grouped.size > 1) "The first and last ${noun}s" else "This $noun"
+                            RitText("${if (grouping == TrendGrouping.WEEKLY) "Weeks start on Monday. " else ""}$which may only " +
+                                "partly fall in this range.", RitType.small, RitThemeTokens.colors.muted)
                         }
                     })
                     Spacer(Modifier.height(10.dp))
