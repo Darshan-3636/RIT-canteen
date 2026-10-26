@@ -20,10 +20,10 @@ const val ADMIN_MODERATION_PENDING = "Needs review"
 
 enum class AdminTone { URGENT, ACTION, NEUTRAL, DONE }
 
-fun SupportTicket.needsAction() = status == TicketStatus.OPEN || status == TicketStatus.IN_PROGRESS
+fun SupportTicket.adminNeedsAction() = status == TicketStatus.OPEN || status == TicketStatus.IN_PROGRESS
 
 fun adminTicketTone(ticket: SupportTicket): AdminTone = when {
-    !ticket.needsAction() -> AdminTone.DONE
+    !ticket.adminNeedsAction() -> AdminTone.DONE
     ticket.escalated -> AdminTone.URGENT
     else -> AdminTone.ACTION
 }
@@ -33,7 +33,7 @@ data class AdminOverviewCounts(val activeSellers: Int, val setupDrafts: Int, val
 
 fun adminOverviewCounts(sellers: List<AdminSellerRecord>, tickets: List<SupportTicket>,
                         moderation: List<ModerationRecord>): AdminOverviewCounts {
-    val open = tickets.filter { it.needsAction() }
+    val open = tickets.filter { it.adminNeedsAction() }
     return AdminOverviewCounts(sellers.count { it.status == AdminSellerStatus.ACTIVE },
         sellers.count { it.status == AdminSellerStatus.DRAFT }, open.size, open.count { it.escalated },
         moderation.count { it.state == ADMIN_MODERATION_PENDING })
@@ -51,7 +51,7 @@ fun adminSellerLabel(sellerId: String?, sellerNames: Map<String, String>) =
 
 fun adminAttentionQueue(tickets: List<SupportTicket>, moderation: List<ModerationRecord>,
                         sellers: List<AdminSellerRecord>, sellerNames: Map<String, String>): List<AdminAttentionItem> {
-    val ticketItems = tickets.filter { it.needsAction() }.map {
+    val ticketItems = tickets.filter { it.adminNeedsAction() }.map {
         val kind = when {
             it.escalated -> AdminAttentionKind.ESCALATED_TICKET
             it.sellerId == null -> AdminAttentionKind.PLATFORM_TICKET
@@ -76,9 +76,9 @@ enum class AdminTicketFilter(val label: String) { ALL("All"), NEEDS_ACTION("Need
 fun adminFilterTickets(tickets: List<SupportTicket>, filter: AdminTicketFilter): List<SupportTicket> = adminSupportOrder(tickets.filter {
     when (filter) {
         AdminTicketFilter.ALL -> true
-        AdminTicketFilter.NEEDS_ACTION -> it.needsAction()
+        AdminTicketFilter.NEEDS_ACTION -> it.adminNeedsAction()
         AdminTicketFilter.ESCALATED -> it.escalated
-        AdminTicketFilter.DONE -> !it.needsAction()
+        AdminTicketFilter.DONE -> !it.adminNeedsAction()
     }
 })
 

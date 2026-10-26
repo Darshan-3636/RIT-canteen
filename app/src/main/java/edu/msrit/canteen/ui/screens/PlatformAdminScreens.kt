@@ -19,6 +19,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import edu.msrit.canteen.customer.AdminSellerStatus
 import edu.msrit.canteen.customer.DevelopmentInsights
@@ -62,7 +64,7 @@ import edu.msrit.canteen.ui.components.adminFilterUsers
 import edu.msrit.canteen.ui.components.adminOverviewCounts
 import edu.msrit.canteen.ui.components.adminRelativeTime
 import edu.msrit.canteen.ui.components.adminUserGroup
-import edu.msrit.canteen.ui.components.needsAction
+import edu.msrit.canteen.ui.components.adminNeedsAction
 import edu.msrit.canteen.ui.components.RitChip
 import edu.msrit.canteen.ui.components.RitEmptyState
 import edu.msrit.canteen.ui.components.RitPrimaryButton
@@ -176,7 +178,7 @@ private fun AdminOverview(identity: AuthorizedIdentity?, onNavigate: (AdminPage)
     }
 
     AdminSectionHeader("Support and content")
-    val platformOpen = tickets.count { it.needsAction() && it.sellerId == null }
+    val platformOpen = tickets.count { it.adminNeedsAction() && it.sellerId == null }
     AdminTaskRow("Unresolved support", "${counts.escalated} escalated · $platformOpen for platform support",
         RitIconKind.Mail, if (counts.openTickets == 0) "All resolved" else "${counts.openTickets} open",
         if (counts.escalated > 0) AdminTone.URGENT else if (counts.openTickets > 0) AdminTone.ACTION else AdminTone.DONE,
@@ -260,7 +262,7 @@ private fun AdminSellerDetail(identity: AuthorizedIdentity?, sellerId: String?, 
                               onSellerAnalytics: (String) -> Unit) {
     val record = sellerId?.let { DevelopmentInsights.sellerRecord(identity, it) }
     if (record == null) { RitEmptyState("Seller unavailable", "No authorized seller record exists."); return }
-    val openTickets = DevelopmentInsights.tickets(identity).count { it.sellerId == record.id && it.needsAction() }
+    val openTickets = DevelopmentInsights.tickets(identity).count { it.sellerId == record.id && it.adminNeedsAction() }
     val toReview = DevelopmentInsights.moderation(identity).count { it.sellerId == record.id && it.state == ADMIN_MODERATION_PENDING }
     AdminDirectoryRow(record.name, orderingLabel(record.id) ?: "Not in the customer catalog yet",
         listOf(record.status.label to sellerTone(record.status)), tag = "admin_seller_header")
@@ -317,7 +319,7 @@ private fun AdminSellerSetup(identity: AuthorizedIdentity?, onNavigate: (AdminPa
     var saved by remember { mutableStateOf(false) }
     RitText("Admin-controlled onboarding · local draft only", RitType.title)
     AdminSectionHeader("1 · Business name")
-    RitTextField(name, { name = it; saved = false }, "Seller display name", "Required", Modifier.fillMaxWidth(), inputTag = "admin_new_seller_name")
+    RitTextField(name, { name = it; saved = false; message = "" }, "Seller display name", "Required", Modifier.fillMaxWidth(), inputTag = "admin_new_seller_name")
     AdminSectionHeader("2 · Owner invitation")
     AdminTaskRow("Invite the owner by verified email", "Disabled until verified email, authorization and seller approval are implemented.",
         RitIconKind.Mail, "Needs backend", AdminTone.DONE)
@@ -326,8 +328,14 @@ private fun AdminSellerSetup(identity: AuthorizedIdentity?, onNavigate: (AdminPa
         RitIconKind.Bulk, "Needs backend", AdminTone.DONE)
     Spacer(Modifier.height(12.dp))
     RitPrimaryButton("Save sample setup draft", {
+        val trimmed = name.trim()
         saved = DevelopmentInsights.createSellerDraft(identity, name)
-        message = if (saved) "Local seller draft saved. No owner access granted." else "Enter a unique seller name."
+        message = when {
+            saved -> "Local seller draft saved. No owner access granted."
+            trimmed.length > 80 -> "Seller names can be up to 80 characters."
+            DevelopmentInsights.sellers(identity).any { it.name.equals(trimmed, true) } -> "A seller named \"$trimmed\" already exists."
+            else -> "Could not save this draft."
+        }
     }, Modifier.fillMaxWidth(), enabled = name.isNotBlank())
     if (message.isNotEmpty()) {
         Spacer(Modifier.height(8.dp))
@@ -464,7 +472,8 @@ private fun AdminModeration(identity: AuthorizedIdentity?) {
         AdminTaskRow(record.subject, "${record.kind} · ${adminSellerLabel(record.sellerId, names)}", RitIconKind.Filter,
             record.state, AdminTone.ACTION, tag = "admin_moderation_${record.id}")
         RitSecondaryButton("Mark as reviewed", { DevelopmentInsights.markModerationReviewed(identity, record.id) },
-            Modifier.fillMaxWidth().padding(bottom = 12.dp).testTag("admin_review_${record.id}"))
+            Modifier.fillMaxWidth().padding(bottom = 12.dp).testTag("admin_review_${record.id}")
+                .semantics { contentDescription = "Mark ${record.subject} as reviewed" })
     }
     if (reviewed.isNotEmpty()) {
         AdminSectionHeader("Reviewed · ${reviewed.size}")

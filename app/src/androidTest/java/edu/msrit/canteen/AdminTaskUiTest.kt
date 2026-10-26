@@ -6,6 +6,7 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -166,6 +167,30 @@ class AdminTaskUiTest {
         rule.onNodeWithTag("admin_ticket_note").performScrollTo().performTextInput("x".repeat(501))
         rule.onNodeWithText("Save local note").performScrollTo().performClick()
         rule.onNodeWithText("Notes can be up to 500 characters. Shorten it and save again.").performScrollTo().assertExists()
+    }
+
+    @Test fun reviewButtonsNameTheirItemForScreenReaders() {
+        openAdmin("debug_admin_moderation")
+        rule.onNodeWithContentDescription("Mark Sample promotional copy as reviewed").performScrollTo().performClick()
+        rule.onNodeWithText("Reviewed · 1").performScrollTo().assertExists()
+        rule.onNodeWithContentDescription("Mark Sample menu description as reviewed").assertExists()
+    }
+
+    @Test fun setupExplainsWhyANameIsRejectedAndClearsStaleMessages() {
+        openAdmin("debug_admin_setup")
+        rule.onNodeWithTag("admin_new_seller_name").performTextInput("main canteen")
+        rule.onNodeWithText("Save sample setup draft").performScrollTo().performClick()
+        rule.onNodeWithText("A seller named \"main canteen\" already exists.").performScrollTo().assertExists()
+        rule.onNodeWithTag("admin_new_seller_name").performTextReplacement("x".repeat(81))
+        rule.onNodeWithTag("admin_setup_message").assertDoesNotExist()
+        rule.onNodeWithText("Save sample setup draft").performScrollTo().performClick()
+        rule.onNodeWithText("Seller names can be up to 80 characters.").performScrollTo().assertExists()
+        rule.onNodeWithTag("admin_new_seller_name").performTextReplacement("Juice Stall")
+        rule.onNodeWithText("Save sample setup draft").performScrollTo().performClick()
+        rule.onNodeWithTag("admin_setup_view").performScrollTo().assertExists()
+        rule.onNodeWithTag("admin_new_seller_name").performTextReplacement("Juice Stall 2")
+        rule.onNodeWithTag("admin_setup_message").assertDoesNotExist()
+        rule.onNodeWithTag("admin_setup_view").assertDoesNotExist()
     }
 
     @Test fun sellerOwnerCannotOpenAdminLinks() {
