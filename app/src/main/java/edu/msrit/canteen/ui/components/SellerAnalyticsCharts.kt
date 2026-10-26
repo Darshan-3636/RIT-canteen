@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -103,7 +105,9 @@ fun StatStrip(cells: List<StatCell>, modifier: Modifier = Modifier) {
             if (index > 0) Box(Modifier.width(1.dp).fillMaxHeight().padding(vertical = 14.dp).background(colors.outline))
             Column(Modifier.weight(1f).padding(horizontal = 12.dp, vertical = 14.dp)
                 .then(if (cell.tag == null) Modifier else Modifier.testTag(cell.tag))) {
-                RitText(cell.value, RitType.title.tabular(), maxLines = 1)
+                // Shrinks to fit rather than ellipsizing, so a money value is never shown cut off.
+                BasicText(cell.value, style = RitType.title.tabular().copy(color = colors.foreground), maxLines = 1,
+                    softWrap = false, autoSize = TextAutoSize.StepBased(RitType.small.fontSize, RitType.title.fontSize))
                 Spacer(Modifier.height(2.dp))
                 RitText(cell.label, RitType.small, colors.muted, maxLines = 2)
             }
@@ -317,6 +321,10 @@ fun ShareLegend(slices: List<ShareSlice>, modifier: Modifier = Modifier) {
     val palette = chartPalette()
     val colors = RitThemeTokens.colors
     val shares = percentShares(slices.map { it.value })
+    val shareStyle = RitType.small.tabular()
+    // Sized for the widest possible share at the current font scale, so every row's column lines up.
+    val measurer = rememberTextMeasurer()
+    val shareWidth = with(LocalDensity.current) { measurer.measure("100%", shareStyle).size.width.toDp() }
     Column(modifier.fillMaxWidth()) {
         slices.forEachIndexed { index, slice ->
             Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -325,7 +333,7 @@ fun ShareLegend(slices: List<ShareSlice>, modifier: Modifier = Modifier) {
                 RitText(slice.label, RitType.label, modifier = Modifier.weight(1f), maxLines = 1)
                 RitText(slice.valueText, RitType.label.tabular())
                 Spacer(Modifier.width(10.dp))
-                RitText("${shares[index]}%", RitType.small.tabular(), colors.muted, modifier = Modifier.width(36.dp))
+                RitText("${shares[index]}%", shareStyle, colors.muted, modifier = Modifier.width(shareWidth), maxLines = 1)
             }
         }
     }

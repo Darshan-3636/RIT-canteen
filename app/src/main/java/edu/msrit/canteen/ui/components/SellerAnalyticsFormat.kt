@@ -10,14 +10,17 @@ import kotlin.math.abs
 
 /** Display-only helpers for seller analytics. No sales value is calculated here, only presented. */
 
-/** Indian digit grouping (1,23,456) done by hand so JVM tests and Android devices format identically. */
+/**
+ * Indian digit grouping (1,23,456) done by hand so JVM tests and Android devices format identically.
+ * Built only from `toString()`, which always emits 0–9, so the phone's language never changes the digits.
+ */
 fun formatRupees(paise: Long): String {
     val sign = if (paise < 0) "-" else ""
     val whole = (abs(paise) / 100).toString()
     val fraction = abs(paise) % 100
     val grouped = if (whole.length <= 3) whole else
         whole.dropLast(3).reversed().chunked(2).joinToString(",").reversed() + "," + whole.takeLast(3)
-    return sign + "₹" + grouped + if (fraction == 0L) "" else ".%02d".format(fraction)
+    return sign + "₹" + grouped + if (fraction == 0L) "" else "." + fraction.toString().padStart(2, '0')
 }
 
 fun lastDays(days: Int, today: LocalDate): InsightRange = InsightRange(today.minusDays(days - 1L), today)

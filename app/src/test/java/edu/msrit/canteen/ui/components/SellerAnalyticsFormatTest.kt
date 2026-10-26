@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
+import java.util.Locale
 
 class SellerAnalyticsFormatTest {
     private val monday = LocalDate.of(2026, 10, 26)
@@ -19,6 +20,19 @@ class SellerAnalyticsFormatTest {
         assertEquals("₹1,23,456", formatRupees(12_345_600))
         assertEquals("₹12,34,56,789.05", formatRupees(123_456_789_05))
         assertEquals("-₹30", formatRupees(-3_000))
+    }
+
+    @Test fun rupeesKeepAsciiDigitsWhateverThePhoneLanguage() {
+        val original = Locale.getDefault()
+        try {
+            listOf("mr-IN", "ar-EG", "bn-IN").forEach { tag ->
+                Locale.setDefault(Locale.forLanguageTag(tag))
+                assertEquals(tag, "₹1,234.50", formatRupees(123_450))
+                assertEquals(tag, "₹0.05", formatRupees(5))
+            }
+        } finally {
+            Locale.setDefault(original)
+        }
     }
 
     @Test fun lastDaysEndsTodayAndIncludesToday() {
