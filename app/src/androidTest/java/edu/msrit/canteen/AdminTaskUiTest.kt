@@ -1,5 +1,6 @@
 package edu.msrit.canteen
 
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -143,6 +144,28 @@ class AdminTaskUiTest {
         rule.onNodeWithTag("admin_analytics_north-counter").performScrollTo().performClick()
         rule.onNodeWithTag("admin_seller_analytics").assertExists()
         rule.onNodeWithText("North Counter · demo · sample").assertExists()
+    }
+
+    @Test fun sellerDetailCountsAreDisplayOnlyBecauseListsAreNotSellerFiltered() {
+        openAdmin("debug_admin_seller_detail")
+        rule.onNodeWithTag("admin_seller_tickets").assertHasNoClickAction()
+        rule.onNodeWithTag("admin_seller_review").assertHasNoClickAction()
+    }
+
+    @Test fun tappingCurrentTicketStatusChangesNothing() {
+        openAdmin("debug_admin_ticket")
+        rule.onNodeWithTag("admin_ticket_status_open").performScrollTo().performClick()
+        rule.onNodeWithTag("admin_ticket_message").assertDoesNotExist()
+        back()
+        rule.onNodeWithTag("debug_admin_audit").performScrollTo().performClick()
+        rule.onNodeWithText("Ticket status").assertDoesNotExist()
+    }
+
+    @Test fun overlongNoteExplainsTheLimit() {
+        openAdmin("debug_admin_ticket")
+        rule.onNodeWithTag("admin_ticket_note").performScrollTo().performTextInput("x".repeat(501))
+        rule.onNodeWithText("Save local note").performScrollTo().performClick()
+        rule.onNodeWithText("Notes can be up to 500 characters. Shorten it and save again.").performScrollTo().assertExists()
     }
 
     @Test fun sellerOwnerCannotOpenAdminLinks() {

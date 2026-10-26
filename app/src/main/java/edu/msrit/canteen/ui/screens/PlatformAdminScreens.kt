@@ -264,10 +264,11 @@ private fun AdminSellerDetail(identity: AuthorizedIdentity?, sellerId: String?, 
     val toReview = DevelopmentInsights.moderation(identity).count { it.sellerId == record.id && it.state == ADMIN_MODERATION_PENDING }
     AdminDirectoryRow(record.name, orderingLabel(record.id) ?: "Not in the customer catalog yet",
         listOf(record.status.label to sellerTone(record.status)), tag = "admin_seller_header")
+    // Display-only: the Support and Content review lists can't be filtered to one seller from here.
     AdminTwoColumn(listOf(
-        Triple(openTickets, "Open tickets", "admin_seller_tickets" to AdminPage.SUPPORT),
-        Triple(toReview, "Content to review", "admin_seller_review" to AdminPage.MODERATION),
-    )) { (value, label, target), modifier -> AdminCountTile(value, label, { onNavigate(target.second) }, modifier, tag = target.first) }
+        Triple(openTickets, "Open tickets", "admin_seller_tickets"),
+        Triple(toReview, "Content to review", "admin_seller_review"),
+    )) { (value, label, tag), modifier -> AdminValueTile(value.toString(), label, modifier, tag) }
     AdminSectionHeader("Access and configuration")
     AdminInfoCard("Owner access", "${record.ownerInviteStatus}. Real invitation, revocation and verified email require the backend.")
     AdminInfoCard("Business configuration", "Seller-controlled minimum, hours and profile remain separate from admin oversight.")
@@ -366,9 +367,10 @@ private fun AdminAnalytics(identity: AuthorizedIdentity?, page: AdminPage, selle
     if (summary.orders == 0) RitEmptyState("No verified app sales", "No eligible production transactions exist. Unpaid requests are excluded.")
     else AdminTwoColumn(listOf(
         Triple(adminMoney(summary.netPaise), "Sample net collected", "admin_sample_revenue"),
+        Triple(adminMoney(summary.grossPaise), "Sample gross before discounts", null),
+        Triple(adminMoney(summary.discountPaise), "Sample discounts", null),
         Triple(summary.orders.toString(), "Sample paid orders", null),
         Triple(summary.customers.toString(), "Sample unique buyers", null),
-        Triple(adminMoney(summary.discountPaise), "Sample discounts · ${adminMoney(summary.grossPaise)} gross", null),
     )) { (value, label, tag), modifier -> AdminValueTile(value, label, modifier, tag) }
     if (currentSeller == null) {
         val active = DevelopmentInsights.sellers(identity).filter { it.status == AdminSellerStatus.ACTIVE }
@@ -428,7 +430,8 @@ private fun AdminTicketDetail(identity: AuthorizedIdentity?, ticketId: String?) 
     AdminSectionHeader("Status")
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         TicketStatus.entries.forEach { s -> RitChip(s.label, ticket.status == s, {
-            if (DevelopmentInsights.setTicketStatus(identity, ticket.id, s)) message = "Status set to ${s.label} locally; no participant notified."
+            if (ticket.status != s && DevelopmentInsights.setTicketStatus(identity, ticket.id, s))
+                message = "Status set to ${s.label} locally; no participant notified."
         }, Modifier.testTag("admin_ticket_status_${s.name.lowercase()}")) }
     }
     AdminSectionHeader("Internal note")
@@ -438,8 +441,11 @@ private fun AdminTicketDetail(identity: AuthorizedIdentity?, ticketId: String?) 
         Modifier.padding(top = 4.dp))
     Spacer(Modifier.height(8.dp))
     RitPrimaryButton("Save local note", {
-        message = if (DevelopmentInsights.saveInternalNote(identity, ticket.id, note))
-            "Local note saved; no participant notified." else "Could not save note."
+        message = when {
+            note.length > 500 -> "Notes can be up to 500 characters. Shorten it and save again."
+            DevelopmentInsights.saveInternalNote(identity, ticket.id, note) -> "Local note saved; no participant notified."
+            else -> "Could not save note."
+        }
     }, Modifier.fillMaxWidth())
     if (message.isNotEmpty()) RitText(message, RitType.small, RitThemeTokens.colors.accent, Modifier.padding(top = 8.dp).testTag("admin_ticket_message"))
     if (ticket.category != TicketCategory.PAYMENT) { Spacer(Modifier.height(12.dp))
