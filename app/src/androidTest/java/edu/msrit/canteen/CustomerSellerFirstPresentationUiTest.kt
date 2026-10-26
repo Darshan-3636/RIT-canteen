@@ -1,10 +1,13 @@
 package edu.msrit.canteen
 
-import androidx.compose.ui.test.assertDoesNotExist
-import androidx.compose.ui.test.assertExists
-import androidx.compose.ui.test.junit4.createComposeRule
+import android.R
+import android.view.ViewGroup
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
@@ -18,16 +21,24 @@ import org.junit.Test
 import java.util.concurrent.atomic.AtomicReference
 
 class CustomerSellerFirstPresentationUiTest {
-    @get:Rule val rule = createComposeRule()
+    @get:Rule val rule = createAndroidComposeRule<DebugTestingActivity>()
+
+    private fun setScreen(content: @Composable () -> Unit) {
+        rule.runOnUiThread {
+            val contentRoot = rule.activity.findViewById<ViewGroup>(R.id.content)
+            val composeView = contentRoot.getChildAt(0) as ComposeView
+            composeView.setContent(content)
+        }
+        rule.waitForIdle()
+    }
 
     @Test fun sellerDirectoryFiltersAndReturnsTheChosenSellerId() {
         val chosenSellerId = AtomicReference<String?>(null)
-        rule.setContent {
+        setScreen {
             RitTheme {
                 ChooseSellerScreen(onSellerChosen = chosenSellerId::set, onBack = {})
             }
         }
-
         rule.onNodeWithTag("choose_seller").assertExists()
         rule.onNodeWithText("Individual & Bulk").assertExists()
         rule.onNodeWithTag("choose_seller_card_main-canteen").performScrollTo().performClick()
@@ -40,12 +51,11 @@ class CustomerSellerFirstPresentationUiTest {
     }
 
     @Test fun sellerMenuSearchStaysWithinTheSelectedSeller() {
-        rule.setContent {
+        setScreen {
             RitTheme {
                 SellerScopedMenuScreen(sellerId = "main-canteen", onBack = {}, onFood = {})
             }
         }
-
         rule.onNodeWithTag("seller_scoped_menu").assertExists()
         rule.onNodeWithTag("seller_menu_item_masala-dosa").performScrollTo().assertExists()
         rule.onNodeWithTag("seller_menu_item_north-lunch").assertDoesNotExist()
@@ -55,26 +65,30 @@ class CustomerSellerFirstPresentationUiTest {
     }
 
     @Test fun secondarySellerMenuContainsOnlyItsOwnItems() {
-        rule.setContent {
+        setScreen {
             RitTheme {
                 SellerScopedMenuScreen(sellerId = "north-counter", onBack = {}, onFood = {})
             }
         }
-
         rule.onNodeWithText("Bulk Only").assertExists()
         rule.onNodeWithTag("seller_menu_item_north-lunch").performScrollTo().assertExists()
         rule.onNodeWithTag("seller_menu_item_masala-dosa").assertDoesNotExist()
     }
 
     @Test fun offersLeadWithBenefitEligibilityAndClearAction() {
-        rule.setContent {
+        val openedPromotion = AtomicReference<String?>(null)
+        setScreen {
             RitTheme {
-                CustomerPromotionsScreen(onBack = {}, onPromotion = {})
+                CustomerPromotionsScreen(onBack = {}, onPromotion = openedPromotion::set)
             }
         }
-
-        rule.onNodeWithTag("offer_benefit_dosa-spotlight").assertExists()
-        rule.onNodeWithTag("offer_eligibility_dosa-spotlight").assertExists()
-        rule.onNodeWithTag("offer_action_dosa-spotlight").assertExists()
+        rule.onNodeWithTag("offer_benefit_dosa-spotlight", useUnmergedTree = true)
+            .assertTextContains("20% OFF")
+        rule.onNodeWithTag("offer_eligibility_dosa-spotlight", useUnmergedTree = true)
+            .assertTextContains("Masala Dosa", substring = true)
+        rule.onNodeWithTag("offer_action_dosa-spotlight", useUnmergedTree = true)
+            .performScrollTo().performClick()
+        assertEquals("dosa-spotlight", openedPromotion.get())
     }
+
 }
