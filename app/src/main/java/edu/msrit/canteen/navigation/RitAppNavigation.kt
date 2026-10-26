@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
@@ -22,8 +23,9 @@ import edu.msrit.canteen.BuildConfig
 import edu.msrit.canteen.auth.AuthEntryIntent
 import edu.msrit.canteen.onboarding.OnboardingFlow
 import edu.msrit.canteen.onboarding.SharedPreferencesOnboardingPreference
-import edu.msrit.canteen.ui.screens.CustomerHomePreviewScreen
 import edu.msrit.canteen.ui.screens.CustomerMenuScreen
+import edu.msrit.canteen.ui.screens.ChooseSellerScreen
+import edu.msrit.canteen.ui.screens.SellerScopedMenuScreen
 import edu.msrit.canteen.ui.screens.ExploreSellersScreen
 import edu.msrit.canteen.ui.screens.SellerProfileScreen
 import edu.msrit.canteen.ui.screens.FoodDetailsScreen
@@ -71,13 +73,13 @@ import edu.msrit.canteen.customer.BulkRequestRecord
 import edu.msrit.canteen.customer.RIT_TIME_ZONE
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.QuoteStage
-import edu.msrit.canteen.ui.screens.SellerOverviewScreen
+import edu.msrit.canteen.ui.screens.SellerDailyOperationsOverview
 import edu.msrit.canteen.ui.screens.SellerInboxScreen
-import edu.msrit.canteen.ui.screens.SellerRequestDetailScreen
+import edu.msrit.canteen.ui.screens.SellerDailyRequestDetailPresentation
 import edu.msrit.canteen.ui.screens.SellerRevisionCompareScreen
 import edu.msrit.canteen.ui.screens.SellerFinalApprovalScreen
 import edu.msrit.canteen.ui.screens.SellerSpecialPickupScreen
-import edu.msrit.canteen.ui.screens.SellerScheduleScreen
+import edu.msrit.canteen.ui.screens.SellerPickupSchedulePresentation
 import edu.msrit.canteen.ui.screens.SellerHistoryScreen
 import edu.msrit.canteen.ui.screens.SellerBusinessHomeScreen
 import edu.msrit.canteen.ui.screens.SellerMenuManagementScreen
@@ -246,6 +248,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
     val customerAccount = remember { DevelopmentCustomerAccount }
     val bulkDraft = remember { BulkDraftSession() }
     val individualCart = remember { IndividualCartSession() }
+    var selectedCustomerSellerId by rememberSaveable { mutableStateOf<String?>(null) }
     val cartCount = individualCart.draft.totalUnits + bulkDraft.draft.lines.sumOf { it.quantity }
     val demoCustomerId = DevelopmentPreviewAccess.identities.firstOrNull { it.role == DevelopmentRole.Customer }
         ?.authorization?.userId.orEmpty()
@@ -342,7 +345,10 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                         onOrderFood = { navController.navigate(Route.OrderFood) },
                         onSellers = { navController.navigate(Route.Sellers) },
                         onSellerProfile = { navController.navigate(Route.sellerProfile(edu.msrit.canteen.customer.PreviewCatalog.MAIN_ID)) },
-                        onSellerMenu = { navController.navigate(Route.sellerMenu(edu.msrit.canteen.customer.PreviewCatalog.MAIN_ID)) },
+                        onSellerMenu = {
+                            selectedCustomerSellerId = PreviewCatalog.MAIN_ID
+                            navController.navigate(Route.sellerMenu(PreviewCatalog.MAIN_ID))
+                        },
                         onFoodDetails = { navController.navigate(Route.foodDetails("masala-dosa")) },
                         onUnifiedCart = { openAsDemoCustomer(Route.cart()) },
                         onSeedDemoCarts = {
@@ -369,7 +375,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                             demoFavorites.clearCustomer(demoCustomerId)
                             openAsDemoCustomer(Route.Favorites)
                         },
-                        onPromotions = { openAsDemoCustomer(Route.Promotions) },
+                        onPromotions = { selectedCustomerSellerId = null; openAsDemoCustomer(Route.Promotions) },
                         onQuickReorderEmpty = { openAsDemoCustomer(Route.QuickReorderEmpty) },
                         onQuickReorderSample = { openAsDemoCustomer(Route.QuickReorderSample) },
                         onBulkCart = {
@@ -443,6 +449,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                         onReset = {
                             demoFavorites.resetAll(); bulkDraft.clear(); individualCart.clear(); DevelopmentIndividualOrders.reset(); DevelopmentSellerOperations.reset()
                             DevelopmentSellerBusiness.reset(); DevelopmentInsights.reset(); customerAccount.reset()
+                            selectedCustomerSellerId = null
                             DevelopmentPreviewAccess.reset()
                         },
                     )
@@ -533,14 +540,12 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
             }
             composable(Route.CustomerPreview) {
                 InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
-                    CustomerHomePreviewScreen(
-                        onOrderFood = { navController.navigate(Route.OrderFood) },
-                        onBulk = { navController.navigate(Route.BulkSellers) },
-                        onSellers = { navController.navigate(Route.Sellers) },
-                        onFood = { navController.navigate(Route.foodDetails(it)) },
-                        onSearch = { navController.navigate(Route.search(it)) },
-                        onOffers = { navController.navigate(Route.Promotions) },
-                        onCart = { navController.navigate(Route.cart()) },
+                    ChooseSellerScreen(
+                        onSellerChosen = { sellerId ->
+                            selectedCustomerSellerId = sellerId
+                            navController.navigate(Route.sellerMenu(sellerId))
+                        },
+                        onBack = { navController.popBackStack() },
                         onBottom = ::openCustomerBottom,
                         cartCount = cartCount,
                         favorites = demoFavorites,
@@ -569,7 +574,10 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
             composable(Route.SellerProfile, arguments = listOf(navArgument("sellerId") { type = NavType.StringType })) { entry ->
                 var pendingSeller by remember { mutableStateOf<String?>(null) }
                 InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) { SellerProfileScreen(entry.arguments?.getString("sellerId").orEmpty(),
-                    onBack = { navController.popBackStack() }, onMenu = { navController.navigate(Route.sellerMenu(it)) },
+                    onBack = { navController.popBackStack() }, onMenu = {
+                        selectedCustomerSellerId = it
+                        navController.navigate(Route.sellerMenu(it))
+                    },
                     onFood = { navController.navigate(Route.foodDetails(it)) },
                     onBulk = { sellerId ->
                         if (bulkDraft.selectSeller(sellerId)) navController.navigate(Route.BulkCart)
@@ -584,9 +592,21 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                     }) }
             }
             composable(Route.SellerMenu, arguments = listOf(navArgument("sellerId") { type = NavType.StringType })) { entry ->
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) { CustomerMenuScreen(entry.arguments?.getString("sellerId"),
-                    onBack = { navController.popBackStack() }, onFood = { navController.navigate(Route.foodDetails(it)) },
-                    favorites = demoFavorites, customerId = demoCustomerId) } }
+                val sellerId = entry.arguments?.getString("sellerId").orEmpty()
+                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                    SellerScopedMenuScreen(sellerId,
+                        onBack = { navController.popBackStack() },
+                        onFood = { navController.navigate(Route.foodDetails(it)) },
+                        favorites = demoFavorites, customerId = demoCustomerId,
+                        onChooseSeller = {
+                            if (!navController.popBackStack(Route.CustomerPreview, false)) navController.navigate(Route.CustomerPreview)
+                        },
+                        onOffers = {
+                            selectedCustomerSellerId = sellerId
+                            navController.navigate(Route.Promotions)
+                        },
+                        onBottom = ::openCustomerBottom, cartCount = cartCount)
+                } }
             }
             composable(Route.FoodDetails, arguments = listOf(navArgument("itemId") { type = NavType.StringType })) { entry ->
                 var pendingBulkItem by remember { mutableStateOf<String?>(null) }
@@ -643,7 +663,8 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
             composable(Route.Promotions) {
                 InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
                     CustomerPromotionsScreen(onBack = { navController.popBackStack() },
-                        onPromotion = { navController.navigate(Route.promotionDetail(it)) })
+                        onPromotion = { navController.navigate(Route.promotionDetail(it)) },
+                        sellerId = selectedCustomerSellerId)
                 } }
             }
             composable(Route.PromotionDetail, arguments = listOf(navArgument("promotionId") { type = NavType.StringType })) { entry ->
@@ -806,22 +827,24 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
             composable(Route.SellerOverview) {
                 val sellerId = activeSellerId() ?: "north-counter"
                 InsetScreen { DebugSellerGate(sellerId, "bulk.view", { navController.navigate(Route.DeveloperPanel) }) {
-                    SellerOverviewScreen(DevelopmentSellerOperations.records, sellerId,
-                        PreviewCatalog.sellers.find { it.id == sellerId }?.name ?: "Seller",
-                        DevelopmentPreviewAccess.activeIdentity?.label ?: "Seller",
-                        DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "bulk.respond")),
-                        DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "operations.history")),
+                    SellerDailyOperationsOverview(
+                        records = DevelopmentSellerOperations.records, sellerId = sellerId,
+                        sellerName = PreviewCatalog.sellers.find { it.id == sellerId }?.name ?: "Seller",
+                        roleLabel = DevelopmentPreviewAccess.activeIdentity?.label ?: "Seller",
+                        canRespond = DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "bulk.respond")),
                         onBack = { navController.popBackStack() },
-                        onInbox = { navController.navigate(Route.SellerInbox) },
-                        onSchedule = { navController.navigate(Route.SellerSchedule) },
-                        onHistory = { navController.navigate(Route.SellerHistory) },
-                        onRequest = { navController.navigate(Route.sellerDetail(it)) },
-                        onManagement = { navController.navigate(Route.SellerManagement) },
-                        onAnalytics = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "analytics.view")))
+                        onOpenRequests = { navController.navigate(Route.SellerInbox) },
+                        onOpenSchedule = { navController.navigate(Route.SellerSchedule) },
+                        onOpenRequest = { navController.navigate(Route.sellerDetail(it)) },
+                        onOpenMenu = { navController.navigate(Route.SellerManageMenu) },
+                        onOpenSales = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "analytics.view")))
                             ({ navController.navigate(Route.sellerInsight(SellerInsightPage.OVERVIEW)) }) else null,
-                        onReports = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "reports.export")))
+                        onOpenReports = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "reports.export")))
                             ({ navController.navigate(Route.sellerInsight(SellerInsightPage.REPORT_BUILDER)) }) else null,
-                        onSupport = { navController.navigate(Route.sellerInsight(SellerInsightPage.SUPPORT)) })
+                        onOpenManagement = { navController.navigate(Route.SellerManagement) },
+                        onOpenHistory = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "operations.history")))
+                            ({ navController.navigate(Route.SellerHistory) }) else null,
+                        onOpenSupport = { navController.navigate(Route.sellerInsight(SellerInsightPage.SUPPORT)) })
                 } }
             }
             composable(Route.SellerInbox) {
@@ -838,13 +861,13 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 InsetScreen { DebugSellerGate(sellerId, "bulk.view", { navController.navigate(Route.DeveloperPanel) }) {
                     val record = scopedSellerRecord(reference)
                     if (record == null) CustomerUnavailableScreen("request", { navController.popBackStack() })
-                    else SellerRequestDetailScreen(record,
+                    else SellerDailyRequestDetailPresentation(record,
                         DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "bulk.respond")),
                         onBack = { navController.popBackStack() },
-                        onCounter = { navController.navigate(Route.sellerCounter(reference)) },
-                        onApproval = { navController.navigate(Route.sellerApproval(reference)) },
-                        onSpecial = { navController.navigate(Route.sellerSpecial(reference)) },
-                        onCompare = { navController.navigate(Route.sellerCompare(reference)) },
+                        onPrimaryAction = { navController.navigate(Route.sellerApproval(reference)) },
+                        onReviewSpecialPickup = { navController.navigate(Route.sellerSpecial(reference)) },
+                        onCompareRevisions = { navController.navigate(Route.sellerCompare(reference)) },
+                        onCounteroffer = { navController.navigate(Route.sellerCounter(reference)) },
                         onReject = { DevelopmentSellerOperations.reject(reference,
                             DevelopmentPreviewAccess.activeIdentity?.authorization) })
                 } }
@@ -907,9 +930,10 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
             composable(Route.SellerSchedule) {
                 val sellerId = activeSellerId() ?: "north-counter"
                 InsetScreen { DebugSellerGate(sellerId, "bulk.view", { navController.navigate(Route.DeveloperPanel) }) {
-                    SellerScheduleScreen(DevelopmentSellerOperations.records, sellerId,
+                    SellerPickupSchedulePresentation(DevelopmentSellerOperations.records, sellerId,
                         onBack = { navController.popBackStack() },
-                        onRequest = { navController.navigate(Route.sellerDetail(it)) })
+                        onOpenRequest = { navController.navigate(Route.sellerDetail(it)) },
+                        canRespond = DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "bulk.respond")))
                 } }
             }
             composable(Route.SellerHistory) {

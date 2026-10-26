@@ -89,6 +89,7 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
     var specialReason by remember(record.reference, latest.version) { mutableStateOf(latest.specialReason) }
     var note by remember(record.reference, latest.version) { mutableStateOf("") }
     var feedback by remember(record.reference, latest.version) { mutableStateOf("") }
+    var showingPreview by remember(record.reference, latest.version) { mutableStateOf(false) }
     val selected = menu.filter { (quantities[it.id] ?: 0) > 0 }
     val pricesValid = selected.all { prices[it.id]?.toLongOrNull() != null }
     val lines = selected.mapNotNull { item ->
@@ -109,6 +110,17 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
         if (isSeller) QuoteActor.SELLER else QuoteActor.CUSTOMER, lines, pickup, special,
         proposal.totalPaise, note, now, specialReason) else null
     val diff = preview?.let { compareQuotes(latest, it) }
+
+    if (isSeller && showingPreview && preview != null) {
+        SellerCounterofferPreviewPresentation(
+            record = record, proposal = preview, canRespond = true,
+            onBack = { showingPreview = false },
+            onContinueReview = { showingPreview = false },
+            onReviewSpecialPickup = { showingPreview = false },
+            proposalIsDraft = true,
+        )
+        return
+    }
 
     Column(Modifier.fillMaxSize().background(colors.background).testTag("demo_quote_editor")) {
         CatalogHeader(if (isSeller) "Seller counteroffer" else "Customer revision", onBack)
@@ -204,6 +216,8 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
                 if (feedback.isNotBlank()) RitText(feedback, RitType.small, colors.accent)
             }
         }
+        if (isSeller && canSubmit) RitSecondaryButton("Preview changed terms", { showingPreview = true },
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("demo_quote_preview"))
         RitPrimaryButton("Create demo revision", {
             val result = onSubmit(proposal)
             feedback = result.explanation

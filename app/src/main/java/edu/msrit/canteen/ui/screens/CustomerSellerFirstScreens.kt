@@ -28,9 +28,12 @@ import edu.msrit.canteen.ui.components.CatalogFoodCard
 import edu.msrit.canteen.ui.components.CatalogHeader
 import edu.msrit.canteen.ui.components.CatalogPill
 import edu.msrit.canteen.ui.components.CatalogSellerCard
+import edu.msrit.canteen.ui.components.RitBottomItem
+import edu.msrit.canteen.ui.components.RitBottomNavigation
 import edu.msrit.canteen.ui.components.RitEmptyState
 import edu.msrit.canteen.ui.components.RitLoadingIndicator
 import edu.msrit.canteen.ui.components.RitSearchField
+import edu.msrit.canteen.ui.components.RitSecondaryButton
 import edu.msrit.canteen.ui.components.RitStatusIndicator
 import edu.msrit.canteen.ui.components.RitText
 import edu.msrit.canteen.ui.components.SellerPhotoContent
@@ -50,6 +53,8 @@ fun ChooseSellerScreen(
     customerId: String? = null,
     catalog: CustomerCatalogSource = PreviewCatalog,
     isLoading: Boolean = false,
+    onBottom: ((RitBottomItem) -> Unit)? = null,
+    cartCount: Int = 0,
 ) {
     val colors = RitThemeTokens.colors
     var query by rememberSaveable { mutableStateOf("") }
@@ -90,6 +95,7 @@ fun ChooseSellerScreen(
                 }
             }
         }
+        if (onBottom != null) RitBottomNavigation(RitBottomItem.Home, onBottom, cartCount = cartCount)
     }
 }
 
@@ -102,6 +108,10 @@ fun SellerScopedMenuScreen(
     favorites: FavoritesRepository? = null,
     customerId: String? = null,
     catalog: CustomerCatalogSource = PreviewCatalog,
+    onChooseSeller: (() -> Unit)? = null,
+    onOffers: (() -> Unit)? = null,
+    onBottom: ((RitBottomItem) -> Unit)? = null,
+    cartCount: Int = 0,
 ) {
     val colors = RitThemeTokens.colors
     val seller = catalog.sellers.find { it.id == sellerId }
@@ -147,10 +157,23 @@ fun SellerScopedMenuScreen(
                         onClearClick = { query = "" },
                     )
                     Spacer(Modifier.height(13.dp))
+                    if (onChooseSeller != null) {
+                        RitSecondaryButton("Choose another seller", onChooseSeller,
+                            Modifier.fillMaxWidth().testTag("seller_menu_change_seller"))
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    if (onOffers != null) {
+                        RitSecondaryButton("Offers from ${seller.name}", onOffers,
+                            Modifier.fillMaxWidth().testTag("seller_menu_offers"))
+                        Spacer(Modifier.height(8.dp))
+                    }
                 }
                 CatalogCategories(categories, categoryId) { categoryId = it }
                 Spacer(Modifier.height(10.dp))
-                RitText("${seller.name} menu", RitType.title, modifier = Modifier.padding(horizontal = 20.dp, vertical = 5.dp))
+                val selectedName = categories.firstOrNull { it.id == categoryId }?.name
+                RitText(if (selectedName == null) "${seller.name} menu" else "$selectedName at ${seller.name}",
+                    RitType.title, modifier = Modifier.padding(horizontal = 20.dp, vertical = 5.dp)
+                        .testTag("seller_menu_results_heading"))
             }
             if (foods.isEmpty()) {
                 item {
@@ -170,5 +193,6 @@ fun SellerScopedMenuScreen(
                 }
             }
         }
+        if (onBottom != null) RitBottomNavigation(RitBottomItem.Home, onBottom, cartCount = cartCount)
     }
 }

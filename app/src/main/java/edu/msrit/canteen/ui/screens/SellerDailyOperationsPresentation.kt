@@ -20,6 +20,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +38,7 @@ import edu.msrit.canteen.customer.BulkDraft
 import edu.msrit.canteen.customer.BulkLine
 import edu.msrit.canteen.customer.BulkRequestRecord
 import edu.msrit.canteen.customer.CustomerCatalogSource
+import edu.msrit.canteen.customer.DemoTransitionResult
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.QuoteActor
 import edu.msrit.canteen.customer.QuoteRevision
@@ -86,6 +91,10 @@ fun SellerDailyOperationsOverview(
     onRetry: (() -> Unit)? = null,
     catalog: CustomerCatalogSource = PreviewCatalog,
     now: LocalDateTime = LocalDateTime.now(RIT_TIME_ZONE),
+    onOpenManagement: (() -> Unit)? = null,
+    onOpenHistory: (() -> Unit)? = null,
+    onOpenReports: (() -> Unit)? = null,
+    onOpenSupport: (() -> Unit)? = null,
 ) {
     val colors = RitThemeTokens.colors
     val sellerRecords = records.filter { it.sellerId == sellerId }
@@ -189,6 +198,22 @@ fun SellerDailyOperationsOverview(
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            if (onOpenManagement != null || onOpenHistory != null || onOpenReports != null || onOpenSupport != null) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        RitText("More seller tools", RitType.title)
+                        if (onOpenManagement != null) RitSecondaryButton("Business management", onOpenManagement,
+                            Modifier.fillMaxWidth().testTag("seller_daily_management"))
+                        if (onOpenHistory != null) RitSecondaryButton("Search and history", onOpenHistory,
+                            Modifier.fillMaxWidth().testTag("seller_daily_history"))
+                        if (onOpenReports != null) RitSecondaryButton("Reports", onOpenReports,
+                            Modifier.fillMaxWidth().testTag("seller_daily_reports"))
+                        if (onOpenSupport != null) RitSecondaryButton("Seller support", onOpenSupport,
+                            Modifier.fillMaxWidth().testTag("seller_daily_support"))
                     }
                 }
             }
@@ -306,8 +331,11 @@ fun SellerDailyRequestDetailPresentation(
     isDemoPreview: Boolean = true,
     errorMessage: String? = null,
     onRetry: (() -> Unit)? = null,
+    onCounteroffer: (() -> Unit)? = null,
+    onReject: (() -> DemoTransitionResult)? = null,
 ) {
     val colors = RitThemeTokens.colors
+    var actionFeedback by remember(record.reference) { mutableStateOf("") }
     val quoteExpired = isRequestQuoteExpired(record, now)
     val currentState = sellerDetailState(record, now)
     val specialNeedsApproval = record.latest.specialPickup &&
@@ -385,6 +413,20 @@ fun SellerDailyRequestDetailPresentation(
                 }
             }
 
+            if (canRespond && !quoteExpired && record.thread.stage in ACTIVE_REQUEST_STAGES) {
+                if (onCounteroffer != null && record.latest.actor == QuoteActor.CUSTOMER) item {
+                    RitSecondaryButton("Create seller counteroffer", onCounteroffer,
+                        Modifier.fillMaxWidth().testTag("seller_daily_counteroffer"))
+                }
+                if (onReject != null) item {
+                    RitSecondaryButton("Reject request", { actionFeedback = onReject().explanation },
+                        Modifier.fillMaxWidth().testTag("seller_daily_reject"))
+                }
+            }
+            if (actionFeedback.isNotBlank()) item {
+                RitMessageCard("Local response", actionFeedback)
+            }
+
             if (errorMessage != null) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -446,6 +488,7 @@ fun SellerCounterofferPreviewPresentation(
     modifier: Modifier = Modifier,
     now: LocalDateTime = LocalDateTime.now(RIT_TIME_ZONE),
     isDemoPreview: Boolean = true,
+    proposalIsDraft: Boolean = false,
 ) {
     val colors = RitThemeTokens.colors
     val previous = record.latest
@@ -498,12 +541,19 @@ fun SellerCounterofferPreviewPresentation(
             item {
                 if (canRespond && !sourceQuoteExpired && sourceRequestIsOpen) {
                     RitPrimaryButton(
-                        if (specialNeedsApproval) "Review pickup exception first" else "Continue to seller response",
-                        if (specialNeedsApproval) onReviewSpecialPickup else onContinueReview,
+                        if (proposalIsDraft) "Return to editor to send revision"
+                        else if (specialNeedsApproval) "Review pickup exception first" else "Continue to seller response",
+                        if (proposalIsDraft) onContinueReview
+                        else if (specialNeedsApproval) onReviewSpecialPickup else onContinueReview,
                         Modifier.fillMaxWidth().testTag(
-                            if (specialNeedsApproval) "seller_counteroffer_review_special"
+                            if (proposalIsDraft) "seller_counteroffer_continue"
+                            else if (specialNeedsApproval) "seller_counteroffer_review_special"
                             else "seller_counteroffer_continue",
                         ),
+                    )
+                    if (proposalIsDraft && proposal.specialPickup) RitMessageCard(
+                        "Separate pickup decision after sending",
+                        "This draft is not an accepted quote. Send it first, then explicitly review the exception for its new revision.",
                     )
                 } else if (sourceQuoteExpired) {
                     RitMessageCard(

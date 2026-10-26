@@ -57,6 +57,25 @@ class Prompt91DemoUiTest {
         rule.onNodeWithTag("cart_bulk_minimum").assertExists()
     }
 
+    @Test fun choosingAnotherSellerOnlyChangesTheBulkCartAfterConfirmation() {
+        hub("debug_seed_carts")
+        back()
+        hub("debug_open_home")
+        rule.onNodeWithTag("choose_seller_card_main-canteen").performScrollTo().performClick()
+        rule.onNodeWithTag("seller_menu_item_masala-dosa").performScrollTo().performClick()
+        rule.onNodeWithTag("food_add_bulk").performClick()
+        rule.onNodeWithTag("cart_confirmation").assertExists()
+        rule.onNodeWithTag("cart_keep").performClick()
+        rule.onNodeWithTag("food_details").assertExists()
+        rule.onNodeWithTag("food_add_bulk").performClick()
+        rule.onNodeWithTag("cart_clear_confirm").performClick()
+        rule.onNodeWithTag("customer_cart").assertExists()
+        rule.onNodeWithTag("cart_line_bulk_masala-dosa").assertExists()
+        rule.onNodeWithTag("cart_line_bulk_north-lunch").assertDoesNotExist()
+        rule.onNodeWithTag("cart_tab_individual").performClick()
+        rule.onNodeWithTag("cart_line_individual_masala-dosa").assertExists()
+    }
+
     @Test fun analyticsDateRangeAndForecastAreInteractiveDemoOnly() {
         hub("debug_role_sellerowner")
         hub("debug_seller_analytics")

@@ -40,31 +40,27 @@ class CustomerDiscoveryUiTest {
         rule.onNodeWithTag("debug_open_home").performScrollTo().assertIsNotEnabled()
     }
 
-    @Test fun homeCategoriesFilterInlineAndDetailsStillOpen() {
+    @Test fun customerChoosesSellerThenFiltersOnlyItsMenuAndOpensDetails() {
         rule.onNodeWithTag("debug_role_customer").performClick()
         rule.onNodeWithTag("debug_open_home").performScrollTo().performClick()
-        rule.onNodeWithTag("customer_home").assertExists()
+        rule.onNodeWithTag("choose_seller").assertExists()
+        rule.onNodeWithTag("choose_seller_card_main-canteen").performScrollTo().performClick()
+        rule.onNodeWithTag("seller_scoped_menu").assertExists()
+        rule.onNodeWithTag("seller_menu_item_north-lunch").assertDoesNotExist()
 
-        rule.onNodeWithTag("home_category_rice").performScrollTo().performClick()
-        rule.onNodeWithTag("customer_home").assertExists()
-        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("home_results_heading"))
-        rule.onNodeWithTag("home_results_heading").performScrollTo().assertTextContains("Rice", substring = true)
-        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("home_item_veg-biryani"))
-        rule.onNodeWithTag("home_item_veg-biryani").assertExists()
-        rule.onNodeWithTag("home_item_masala-dosa").assertDoesNotExist()
+        rule.onNodeWithTag("catalog_category_rice").performClick()
+        rule.onNodeWithTag("seller_menu_results_heading").assertTextContains("Rice", substring = true)
+        rule.onNodeWithTag("seller_menu_item_veg-biryani").performScrollTo().assertExists()
+        rule.onNodeWithTag("seller_menu_item_masala-dosa").assertDoesNotExist()
 
-        rule.onNodeWithTag("home_category_snacks").performScrollTo().performClick()
-        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("home_results_heading"))
-        rule.onNodeWithTag("home_results_heading").performScrollTo().assertTextContains("Snacks", substring = true)
-        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("home_item_idli"))
-        rule.onNodeWithTag("home_item_idli").assertExists()
-        rule.onNodeWithTag("home_item_veg-biryani").assertDoesNotExist()
+        rule.onNodeWithTag("catalog_category_snacks").performClick()
+        rule.onNodeWithTag("seller_menu_results_heading").assertTextContains("Snacks", substring = true)
+        rule.onNodeWithTag("seller_menu_item_idli").performScrollTo().assertExists()
+        rule.onNodeWithTag("seller_menu_item_veg-biryani").assertDoesNotExist()
 
-        rule.onNodeWithTag("home_category_all").performScrollTo().performClick()
-        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("home_results_heading"))
-        rule.onNodeWithTag("home_results_heading").performScrollTo().assertTextContains("All", substring = true)
-        rule.onNodeWithTag("home_list").performScrollToNode(hasTestTag("home_item_masala-dosa"))
-        rule.onNodeWithTag("home_item_masala-dosa").performClick()
+        rule.onNodeWithTag("catalog_category_all").performClick()
+        rule.onNodeWithTag("seller_menu_results_heading").assertTextContains("Main Canteen menu", substring = true)
+        rule.onNodeWithTag("seller_menu_item_masala-dosa").performScrollTo().performClick()
         rule.onNodeWithTag("food_details").assertExists()
     }
 }

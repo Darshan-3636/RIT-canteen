@@ -62,9 +62,10 @@ fun CatalogHeader(title: String, onBack: () -> Unit) {
 @Composable
 fun CatalogCategories(categories: List<MenuCategory>, selectedId: String?, onSelect: (String?) -> Unit) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp)) {
-        item(key = "all") { RitChip("All", selectedId == null, { onSelect(null) }) }
+        item(key = "all") { RitChip("All", selectedId == null, { onSelect(null) }, Modifier.testTag("catalog_category_all")) }
         items(categories, key = { it.id }) { category ->
-            RitChip(category.name, selectedId == category.id, { onSelect(category.id) })
+            RitChip(category.name, selectedId == category.id, { onSelect(category.id) },
+                Modifier.testTag("catalog_category_${category.id}"))
         }
     }
 }

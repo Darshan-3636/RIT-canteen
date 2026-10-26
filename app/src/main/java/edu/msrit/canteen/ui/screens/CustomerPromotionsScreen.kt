@@ -77,14 +77,18 @@ private fun Promotion.eligibilityLabel(catalog: CustomerCatalogSource): String {
 fun CustomerPromotionsScreen(onBack: () -> Unit, onPromotion: (String) -> Unit,
                              source: PromotionSource = DevelopmentPromotions,
                              catalog: CustomerCatalogSource = PreviewCatalog,
-                             now: Instant = Instant.now()) {
+                             now: Instant = Instant.now(), sellerId: String? = null) {
     val colors = RitThemeTokens.colors
-    val promotions = source.presentable(now = now).filter { it.hasVisibleTarget(catalog) }
+    val promotions = source.presentable(now = now).filter {
+        (sellerId == null || it.sellerId == sellerId) && it.hasVisibleTarget(catalog)
+    }
+    val sellerName = catalog.sellers.firstOrNull { it.id == sellerId }?.name
     Column(Modifier.fillMaxSize().background(colors.background).testTag("promotions_screen")) {
         CatalogHeader("Offers", onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
             RitText("Good things on the menu", RitType.heading)
-            RitText("Discover seller specials and featured food.", RitType.body, colors.muted)
+            RitText(if (sellerName == null) "Discover seller specials and featured food."
+                else "Specials and featured food from $sellerName.", RitType.body, colors.muted)
             Spacer(Modifier.height(10.dp))
             RitStatusIndicator("Demo offers · not redeemable")
             Spacer(Modifier.height(14.dp))
