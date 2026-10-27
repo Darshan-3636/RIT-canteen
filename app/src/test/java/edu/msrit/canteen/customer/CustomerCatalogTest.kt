@@ -61,4 +61,15 @@ class CustomerCatalogTest {
         ItemEligibility.entries.forEach { assertFalse(orderingAction(it).enabled) }
         assertEquals("Item unavailable", orderingAction(ItemEligibility.UNAVAILABLE).label)
     }
+
+    @Test fun everyCurrentSellerAndFoodHasDedicatedArtworkWithUnknownFallback() {
+        assertEquals(4, catalog.sellers.size)
+        assertEquals(12, catalog.items.size)
+        assertEquals(catalog.sellers.size, catalog.sellers.mapNotNull { CatalogArtwork.sellerPhoto(it.id) }.distinct().size)
+        assertEquals(catalog.items.size, catalog.items.mapNotNull { CatalogArtwork.itemPhoto(it.id) }.distinct().size)
+        catalog.sellers.forEach { assertEquals(CatalogArtwork.sellerPhoto(it.id), it.photo) }
+        catalog.items.forEach { assertEquals(CatalogArtwork.itemPhoto(it.id), it.photo) }
+        assertEquals(null, CatalogArtwork.sellerPhoto("future-seller"))
+        assertEquals(null, CatalogArtwork.itemPhoto("future-food"))
+    }
 }

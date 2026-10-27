@@ -7,6 +7,9 @@ import java.time.LocalDateTime
 
 /** Debug fixture only. Saved examples never leave this process or reach a seller. */
 object DevelopmentIndividualOrders {
+    private const val LEGACY_USER = "debug-customer"
+    private var activeUser = LEGACY_USER
+    private val byUser = mutableMapOf<String, List<IndividualOrderPreview>>()
     private fun examples(now: LocalDateTime) = listOf(
         IndividualOrderPreview("SAMPLE-FOOD-01", now.minusDays(2), listOf(
             QuoteLineSnapshot("masala-dosa", "Masala Dosa", 2, 5_000),
@@ -20,6 +23,13 @@ object DevelopmentIndividualOrders {
     var records by mutableStateOf(examples(LocalDateTime.now(RIT_TIME_ZONE)))
         private set
 
+    fun activate(userId: String) {
+        byUser[activeUser] = records
+        activeUser = userId
+        records = byUser[userId] ?: if (userId == LEGACY_USER) examples(LocalDateTime.now(RIT_TIME_ZONE)) else emptyList()
+    }
+    fun deactivate() { byUser[activeUser] = records; activeUser = ""; records = emptyList() }
+
     fun saveLocal(draft: IndividualDraft, catalog: CustomerCatalogSource = PreviewCatalog): Boolean {
         val check = checkIndividualCart(draft, catalog)
         if (!check.readyForReview) return false
@@ -28,8 +38,9 @@ object DevelopmentIndividualOrders {
         }
         records = listOf(IndividualOrderPreview("LOCAL-FOOD-${records.count { it.locallySaved } + 1}",
             LocalDateTime.now(RIT_TIME_ZONE), lines, check.subtotalPaise, locallySaved = true)) + records
+        byUser[activeUser] = records
         return true
     }
 
-    fun reset() { records = examples(LocalDateTime.now(RIT_TIME_ZONE)) }
+    fun reset() { activeUser = LEGACY_USER; records = examples(LocalDateTime.now(RIT_TIME_ZONE)); byUser[LEGACY_USER] = records }
 }

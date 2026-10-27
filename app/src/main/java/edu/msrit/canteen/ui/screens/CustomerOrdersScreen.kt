@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +29,7 @@ import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.QuoteStage
 import edu.msrit.canteen.ui.components.CatalogHeader
 import edu.msrit.canteen.ui.components.CatalogPill
+import edu.msrit.canteen.ui.components.FoodPhotoContent
 import edu.msrit.canteen.ui.components.RitBottomItem
 import edu.msrit.canteen.ui.components.RitBottomNavigation
 import edu.msrit.canteen.ui.components.RitChip
@@ -56,10 +58,11 @@ private fun bulkPrimaryState(record: BulkRequestRecord): String = when (record.t
 @Composable
 fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<BulkRequestRecord>,
                          onBack: () -> Unit, onIndividual: (String) -> Unit, onBulk: (String) -> Unit,
-                         onCart: () -> Unit, onBottom: (RitBottomItem) -> Unit, cartCount: Int = 0) {
+                         onCart: () -> Unit, onBottom: (RitBottomItem) -> Unit, cartCount: Int = 0,
+                         customerUserId: String = "debug-customer") {
     val colors = RitThemeTokens.colors
     var tab by remember { mutableStateOf(OrdersTab.ALL) }
-    val bulkVisible = bulk.filter { it.customerUserId == "debug-customer" }
+    val bulkVisible = bulk.filter { it.customerUserId == customerUserId }
     Column(Modifier.fillMaxSize().background(colors.background).testTag("customer_orders")) {
         CatalogHeader("Orders", onBack)
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -68,7 +71,8 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                     { tab = choice }, Modifier.weight(1f).testTag("orders_tab_${choice.name.lowercase()}"))
             }
         }
-        LazyColumn(Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp)) {
+        LazyColumn(Modifier.weight(1f).testTag("orders_list"),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp)) {
             item {
                 RitText("Your activity", RitType.heading)
                 RitText("Demo only · nothing submitted or charged", RitType.small, colors.muted,
@@ -82,7 +86,7 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                     OrderCard("Individual · Main Canteen", if (record.locallySaved) "Saved locally · not submitted" else "Sample history · not a real purchase",
                         record.lines.joinToString { "${it.quantity}× ${it.title}" },
                         "${record.placedAt.format(orderDate)} · ${displayPaise(record.totalPaise)}",
-                        { onIndividual(record.id) }, "orders_individual_${record.id}")
+                        { onIndividual(record.id) }, "orders_individual_${record.id}", record.lines.firstOrNull()?.itemId)
                 }
             }
             if (tab != OrdersTab.INDIVIDUAL) {
@@ -93,7 +97,7 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                     OrderCard("Bulk · $seller", bulkPrimaryState(record),
                         "${record.latest.lines.sumOf { it.quantity }} items · pickup ${record.latest.pickup.format(orderDate)}",
                         "${record.reference} · ${displayPaise(record.latest.totalPaise)} · Demo data",
-                        { onBulk(record.reference) }, "orders_bulk_${record.reference}")
+                        { onBulk(record.reference) }, "orders_bulk_${record.reference}", record.latest.lines.firstOrNull()?.itemId)
                 }
             }
             item { Spacer(Modifier.height(10.dp)); RitSecondaryButton("Open Cart", onCart, Modifier.fillMaxWidth()) }
@@ -104,11 +108,15 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
 
 @Composable
 private fun OrderCard(title: String, status: String, detail: String, foot: String,
-                      onClick: () -> Unit, tag: String) {
+                      onClick: () -> Unit, tag: String, previewItemId: String?) {
     val colors = RitThemeTokens.colors
     Column(Modifier.fillMaxWidth().padding(bottom = 10.dp).border(1.dp, colors.outline,
         RoundedCornerShape(RitRadii.card)).background(colors.card, RoundedCornerShape(RitRadii.card))
         .clickable(onClick = onClick).testTag(tag).padding(16.dp)) {
+        PreviewCatalog.items.find { it.id == previewItemId }?.let { item ->
+            FoodPhotoContent(item.photo, "${item.name} order preview", Modifier.fillMaxWidth().height(110.dp), item.localImageUri)
+            Spacer(Modifier.height(10.dp))
+        }
         RitText(title, RitType.label)
         Spacer(Modifier.height(6.dp))
         CatalogPill(status)
@@ -131,6 +139,9 @@ fun IndividualOrderDetailScreen(record: IndividualOrderPreview?, onBack: () -> U
             Spacer(Modifier.height(18.dp))
             record.lines.forEach { line ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    PreviewCatalog.items.find { it.id == line.itemId }?.let { item ->
+                        FoodPhotoContent(item.photo, "${item.name} order item", Modifier.padding(end = 10.dp).size(48.dp), item.localImageUri)
+                    }
                     RitText("${line.quantity} × ${line.title}", RitType.body, modifier = Modifier.weight(1f))
                     RitText(displayPaise(line.unitPricePaise * line.quantity), RitType.body)
                 }

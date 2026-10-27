@@ -21,6 +21,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import edu.msrit.canteen.BuildConfig
 import edu.msrit.canteen.auth.AuthEntryIntent
+import edu.msrit.canteen.auth.DemoAccount
+import edu.msrit.canteen.auth.DevelopmentDemoAccounts
 import edu.msrit.canteen.onboarding.OnboardingFlow
 import edu.msrit.canteen.onboarding.SharedPreferencesOnboardingPreference
 import edu.msrit.canteen.ui.screens.CustomerMenuScreen
@@ -48,6 +50,7 @@ import edu.msrit.canteen.customer.DevelopmentSellerOperations
 import edu.msrit.canteen.customer.DevelopmentSellerBusiness
 import edu.msrit.canteen.customer.DevelopmentInsights
 import edu.msrit.canteen.customer.DevelopmentCustomerAccount
+import edu.msrit.canteen.customer.CustomerProfile
 import edu.msrit.canteen.ui.theme.AppearancePreference
 import edu.msrit.canteen.ui.screens.CustomerProfileScreen
 import edu.msrit.canteen.ui.screens.CustomerProfileEditScreen
@@ -114,6 +117,9 @@ import edu.msrit.canteen.ui.screens.BulkFinalQuoteScreen
 import edu.msrit.canteen.ui.screens.BulkPaymentEligibilityScreen
 import edu.msrit.canteen.ui.components.RitBottomItem
 import edu.msrit.canteen.ui.screens.EmailEntryScreen
+import edu.msrit.canteen.ui.screens.DemoLoginScreen
+import edu.msrit.canteen.ui.screens.DemoSignupScreen
+import edu.msrit.canteen.ui.screens.DemoRoleAccountScreen
 import edu.msrit.canteen.ui.screens.SellerOnboardingEntryScreen
 import edu.msrit.canteen.ui.screens.ModeSelectionPreviewScreen
 import edu.msrit.canteen.ui.screens.OnboardingScreen
@@ -131,6 +137,7 @@ internal object Route {
     const val Welcome = "welcome"
     const val SellerOnboardingEntry = "seller-onboarding-entry"
     const val EmailEntry = "email-entry/{intent}"
+    const val DemoAccountPage = "debug/demo-account"
     fun emailEntry(intent: AuthEntryIntent) = "email-entry/${intent.routeValue}"
     const val DeveloperPanel = "debug/developer-panel"
     const val StoriesPreview = "debug/rit-stories"
@@ -236,7 +243,7 @@ internal object Route {
         SellerManageCategories, SellerManageSettings, SellerManageProfile, SellerManageHours,
         SellerManageClosures, SellerManageMinimum, SellerManageEmployees, SellerManageEmployee,
         SellerManagePromotions, SellerManagePromotion, SellerInsights, Admin,
-        OtpPreview, ProfilePreview, ModePreview)
+        OtpPreview, ProfilePreview, ModePreview, DemoAccountPage)
 }
 
 @Composable
@@ -246,12 +253,53 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
     val onboarding = remember(context) { OnboardingFlow(SharedPreferencesOnboardingPreference(context)) }
     val demoFavorites = remember(context) { DevelopmentFavoritesRepository(context) }
     val customerAccount = remember { DevelopmentCustomerAccount }
+    remember(context) {
+        if (BuildConfig.DEBUG) {
+            DevelopmentDemoAccounts.initialize(context)
+            DevelopmentCustomerAccount.initialize(context)
+            DevelopmentDemoAccounts.activeAccount?.let { account ->
+                if (account.role == DevelopmentRole.Customer) {
+                    DevelopmentCustomerAccount.activate(account.id, CustomerProfile(account.name, account.email,
+                        requireNotNull(account.affiliation), account.department))
+                    DevelopmentIndividualOrders.activate(account.id)
+                } else { DevelopmentCustomerAccount.deactivate(); DevelopmentIndividualOrders.deactivate() }
+            }
+        }
+        true
+    }
     val bulkDraft = remember { BulkDraftSession() }
     val individualCart = remember { IndividualCartSession() }
     var selectedCustomerSellerId by rememberSaveable { mutableStateOf<String?>(null) }
     val cartCount = individualCart.draft.totalUnits + bulkDraft.draft.lines.sumOf { it.quantity }
-    val demoCustomerId = DevelopmentPreviewAccess.identities.firstOrNull { it.role == DevelopmentRole.Customer }
-        ?.authorization?.userId.orEmpty()
+    val demoCustomerId = DevelopmentPreviewAccess.activeIdentity?.authorization?.takeIf {
+        AppMode.Customer in it.modes }?.userId.orEmpty()
+    fun homeFor(account: DemoAccount): String = when (account.role) {
+        DevelopmentRole.Customer -> Route.CustomerPreview
+        DevelopmentRole.PlatformAdministrator -> Route.admin(AdminPage.DASHBOARD)
+        else -> Route.SellerOverview
+    }
+    fun finishDemoSignIn(account: DemoAccount) {
+        DevelopmentPreviewAccess.clearHubSelection()
+        if (account.role == DevelopmentRole.Customer) {
+            DevelopmentCustomerAccount.activate(account.id, CustomerProfile(account.name, account.email,
+                requireNotNull(account.affiliation), account.department))
+            DevelopmentIndividualOrders.activate(account.id)
+        } else { DevelopmentCustomerAccount.deactivate(); DevelopmentIndividualOrders.deactivate() }
+        individualCart.clear(); bulkDraft.clear(); selectedCustomerSellerId = null
+        navController.navigate(homeFor(account)) {
+            popUpTo(navController.graph.id) { inclusive = false }
+            launchSingleTop = true
+        }
+    }
+    fun signOutDemo() {
+        DevelopmentDemoAccounts.signOut(); DevelopmentPreviewAccess.clearHubSelection()
+        DevelopmentCustomerAccount.deactivate(); DevelopmentIndividualOrders.deactivate()
+        individualCart.clear(); bulkDraft.clear(); selectedCustomerSellerId = null
+        navController.navigate(Route.Welcome) {
+            popUpTo(navController.graph.id) { inclusive = false }
+            launchSingleTop = true
+        }
+    }
     fun openAsDemoCustomer(route: String) {
         DevelopmentPreviewAccess.select(DevelopmentRole.Customer)
         navController.navigate(route)
@@ -282,7 +330,8 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
             InsetScreen {
                 SplashScreen(
                     onStartupComplete = {
-                        navController.navigate(if (onboarding.shouldShowOnboarding()) Route.Onboarding else Route.Welcome) {
+                        navController.navigate(DevelopmentDemoAccounts.activeAccount?.takeIf { BuildConfig.DEBUG }
+                            ?.let(::homeFor) ?: if (onboarding.shouldShowOnboarding()) Route.Onboarding else Route.Welcome) {
                             popUpTo(Route.Splash) { inclusive = true }
                         }
                     },
@@ -319,12 +368,14 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
         composable(Route.EmailEntry, arguments = listOf(navArgument("intent") { type = NavType.StringType })) { entry ->
             val entryIntent = AuthEntryIntent.fromRoute(entry.arguments?.getString("intent"))
             InsetScreen {
-                EmailEntryScreen(
-                    entryIntent = entryIntent,
-                    onBack = { navController.popBackStack() },
-                    onProfilePreview = if (BuildConfig.DEBUG && entryIntent == AuthEntryIntent.GetStarted)
-                        ({ navController.navigate(Route.ProfilePreview) }) else null,
-                )
+                if (BuildConfig.DEBUG) {
+                    if (entryIntent == AuthEntryIntent.Login) DemoLoginScreen(
+                        onBack = { navController.popBackStack() },
+                        onCreateAccount = { navController.navigate(Route.emailEntry(AuthEntryIntent.GetStarted)) },
+                        onAuthenticated = ::finishDemoSignIn)
+                    else DemoSignupScreen(onBack = { navController.popBackStack() },
+                        onAuthenticated = ::finishDemoSignIn)
+                } else EmailEntryScreen(entryIntent = entryIntent, onBack = { navController.popBackStack() })
             }
         }
         if (BuildConfig.DEBUG) {
@@ -341,7 +392,8 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                         onCustomer = { navController.navigate(Route.CustomerPreview) },
                         onStories = { openAsDemoCustomer(Route.StoriesPreview) },
                         onCustomerPage = { openAsDemoCustomer(Route.customerAccount(it)) },
-                        onSeedCustomerExamples = { DevelopmentCustomerAccount.seedExamples(); openAsDemoCustomer(Route.customerAccount("support")) },
+                        onSeedCustomerExamples = { DevelopmentPreviewAccess.select(DevelopmentRole.Customer)
+                            DevelopmentCustomerAccount.seedExamples(); navController.navigate(Route.customerAccount("support")) },
                         onOrderFood = { navController.navigate(Route.OrderFood) },
                         onSellers = { navController.navigate(Route.Sellers) },
                         onSellerProfile = { navController.navigate(Route.sellerProfile(edu.msrit.canteen.customer.PreviewCatalog.MAIN_ID)) },
@@ -352,6 +404,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                         onFoodDetails = { navController.navigate(Route.foodDetails("masala-dosa")) },
                         onUnifiedCart = { openAsDemoCustomer(Route.cart()) },
                         onSeedDemoCarts = {
+                            DevelopmentPreviewAccess.select(DevelopmentRole.Customer)
                             individualCart.clear(); bulkDraft.clear()
                             PreviewCatalog.items.firstOrNull { it.id == "masala-dosa" }?.let { individualCart.setQuantity(it, 2) }
                             PreviewCatalog.items.firstOrNull { it.id == "filter-coffee" }?.let { individualCart.setQuantity(it, 1) }
@@ -360,7 +413,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                             PreviewCatalog.items.firstOrNull { it.id == "north-snack" }?.let { bulkDraft.setQuantity(it, 4) }
                             if (customerAccount.templates.none { it.name == "Club lunch sample" })
                                 customerAccount.saveTemplate("Club lunch sample", BulkDraft("north-counter",
-                                    listOf(BulkLine("north-lunch", 6), BulkLine("north-snack", 4))), demoCustomerId)
+                                    listOf(BulkLine("north-lunch", 6), BulkLine("north-snack", 4))), "debug-customer")
                             openAsDemoCustomer(Route.cart())
                         },
                         onUnifiedOrders = { openAsDemoCustomer(Route.Orders) },
@@ -368,11 +421,11 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                         onSearch = { openAsDemoCustomer(Route.search()) },
                         onFilters = { openAsDemoCustomer(Route.search(filters = true)) },
                         onFavoritesPopulated = {
-                            demoFavorites.seedSample(demoCustomerId)
+                            demoFavorites.seedSample("debug-customer")
                             openAsDemoCustomer(Route.Favorites)
                         },
                         onFavoritesEmpty = {
-                            demoFavorites.clearCustomer(demoCustomerId)
+                            demoFavorites.clearCustomer("debug-customer")
                             openAsDemoCustomer(Route.Favorites)
                         },
                         onPromotions = { selectedCustomerSellerId = null; openAsDemoCustomer(Route.Promotions) },
@@ -455,6 +508,23 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                     )
                 }
             }
+            composable(Route.DemoAccountPage) {
+                val account = DevelopmentDemoAccounts.activeAccount
+                InsetScreen {
+                    if (account == null || account.role == DevelopmentRole.Customer) {
+                        CustomerUnavailableScreen("account", { navController.navigate(Route.Welcome) {
+                            popUpTo(navController.graph.id) { inclusive = false }
+                        } })
+                    } else DemoRoleAccountScreen(account, appearance,
+                        onBack = { navController.popBackStack() },
+                        onDashboard = { navController.navigate(homeFor(account)) { launchSingleTop = true } },
+                        onSettings = { navController.navigate(if (account.role == DevelopmentRole.PlatformAdministrator)
+                            Route.admin(AdminPage.SETTINGS) else Route.SellerManageSettings) },
+                        onSupport = { navController.navigate(if (account.role == DevelopmentRole.PlatformAdministrator)
+                            Route.admin(AdminPage.SUPPORT) else Route.sellerInsight(SellerInsightPage.SUPPORT)) },
+                        onLogout = ::signOutDemo)
+                }
+            }
             composable(Route.StoriesPreview) {
                 InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
                     RitStoriesPreviewScreen(onBack = { navController.popBackStack() },
@@ -482,18 +552,14 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                             { navController.navigate(Route.QuickReorderEmpty) },
                             { navController.navigate(Route.Orders) }, { go("templates") }, { go("support") },
                             { go("settings") }, { navController.navigate(Route.StoriesPreview) }, { go("notifications") },
-                            cartCount = cartCount)
+                            cartCount = cartCount, onAccount = { go("account") })
                         "edit" -> CustomerProfileEditScreen(customerAccount, userId, back)
                         "settings" -> CustomerSettingsScreen(back, { go("appearance") }, { go("preferences") },
                             { go("privacy") }, { go("account") }, { go("support") })
                         "appearance" -> CustomerAppearanceScreen(appearance, back)
                         "preferences" -> CustomerPreferenceScreen(customerAccount, userId, false, back)
                         "privacy" -> CustomerPreferenceScreen(customerAccount, userId, true, back)
-                        "account" -> CustomerAccountManagementScreen(customerAccount.profile, back, {
-                            DevelopmentPreviewAccess.reset(); navController.navigate(Route.DeveloperPanel) {
-                                popUpTo(Route.DeveloperPanel) { inclusive = false }
-                            }
-                        })
+                        "account" -> CustomerAccountManagementScreen(customerAccount.profile, back, ::signOutDemo)
                         "notifications" -> CustomerNotificationsScreen(customerAccount, back)
                         "support" -> CustomerSupportScreen(customerAccount, back, { go("ticket-new") },
                             { navController.navigate(Route.customerAccount("ticket", it)) })
@@ -717,7 +783,8 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                         { navController.popBackStack() },
                         { navController.navigate(Route.individualOrderDetail(it)) },
                         { navController.navigate(Route.customerDemoDetail(it)) },
-                        { navController.navigate(Route.cart()) }, ::openCustomerBottom, cartCount)
+                        { navController.navigate(Route.cart()) }, ::openCustomerBottom, cartCount,
+                        customerUserId = demoCustomerId)
                 } }
             }
             composable(Route.IndividualOrderDetail, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
@@ -844,7 +911,9 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                         onOpenManagement = { navController.navigate(Route.SellerManagement) },
                         onOpenHistory = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "operations.history")))
                             ({ navController.navigate(Route.SellerHistory) }) else null,
-                        onOpenSupport = { navController.navigate(Route.sellerInsight(SellerInsightPage.SUPPORT)) })
+                        onOpenSupport = { navController.navigate(Route.sellerInsight(SellerInsightPage.SUPPORT)) },
+                        onOpenAccount = if (DevelopmentDemoAccounts.activeAccount != null)
+                            ({ navController.navigate(Route.DemoAccountPage) }) else null)
                 } }
             }
             composable(Route.SellerInbox) {
@@ -1093,7 +1162,9 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                         onNavigate = { navController.navigate(Route.admin(it)) },
                         onSeller = { navController.navigate(Route.admin(AdminPage.SELLER_DETAIL, it)) },
                         onSellerAnalytics = { navController.navigate(Route.admin(AdminPage.SELLER_ANALYTICS, it)) },
-                        onTicket = { navController.navigate(Route.admin(AdminPage.TICKET_DETAIL, it)) })
+                        onTicket = { navController.navigate(Route.admin(AdminPage.TICKET_DETAIL, it)) },
+                        onAccount = if (DevelopmentDemoAccounts.activeAccount != null)
+                            ({ navController.navigate(Route.DemoAccountPage) }) else null)
                 } }
             }
             composable(Route.CustomerDemoList) {

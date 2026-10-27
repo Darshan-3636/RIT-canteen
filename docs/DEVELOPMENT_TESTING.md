@@ -1,5 +1,11 @@
 # Development testing policy
 
+## Demo-login milestone (October 2026)
+
+The normal **debug** launcher now offers local email/password Login and Student/Faculty signup. Eight seeded accounts can enter Customer Home, their associated seller's dashboard, or Platform Overview without the Testing Hub. Locally registered customers use salted password hashes and are restored from device-local preferences; these are development identities, not production authentication. Profile, preferences, support and templates are scoped to the active customer ID. Individual order history is separated by customer in memory. Active cart drafts are cleared on logout or role switch. The dedicated debug Testing Hub remains available; the logo-tap shortcut remains removed. The release source set has an inert demo-account implementation and still uses the unavailable real-OTP entry.
+
+The catalog now bundles illustrative concept images for all four current seller fixtures and all twelve current menu items. These are not verified vendor photographs. Future catalog IDs fall back to neutral native placeholders, and a user-selected local image takes precedence.
+
 Until the application is complete, every development prompt should end with relevant builds, unit tests, lint, available automated UI/device tests, actual results, tests that could not run, and a short feature-specific manual visual/device checklist. Do not claim physical-device testing unless a connected device was used. Do not start a subsequent prompt while closing out the current one.
 
 ## Debug-only testing hub

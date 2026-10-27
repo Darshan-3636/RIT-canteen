@@ -285,7 +285,8 @@ private fun AdminSellerDetail(identity: AuthorizedIdentity?, sellerId: String?, 
 fun PlatformAdminScreen(page: AdminPage, identity: AuthorizedIdentity?, sample: Boolean,
                         sellerId: String?, ticketId: String?, onBack: () -> Unit,
                         onNavigate: (AdminPage) -> Unit, onSeller: (String) -> Unit,
-                        onSellerAnalytics: (String) -> Unit, onTicket: (String) -> Unit) {
+                        onSellerAnalytics: (String) -> Unit, onTicket: (String) -> Unit,
+                        onAccount: (() -> Unit)? = null) {
     val title = when (page) {
         AdminPage.DASHBOARD -> "Platform overview"; AdminPage.SELLERS -> "Participating sellers"
         AdminPage.SELLER_DETAIL -> "Seller oversight"; AdminPage.SELLER_SETUP -> "Seller setup"
@@ -297,7 +298,11 @@ fun PlatformAdminScreen(page: AdminPage, identity: AuthorizedIdentity?, sample: 
     AdminPageShell(title, "admin_${page.name.lowercase()}", onBack) {
         if (!PresentationAccess.allows(identity, ProtectedArea.Administrator)) { AdminDeniedState(onBack); return@AdminPageShell }
         when (page) {
-            AdminPage.DASHBOARD -> AdminOverview(identity, onNavigate, onSeller, onTicket)
+            AdminPage.DASHBOARD -> {
+                if (onAccount != null) RitSecondaryButton("My account", onAccount,
+                    Modifier.fillMaxWidth().testTag("admin_my_account"))
+                AdminOverview(identity, onNavigate, onSeller, onTicket)
+            }
             AdminPage.SELLERS -> AdminSellerDirectory(identity, onNavigate, onSeller)
             AdminPage.SELLER_DETAIL -> AdminSellerDetail(identity, sellerId, onNavigate, onSellerAnalytics)
             AdminPage.SELLER_SETUP -> AdminSellerSetup(identity, onNavigate)

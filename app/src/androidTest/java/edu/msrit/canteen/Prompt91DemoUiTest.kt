@@ -38,7 +38,8 @@ class Prompt91DemoUiTest {
         rule.onNodeWithTag("individual_save_demo").performClick()
         rule.onNodeWithTag("customer_orders").assertExists()
         rule.onNodeWithTag("orders_individual_LOCAL-FOOD-1").assertExists()
-        rule.onNodeWithTag("orders_bulk_DEMO-NC-NEW").performScrollTo().assertExists()
+        rule.onNodeWithTag("orders_list").performScrollToNode(hasTestTag("orders_bulk_DEMO-NC-NEW"))
+        rule.onNodeWithTag("orders_bulk_DEMO-NC-NEW").assertExists()
     }
 
     @Test fun cartTabsStaySeparateAndTemplateStartsWithoutBulkCart() {

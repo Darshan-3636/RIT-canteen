@@ -8,6 +8,14 @@ import androidx.compose.runtime.setValue
 object DevelopmentSellerBusiness : SellerBusinessRepository {
     private const val SELLER = "north-counter"
     private val fixtures = listOf(
+        SellerEmployee("demo-owner-main", "main-canteen", "Main Canteen Owner · demo", SellerEmployeeRole.OWNER),
+        SellerEmployee("demo-manager-main", "main-canteen", "Main Canteen Manager · demo", SellerEmployeeRole.MANAGER,
+            "demo-owner-main", setOf(SellerCapability.VIEW_REQUESTS, SellerCapability.RESPOND,
+                SellerCapability.HISTORY, SellerCapability.CATALOG, SellerCapability.AVAILABILITY,
+                SellerCapability.HOURS, SellerCapability.PROMOTIONS, SellerCapability.EMPLOYEES,
+                SellerCapability.ANALYTICS)),
+        SellerEmployee("demo-staff-main", "main-canteen", "Main Canteen Staff · demo", SellerEmployeeRole.STAFF,
+            "demo-manager-main", setOf(SellerCapability.VIEW_REQUESTS)),
         SellerEmployee("debug-owner", SELLER, "North Counter Owner · demo", SellerEmployeeRole.OWNER),
         SellerEmployee("debug-manager", SELLER, "North Counter Manager · demo", SellerEmployeeRole.MANAGER,
             "debug-owner", setOf(SellerCapability.VIEW_REQUESTS, SellerCapability.RESPOND,
@@ -18,6 +26,7 @@ object DevelopmentSellerBusiness : SellerBusinessRepository {
         SellerEmployee("debug-staff-ops", SELLER, "Operations Staff · delegated demo", SellerEmployeeRole.STAFF,
             "debug-manager", setOf(SellerCapability.VIEW_REQUESTS, SellerCapability.RESPOND,
                 SellerCapability.AVAILABILITY)),
+        SellerEmployee("demo-owner-north", SELLER, "North Counter Owner · demo", SellerEmployeeRole.OWNER),
     )
     override var employees by mutableStateOf(fixtures)
         private set

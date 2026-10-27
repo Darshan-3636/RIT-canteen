@@ -22,8 +22,8 @@ class DeveloperHubAccessUiTest {
         rule.onNodeWithTag("welcome_screen").assertExists()
         rule.onNodeWithTag("debug_testing_hub").assertDoesNotExist()
         rule.onNodeWithText("Login").performClick()
-        repeat(6) { rule.onNodeWithTag("login_logo").performTouchInput { click() } }
-        rule.onNodeWithTag("login_screen").assertExists()
+        rule.onNodeWithTag("demo_login_screen").assertExists()
+        rule.onNodeWithTag("login_logo").assertDoesNotExist()
         rule.onNodeWithTag("debug_testing_hub").assertDoesNotExist()
     }
 }

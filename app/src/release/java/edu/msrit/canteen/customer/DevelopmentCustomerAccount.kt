@@ -1,5 +1,7 @@
 package edu.msrit.canteen.customer
 
+import android.content.Context
+
 /** Inert release counterpart: no mock identity, data or mutation is available. */
 object DevelopmentCustomerAccount : CustomerAccountRepository {
     override val profile: CustomerProfile? = null
@@ -17,5 +19,8 @@ object DevelopmentCustomerAccount : CustomerAccountRepository {
     override fun replyToTicket(id: String, message: String, userId: String?) = false
     override fun escalateTicket(id: String, userId: String?) = false
     fun seedExamples() = Unit
+    fun initialize(context: Context) = Unit
+    fun activate(userId: String, initial: CustomerProfile) = Unit
+    fun deactivate() = Unit
     override fun reset() = Unit
 }

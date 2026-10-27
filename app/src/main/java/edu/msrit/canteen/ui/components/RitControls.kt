@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -124,6 +125,7 @@ fun RitTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     inputTag: String? = null,
     singleLine: Boolean = true,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     val colors = RitThemeTokens.colors
     val shape = RoundedCornerShape(RitRadii.card)
@@ -144,6 +146,7 @@ fun RitTextField(
             textStyle = RitType.body.copy(color = colors.foreground),
             singleLine = singleLine,
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            visualTransformation = visualTransformation,
             cursorBrush = SolidColor(colors.accent),
             decorationBox = { inner ->
                 Box(contentAlignment = if (singleLine) Alignment.CenterStart else Alignment.TopStart) {

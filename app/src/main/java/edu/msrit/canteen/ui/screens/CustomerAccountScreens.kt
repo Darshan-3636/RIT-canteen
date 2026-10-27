@@ -123,7 +123,8 @@ private fun CustomerAvatar(profile: CustomerProfile) {
 fun CustomerProfileScreen(repo: CustomerAccountRepository, onBack: () -> Unit, onBottom: (RitBottomItem) -> Unit,
                           onEdit: () -> Unit, onFavorites: () -> Unit, onQuickReorder: () -> Unit, onOrders: () -> Unit,
                           onTemplates: () -> Unit, onSupport: () -> Unit, onSettings: () -> Unit,
-                          onStories: () -> Unit, onNotifications: () -> Unit, cartCount: Int = 0) {
+                          onStories: () -> Unit, onNotifications: () -> Unit, cartCount: Int = 0,
+                          onAccount: (() -> Unit)? = null) {
     val colors = RitThemeTokens.colors
     CustomerShell("My profile", "customer_profile", onBack, onBottom, cartCount) {
         val profile = repo.profile
@@ -150,6 +151,8 @@ fun CustomerProfileScreen(repo: CustomerAccountRepository, onBack: () -> Unit, o
         AccountRow("Notifications", "Inbox preview and delivery boundary", onNotifications, "profile_notifications")
         AccountRow("Help & Support", "Issue categories and local ticket previews", onSupport, "profile_support")
         AccountRow("Settings & privacy", "Appearance, alerts and consent", onSettings, "profile_settings")
+        if (onAccount != null) AccountRow("Account & sign out", "Switch to another account safely",
+            onAccount, "profile_account")
         AccountRow("RIT Stories", "Optional games and ideas gallery", onStories, "profile_stories")
     }
 }
@@ -260,7 +263,7 @@ fun CustomerAccountManagementScreen(profile: CustomerProfile?, onBack: () -> Uni
         AccountRow("Sessions", "No production login session exists in this preview")
         AccountRow("Request my data", "Unavailable until authenticated account and privacy service exist")
         AccountRow("Request account deletion", "Requires identity verification and retention review; no deletion is sent")
-        RitSecondaryButton("End mock preview session", onSignOut, Modifier.fillMaxWidth().testTag("account_mock_signout"))
+        RitSecondaryButton("Log out", onSignOut, Modifier.fillMaxWidth().testTag("account_mock_signout"))
     }
 }
 

@@ -6,6 +6,7 @@ object DevelopmentPreviewAccess {
     val activeRole: DevelopmentRole? get() = null
     val activeIdentity: DevelopmentTestIdentity? get() = null
     fun select(role: DevelopmentRole) = Unit
+    fun clearHubSelection() = Unit
     fun reset() = Unit
     fun allows(area: ProtectedArea): Boolean = false
 }

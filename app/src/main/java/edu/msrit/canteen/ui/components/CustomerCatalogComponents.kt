@@ -1,6 +1,7 @@
 package edu.msrit.canteen.ui.components
 
 import androidx.compose.foundation.Image
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -70,16 +71,38 @@ fun CatalogCategories(categories: List<MenuCategory>, selectedId: String?, onSel
     }
 }
 
+@DrawableRes
+fun foodPhotoResource(photo: FoodPhoto?): Int? = when (photo) {
+    FoodPhoto.DOSA -> R.drawable.catalog_dosa
+    FoodPhoto.BIRYANI -> R.drawable.catalog_biryani
+    FoodPhoto.COFFEE -> R.drawable.catalog_coffee
+    FoodPhoto.IDLI -> R.drawable.food_idli
+    FoodPhoto.LEMON_RICE -> R.drawable.food_lemon_rice
+    FoodPhoto.WATER_BOTTLE -> R.drawable.food_water_bottle
+    FoodPhoto.NORTH_LUNCH -> R.drawable.food_north_lunch
+    FoodPhoto.NORTH_SNACK -> R.drawable.food_north_snack
+    FoodPhoto.GROUP_COFFEE -> R.drawable.food_corner_coffee
+    FoodPhoto.BISCUITS -> R.drawable.food_corner_biscuits
+    FoodPhoto.JUICE_CARTON -> R.drawable.food_pantry_juice
+    FoodPhoto.PANTRY_WATER -> R.drawable.food_pantry_water
+    null -> null
+}
+
+@DrawableRes
+fun sellerPhotoResource(photo: SellerPhoto?): Int? = when (photo) {
+    SellerPhoto.CAMPUS_CONTEXT -> R.drawable.rit_campus
+    SellerPhoto.MAIN_CANTEEN -> R.drawable.seller_main_canteen
+    SellerPhoto.NORTH_COUNTER -> R.drawable.seller_north_counter
+    SellerPhoto.COFFEE_CORNER -> R.drawable.seller_coffee_corner
+    SellerPhoto.CAMPUS_PANTRY -> R.drawable.seller_campus_pantry
+    null -> null
+}
+
 @Composable
 fun FoodPhotoContent(photo: FoodPhoto?, description: String, modifier: Modifier = Modifier, localUri: String? = null) {
     val colors = RitThemeTokens.colors
     val bitmap = rememberLocalBitmap(localUri)
-    val image = when (photo) {
-        FoodPhoto.DOSA -> R.drawable.catalog_dosa
-        FoodPhoto.BIRYANI -> R.drawable.catalog_biryani
-        FoodPhoto.COFFEE -> R.drawable.catalog_coffee
-        null -> null
-    }
+    val image = foodPhotoResource(photo)
     if (bitmap != null) {
         Image(bitmap.asImageBitmap(), contentDescription = "$description · locally selected demo image",
             modifier = modifier, contentScale = ContentScale.Crop)
@@ -99,8 +122,10 @@ fun SellerPhotoContent(photo: SellerPhoto?, modifier: Modifier = Modifier, local
     if (bitmap != null) {
         Image(bitmap.asImageBitmap(), contentDescription = "Locally selected demo seller image", modifier = modifier,
             contentScale = ContentScale.Crop)
-    } else if (photo == SellerPhoto.CAMPUS_CONTEXT) {
-        Image(painterResource(R.drawable.rit_campus), contentDescription = "RIT campus concept image, not a verified seller photo", modifier = modifier, contentScale = ContentScale.Crop)
+    } else if (photo != null) {
+        val image = requireNotNull(sellerPhotoResource(photo))
+        Image(painterResource(image), contentDescription = "Illustrative seller concept image, not a verified vendor photograph",
+            modifier = modifier, contentScale = ContentScale.Crop)
     } else {
         Box(modifier.background(colors.warmCard), contentAlignment = Alignment.Center) {
             RitIcon(RitIconKind.Store, colors.accent, size = 36.dp)

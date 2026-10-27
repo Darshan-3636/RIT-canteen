@@ -218,6 +218,8 @@ class SellerBusinessTest {
         repo.reset()
         assertFalse(PreviewCatalog.items.any { it.id == "test-item" })
         assertEquals(10, DevelopmentBulkPreview.forSeller(seller)?.minimum)
-        assertEquals(4, repo.employees.size)
+        assertEquals(8, repo.employees.size)
+        assertTrue(repo.employees.any { it.id == "demo-owner-main" && it.sellerId == "main-canteen" })
+        assertTrue(repo.employees.any { it.id == "demo-owner-north" && it.sellerId == "north-counter" })
     }
 }

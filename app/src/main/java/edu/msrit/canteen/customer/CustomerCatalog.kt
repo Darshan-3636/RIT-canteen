@@ -17,8 +17,35 @@ enum class Dietary { VEGETARIAN, NON_VEGETARIAN, NOT_SPECIFIED }
 enum class ItemAvailability { AVAILABLE, UNAVAILABLE }
 enum class UnavailableVisibility { SHOW, HIDE }
 enum class SellerAvailability { UNKNOWN, AVAILABLE, UNAVAILABLE }
-enum class FoodPhoto { DOSA, BIRYANI, COFFEE }
-enum class SellerPhoto { CAMPUS_CONTEXT }
+enum class FoodPhoto { DOSA, BIRYANI, COFFEE, IDLI, LEMON_RICE, WATER_BOTTLE,
+    NORTH_LUNCH, NORTH_SNACK, GROUP_COFFEE, BISCUITS, JUICE_CARTON, PANTRY_WATER }
+enum class SellerPhoto { CAMPUS_CONTEXT, MAIN_CANTEEN, NORTH_COUNTER, COFFEE_CORNER, CAMPUS_PANTRY }
+
+/** Bundled concept imagery is keyed by stable fixture IDs; new seller-created IDs use a neutral fallback. */
+object CatalogArtwork {
+    private val sellerPhotos = mapOf(
+        "main-canteen" to SellerPhoto.MAIN_CANTEEN,
+        "north-counter" to SellerPhoto.NORTH_COUNTER,
+        "coffee-corner" to SellerPhoto.COFFEE_CORNER,
+        "campus-pantry" to SellerPhoto.CAMPUS_PANTRY,
+    )
+    private val itemPhotos = mapOf(
+        "masala-dosa" to FoodPhoto.DOSA,
+        "veg-biryani" to FoodPhoto.BIRYANI,
+        "filter-coffee" to FoodPhoto.COFFEE,
+        "idli" to FoodPhoto.IDLI,
+        "lemon-rice" to FoodPhoto.LEMON_RICE,
+        "water-bottle" to FoodPhoto.WATER_BOTTLE,
+        "north-lunch" to FoodPhoto.NORTH_LUNCH,
+        "north-snack" to FoodPhoto.NORTH_SNACK,
+        "corner-coffee" to FoodPhoto.GROUP_COFFEE,
+        "corner-biscuits" to FoodPhoto.BISCUITS,
+        "pantry-juice" to FoodPhoto.JUICE_CARTON,
+        "pantry-water" to FoodPhoto.PANTRY_WATER,
+    )
+    fun sellerPhoto(id: String): SellerPhoto? = sellerPhotos[id]
+    fun itemPhoto(id: String): FoodPhoto? = itemPhotos[id]
+}
 
 data class Price(val rupees: Int) {
     init { require(rupees >= 0) }
@@ -114,7 +141,7 @@ object PreviewCatalog : CustomerCatalogSource {
         Seller("north-counter", "North Counter · demo", "Prepared lunch and snacks for group requests.", null, OrderingCapabilities(false, true), setOf("rice", "snacks")),
         Seller("coffee-corner", "Coffee Corner · demo", "Drinks and light bites for group requests.", null, OrderingCapabilities(false, true), setOf("drinks", "snacks", "packs")),
         Seller("campus-pantry", "Campus Pantry · demo", "Packaged snacks and drinks for group requests.", null, OrderingCapabilities(false, true), setOf("packs", "drinks")),
-    )
+    ).map { it.copy(photo = CatalogArtwork.sellerPhoto(it.id)) }
     private val initialItems = listOf(
         MenuItem("masala-dosa", MAIN_ID, "dosa", "Masala Dosa", "Crisp dosa with spiced potato filling, sambar and chutney.", Price(50), FoodKind.PREPARED, Dietary.VEGETARIAN, photo = FoodPhoto.DOSA, featured = true),
         MenuItem("veg-biryani", MAIN_ID, "rice", "Veg Biryani", "Fragrant rice with vegetables and warm spices.", Price(85), FoodKind.PREPARED, Dietary.VEGETARIAN, photo = FoodPhoto.BIRYANI, featured = true),
@@ -128,7 +155,7 @@ object PreviewCatalog : CustomerCatalogSource {
         MenuItem("corner-biscuits", "coffee-corner", "packs", "Biscuit Pack", "Sealed biscuit pack.", Price(25), FoodKind.PACKAGED, Dietary.VEGETARIAN),
         MenuItem("pantry-juice", "campus-pantry", "packs", "Juice Carton", "Packaged fruit drink for group requests.", Price(30), FoodKind.PACKAGED, Dietary.VEGETARIAN),
         MenuItem("pantry-water", "campus-pantry", "drinks", "Water Bottle", "Sealed drinking water.", Price(20), FoodKind.PACKAGED, Dietary.VEGETARIAN),
-    )
+    ).map { it.copy(photo = CatalogArtwork.itemPhoto(it.id)) }
 
     override var categories by mutableStateOf(initialCategories)
         private set

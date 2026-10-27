@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,6 +36,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextAlign
 import edu.msrit.canteen.R
@@ -208,6 +208,7 @@ fun RitBottomNavigation(selected: RitBottomItem, onSelect: (RitBottomItem) -> Un
             val active = item == selected
             Column(
                 modifier = Modifier.weight(1f).heightIn(min = 54.dp).clickable(role = Role.Tab) { onSelect(item) }
+                    .testTag("customer_bottom_${item.name.lowercase()}")
                     .semantics { stateDescription = if (active) "Selected" else "Not selected" },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,

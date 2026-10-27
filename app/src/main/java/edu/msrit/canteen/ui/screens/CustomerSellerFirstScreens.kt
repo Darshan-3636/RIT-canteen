@@ -135,12 +135,12 @@ fun SellerScopedMenuScreen(
                 Column(Modifier.padding(horizontal = 20.dp)) {
                     SellerPhotoContent(
                         seller.photo,
-                        Modifier.fillMaxWidth().height(166.dp).clip(RoundedCornerShape(RitRadii.hero)),
+                        Modifier.fillMaxWidth().height(112.dp).clip(RoundedCornerShape(RitRadii.hero)),
                         seller.localImageUri,
                     )
-                    Spacer(Modifier.height(15.dp))
+                    Spacer(Modifier.height(9.dp))
                     RitText(seller.name, RitType.heading)
-                    RitText(seller.description, RitType.body, colors.muted)
+                    RitText(seller.description, RitType.body, colors.muted, maxLines = 2)
                     Spacer(Modifier.height(9.dp))
                     CatalogPill(sellerOrderingBadge(seller))
                     Spacer(Modifier.height(7.dp))

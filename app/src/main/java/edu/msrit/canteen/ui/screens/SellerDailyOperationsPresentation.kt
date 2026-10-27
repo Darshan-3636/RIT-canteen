@@ -11,10 +11,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -95,6 +97,7 @@ fun SellerDailyOperationsOverview(
     onOpenHistory: (() -> Unit)? = null,
     onOpenReports: (() -> Unit)? = null,
     onOpenSupport: (() -> Unit)? = null,
+    onOpenAccount: (() -> Unit)? = null,
 ) {
     val colors = RitThemeTokens.colors
     val sellerRecords = records.filter { it.sellerId == sellerId }
@@ -133,10 +136,14 @@ fun SellerDailyOperationsOverview(
                     RitText("$roleLabel · seller operations", RitType.small, colors.muted)
                 }
             }
+            if (onOpenAccount != null) item {
+                RitSecondaryButton("My account", onOpenAccount,
+                    Modifier.fillMaxWidth().testTag("seller_daily_account"))
+            }
 
             item {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
@@ -151,7 +158,7 @@ fun SellerDailyOperationsOverview(
                         },
                         action = if (canRespond) "Review requests" else "View requests",
                         onClick = onOpenRequests,
-                        modifier = Modifier.weight(1f).testTag("seller_daily_reply_summary"),
+                        modifier = Modifier.weight(1f).fillMaxHeight().testTag("seller_daily_reply_summary"),
                         icon = RitIconKind.Mail,
                     )
                     DailyFocusCard(
@@ -164,7 +171,7 @@ fun SellerDailyOperationsOverview(
                         },
                         action = "Open schedule",
                         onClick = onOpenSchedule,
-                        modifier = Modifier.weight(1f).testTag("seller_daily_pickup_summary"),
+                        modifier = Modifier.weight(1f).fillMaxHeight().testTag("seller_daily_pickup_summary"),
                         icon = RitIconKind.Orders,
                         footnote = "Requested times, not reservations",
                     )

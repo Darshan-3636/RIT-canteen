@@ -3,7 +3,13 @@ package edu.msrit.canteen.navigation
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import edu.msrit.canteen.auth.DevelopmentDemoAccounts
+import edu.msrit.canteen.auth.DemoAccount
 import edu.msrit.canteen.customer.DevelopmentSellerBusiness
+import edu.msrit.canteen.customer.CustomerAffiliation
+import edu.msrit.canteen.customer.CustomerProfile
+import edu.msrit.canteen.customer.DevelopmentCustomerAccount
+import edu.msrit.canteen.customer.DevelopmentIndividualOrders
 
 /** Debug-only mock login. Never writes to or substitutes for a real authenticated session. */
 object DevelopmentPreviewAccess {
@@ -31,7 +37,8 @@ object DevelopmentPreviewAccess {
         private set
 
     val activeIdentity: DevelopmentTestIdentity?
-        get() = identities.firstOrNull { it.role == activeRole }?.let { identity ->
+        get() = (DevelopmentDemoAccounts.activeAccount?.let(::asIdentity)
+            ?: identities.firstOrNull { it.role == activeRole })?.let { identity ->
             val sellerId = identity.authorization.modes.firstNotNullOfOrNull { mode -> when (mode) {
                 is AppMode.SellerOwner -> mode.sellerId
                 is AppMode.SellerManager -> mode.sellerId
@@ -43,7 +50,38 @@ object DevelopmentPreviewAccess {
                     identity.authorization.userId, sellerId).map { it.wire }.toSet())))
         }
 
-    fun select(role: DevelopmentRole) { activeRole = role }
-    fun reset() { activeRole = null }
+    private fun asIdentity(account: DemoAccount): DevelopmentTestIdentity {
+        val mode = when (account.role) {
+            DevelopmentRole.Customer -> AppMode.Customer
+            DevelopmentRole.SellerOwner -> AppMode.SellerOwner(requireNotNull(account.sellerId))
+            DevelopmentRole.SellerManager -> AppMode.SellerManager(requireNotNull(account.sellerId))
+            DevelopmentRole.SellerStaff, DevelopmentRole.SellerStaffOperations ->
+                AppMode.OperationalStaff(requireNotNull(account.sellerId))
+            DevelopmentRole.PlatformAdministrator -> AppMode.PlatformAdministrator
+        }
+        val roleLabel = when (account.role) {
+            DevelopmentRole.Customer -> "Customer"
+            DevelopmentRole.SellerOwner -> "Seller owner"
+            DevelopmentRole.SellerManager -> "Seller manager"
+            DevelopmentRole.SellerStaff -> "Seller staff"
+            DevelopmentRole.SellerStaffOperations -> "Seller staff · delegated"
+            DevelopmentRole.PlatformAdministrator -> "Platform administrator"
+        }
+        return DevelopmentTestIdentity(account.role, roleLabel, account.name,
+            AuthorizedIdentity(account.id, setOf(mode)))
+    }
+
+    fun select(role: DevelopmentRole) {
+        DevelopmentDemoAccounts.signOut(); activeRole = role
+        if (role == DevelopmentRole.Customer) {
+            DevelopmentCustomerAccount.activate("debug-customer", CustomerProfile("Demo Customer",
+                "demo@example.invalid", CustomerAffiliation.STUDENT))
+            DevelopmentIndividualOrders.activate("debug-customer")
+        } else {
+            DevelopmentCustomerAccount.deactivate(); DevelopmentIndividualOrders.deactivate()
+        }
+    }
+    fun clearHubSelection() { activeRole = null }
+    fun reset() { activeRole = null; DevelopmentDemoAccounts.signOut() }
     fun allows(area: ProtectedArea): Boolean = PresentationAccess.allows(activeIdentity?.authorization, area)
 }
