@@ -113,7 +113,7 @@ class CommerceIntegrationTest {
             f.context.dataSource.connection.use { c ->
                 c.createStatement().use { s ->
                     s.executeQuery("SELECT count(*) FROM sellers").use { r -> r.next();assertEquals(4,r.getInt(1)) }
-                    s.executeQuery("SELECT count(*) FROM menu_items").use { r -> r.next();assertEquals(12,r.getInt(1)) }
+                    s.executeQuery("SELECT count(*) FROM menu_items").use { r -> r.next();assertEquals(72,r.getInt(1)) }
                 }
             }
             val directory=client.get("/api/v1/sellers");assertEquals(HttpStatusCode.OK,directory.status)

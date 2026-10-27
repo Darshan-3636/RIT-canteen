@@ -17,6 +17,10 @@ import edu.msrit.canteen.backend.core.BackendBootstrap
 import edu.msrit.canteen.backend.core.BackendConfig
 import edu.msrit.canteen.backend.core.BackendContext
 import edu.msrit.canteen.backend.core.close
+import edu.msrit.canteen.backend.features.commerce.seedCommerceFixtures
+import edu.msrit.canteen.backend.features.commerce.registerCommerceRoutes
+import edu.msrit.canteen.backend.features.engagement.registerEngagementRoutes
+import edu.msrit.canteen.backend.features.integration.PostgresCommerceReadPort
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
@@ -44,14 +48,20 @@ private val requestJson = Json { ignoreUnknownKeys = false; explicitNulls = true
 fun main() {
     val config = BackendConfig.fromEnvironment()
     val context = BackendBootstrap.open(config)
+    try {
+        if (config.demoSeedEnabled) seedCommerceFixtures(context)
+    } catch (failure: Throwable) {
+        context.close()
+        throw failure
+    }
     Runtime.getRuntime().addShutdownHook(Thread { context.close() })
     embeddedServer(Netty, host = config.httpHost, port = config.httpPort) {
         backendModule(context)
     }.start(wait = true)
 }
 
-/** The lead registers contributor route modules here only after their branches merge. */
-fun Application.backendModule(context: BackendContext) {
+/** Owner integration mounts both contributor modules beneath the shared V1 prefix. */
+fun Application.backendModule(context: BackendContext, mountContributorRoutes: Boolean = true) {
     val accounts = AccountService(context)
     install(ContentNegotiation) {
         json(Json { encodeDefaults = true; explicitNulls = true; ignoreUnknownKeys = false })
@@ -78,6 +88,10 @@ fun Application.backendModule(context: BackendContext) {
             else call.respondApiError(HttpStatusCode.ServiceUnavailable, "DATABASE_NOT_READY", "Database is unavailable")
         }
         route("/api/v1") {
+            if (mountContributorRoutes) {
+                registerCommerceRoutes(context)
+                registerEngagementRoutes(context, PostgresCommerceReadPort(context))
+            }
             post("/auth/register") {
                 val request = call.readJson<RegisterRequest>()
                 call.respond(HttpStatusCode.Created, RegisterResponse(accounts.register(request)))

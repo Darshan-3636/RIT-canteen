@@ -128,7 +128,8 @@ class EngagementFeatureTest {
             val cast = Cast(fixture)
             testApplication {
                 application {
-                    backendModule(context)
+                    // Preserve the contributor's isolated port tests; production mounts the real adapter.
+                    backendModule(context, mountContributorRoutes = false)
                     routing {
                         route("/api/v1") {
                             if (commerce == null) registerEngagementRoutes(context) else registerEngagementRoutes(context, commerce)
