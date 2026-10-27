@@ -1,0 +1,9 @@
+.gradle/
+build/
+.env
+.env.*
+!.env.example
+*.log
+*.dump
+*.sql.gz
+pgdata/
