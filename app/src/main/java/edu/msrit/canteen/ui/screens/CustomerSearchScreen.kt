@@ -129,7 +129,7 @@ fun CustomerSearchScreen(
                     catalog.sellers.any { category.id in it.categoryIds } }.map { it.id to it.name }, filters.categoryId, "category") {
                     filters = filters.copy(categoryId = it)
                 } }
-                item { FilterChoices("Food type", listOf("PREPARED" to "Prepared", "PACKAGED" to "Packaged"), filters.kind?.name, "kind") {
+                item { FilterChoices("Preparation / packaging", listOf("PREPARED" to "Prepared", "PACKAGED" to "Packaged"), filters.kind?.name, "kind") {
                     filters = filters.copy(kind = it?.let(FoodKind::valueOf))
                 } }
                 val knownDietary = catalog.items.map { it.dietary }.filter { it != Dietary.NOT_SPECIFIED }.distinct()

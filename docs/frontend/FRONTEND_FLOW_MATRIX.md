@@ -9,7 +9,11 @@ This branch starts at Android commit `89123939c3ad9370b486f3f7251efb26ae778780`.
 | Seller staff | Same shared login → Seller Dashboard | Dashboard, Orders, Menu, Account | Seller-scoped read views; response, payment/pickup confirmation and Insights are absent unless capability grants them. |
 | Platform administrator | Same shared login → Admin dashboard | Admin's existing dashboard pages | Separate admin navigation and account; no customer/seller tabs or implicit ownership. |
 
-Welcome has one shared prominent **Log In** and a secondary **Create Customer Account**. It has no seller self-registration fork. Customer signup cannot select a privileged role. The Debug Testing Hub remains separate from the normal journey. A denied route displays an access-unavailable state whose exit returns to the current authorized root or Welcome, never to the Hub.
+Welcome has one shared prominent **Log In** and a secondary **Create Customer Account**. It has no seller self-registration fork. Customer signup cannot select a privileged role. The former Developer Testing Hub launcher and route are removed; debug mock identities remain available through the normal Login screen only. A denied route returns to the current authorized root or Welcome. Sign-in clears transient Welcome/Login routes; sign-out clears protected routes before Welcome.
+
+## Seller-scoped catalog
+
+Customer Home → choose one of four sample sellers → menu categories for that seller's visible items only → item detail → eligible individual or bulk cart. Each seller starts with 18 distinct sample products (72 total). Main Canteen has Dosa, Breakfast, Rice Dishes, Meals & Thalis and Beverages; North Counter has Snacks, Chaat, Rolls, Sandwiches and Combos; Coffee Corner / Bakery has Puffs, Breads & Buns, Cakes & Pastries, Cookies & Biscuits and Beverages; Campus Pantry has Beverages and Packaged Snacks. The **All** chip clears the menu category. `FoodKind` (Prepared or Packaged) remains an independent advanced-search filter: Pantry juice and water are both packaged beverages, not Packaged Snacks. Seller management edits and availability changes update the same in-memory customer catalog snapshot; reset restores all 72 seeds.
 
 ## Demo journeys
 

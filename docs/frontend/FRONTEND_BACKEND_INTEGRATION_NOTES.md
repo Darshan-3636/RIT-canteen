@@ -2,6 +2,8 @@
 
 No backend files or frozen API contracts are changed by this branch. The normal debug login uses `DevelopmentDemoAccounts` and `DevelopmentPreviewAccess`; release mock login is inert. When server authentication is integrated, the app must map a server-issued identity/role/seller membership to `AuthorizedIdentity` without letting the user choose seller/admin privileges. `PresentationAccess` is presentation-only; every operation needs server-side authorization.
 
+The visible Developer Testing Hub has been removed. Debug mock identities are reached only via the normal Login UI. `PreviewCatalog` now presents 72 Android-only sample items across four stable seller IDs, while the current commerce backend seeds only the original 12 item IDs. Never assume backend parity for the 60 new IDs or the added presentation categories. A server-backed catalog must return authoritative item IDs, seller ownership, category mapping, availability, prices and approved image URLs; local seed photos are placeholders for demonstration, not production photo hosting.
+
 ## Replaceable seams
 
 - `DemoCheckoutRepository` is the client-only prototype contract; `DevelopmentDemoCheckout` in `app/src/debug` implements in-memory individual submission, seller response, payment-outcome simulation, token creation and pickup redemption. The release counterpart denies all operations. It must **not** be reused as a production payment or fulfillment repository.

@@ -18,8 +18,10 @@ class DiscoveryTest {
         val filters = DiscoveryFilters(sellerId = PreviewCatalog.MAIN_ID, categoryId = "rice",
             kind = FoodKind.PREPARED, dietary = Dietary.VEGETARIAN, maxPrice = 85,
             orderEligibility = OrderEligibilityFilter.INDIVIDUAL_PLANNED, itemMarkedAvailableOnly = true)
-        assertEquals(listOf("veg-biryani"), PreviewCatalog.discover(filters = filters).items.map { it.id })
-        assertTrue(PreviewCatalog.discover(filters = filters.copy(maxPrice = 50)).items.isEmpty())
+        val matchingRice = PreviewCatalog.discover(filters = filters).items
+        assertTrue(matchingRice.any { it.id == "veg-biryani" })
+        assertTrue(matchingRice.all { it.sellerId == PreviewCatalog.MAIN_ID && it.categoryId == "rice" && it.price.rupees <= 85 })
+        assertTrue(PreviewCatalog.discover(filters = filters.copy(maxPrice = 39)).items.isEmpty())
         assertEquals(PreviewCatalog.visibleItems().size, PreviewCatalog.discover(filters = DiscoveryFilters()).items.size)
     }
 

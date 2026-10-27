@@ -17,17 +17,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -88,15 +91,22 @@ private fun BusinessPage(title: String, tag: String, onBack: () -> Unit, content
 }
 
 @Composable
-private fun BusinessCard(title: String, detail: String, onClick: (() -> Unit)? = null, tag: String? = null) {
+private fun BusinessCard(title: String, detail: String, onClick: (() -> Unit)? = null, tag: String? = null,
+                         food: MenuItem? = null) {
     val colors = RitThemeTokens.colors
     Column(Modifier.fillMaxWidth().padding(bottom = 9.dp)
         .border(1.dp, colors.outline, RoundedCornerShape(RitRadii.card))
         .background(colors.card, RoundedCornerShape(RitRadii.card))
         .then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick))
         .then(if (tag == null) Modifier else Modifier.testTag(tag)).padding(16.dp)) {
-        RitText(title, RitType.label)
-        RitText(detail, RitType.small, colors.muted)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (food != null) FoodPhotoContent(food.photo, "${food.name} sample photo",
+                Modifier.size(64.dp), food.localImageUri)
+            Column {
+                RitText(title, RitType.label)
+                RitText(detail, RitType.small, colors.muted)
+            }
+        }
     }
 }
 
@@ -148,8 +158,15 @@ fun SellerMenuManagementScreen(sellerId: String, userId: String, repo: SellerBus
     var query by remember { mutableStateOf("") }
     var category by remember { mutableStateOf<String?>(null) }
     val seller = PreviewCatalog.sellers.find { it.id == sellerId }
+    val activeCategoryIds = seller?.categoryIds?.filter { id ->
+        PreviewCatalog.items.any { it.sellerId == sellerId && it.categoryId == id }
+    }.orEmpty()
+    val selectedCategory = category?.takeIf { it in activeCategoryIds }
+    LaunchedEffect(sellerId, selectedCategory, activeCategoryIds) {
+        if (category != selectedCategory) category = null
+    }
     val filteredItems = PreviewCatalog.items.filter { it.sellerId == sellerId &&
-        (category == null || it.categoryId == category) && it.name.contains(query, true) }
+        (selectedCategory == null || it.categoryId == selectedCategory) && it.name.contains(query, true) }
     val colors = RitThemeTokens.colors
     Column(Modifier.fillMaxSize().background(colors.background).testTag("seller_menu_management")) {
         CatalogHeader("Menu management", if (rootTab) null else onBack)
@@ -162,9 +179,10 @@ fun SellerMenuManagementScreen(sellerId: String, userId: String, repo: SellerBus
             Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                RitChip("All", category == null, { category = null })
-                seller?.categoryIds?.forEach { id ->
-                    RitChip(PreviewCatalog.categories.find { it.id == id }?.name ?: id, category == id, { category = id })
+                RitChip("All", selectedCategory == null, { category = null })
+                activeCategoryIds.forEach { id ->
+                    RitChip(PreviewCatalog.categories.find { it.id == id }?.name ?: id,
+                        selectedCategory == id, { category = id })
                 }
             }
             Spacer(Modifier.height(13.dp))
@@ -188,7 +206,7 @@ fun SellerMenuManagementScreen(sellerId: String, userId: String, repo: SellerBus
                 BusinessCard("${item.name} · ${item.price.display}",
                     "${item.kind.name.lowercase().replaceFirstChar(Char::uppercase)} · $status",
                     { if (SellerCapability.CATALOG in caps) onItem(item.id) else onAvailability(item.id) },
-                    "seller_item_${item.id}")
+                    "seller_item_${item.id}", food = item)
             }
         }
     }

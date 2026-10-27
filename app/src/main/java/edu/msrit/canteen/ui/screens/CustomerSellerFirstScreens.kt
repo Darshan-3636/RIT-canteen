@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -79,7 +80,8 @@ fun ChooseSellerScreen(
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
             ) {
                 items(sellers, key = { it.id }) { seller ->
-                    val categoryNames = catalog.categories.filter { it.id in seller.categoryIds }
+                    val visibleCategoryIds = catalog.visibleItems(seller.id).mapTo(hashSetOf()) { it.categoryId }
+                    val categoryNames = catalog.categories.filter { it.id in seller.categoryIds && it.id in visibleCategoryIds }
                         .joinToString(" · ") { it.name }
                     CatalogSellerCard(
                         seller = seller,
@@ -122,10 +124,15 @@ fun SellerScopedMenuScreen(
             return@Column
         }
 
-        val categories = catalog.categories.filter { it.id in seller.categoryIds }
-        val foods = catalog.visibleItems(sellerId = seller.id, categoryId = categoryId, query = query)
+        val visibleCategoryIds = catalog.visibleItems(sellerId = seller.id).mapTo(hashSetOf()) { it.categoryId }
+        val categories = catalog.categories.filter { it.id in seller.categoryIds && it.id in visibleCategoryIds }
+        val selectedCategoryId = categoryId?.takeIf { selected -> categories.any { it.id == selected } }
+        LaunchedEffect(seller.id, selectedCategoryId, categories) {
+            if (categoryId != selectedCategoryId) categoryId = null
+        }
+        val foods = catalog.visibleItems(sellerId = seller.id, categoryId = selectedCategoryId, query = query)
         LazyColumn(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).testTag("seller_menu_list"),
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
             item {
@@ -165,9 +172,9 @@ fun SellerScopedMenuScreen(
                         Spacer(Modifier.height(8.dp))
                     }
                 }
-                CatalogCategories(categories, categoryId) { categoryId = it }
+                CatalogCategories(categories, selectedCategoryId) { categoryId = it }
                 Spacer(Modifier.height(10.dp))
-                val selectedName = categories.firstOrNull { it.id == categoryId }?.name
+                val selectedName = categories.firstOrNull { it.id == selectedCategoryId }?.name
                 RitText(if (selectedName == null) "${seller.name} menu" else "$selectedName at ${seller.name}",
                     RitType.title, modifier = Modifier.padding(horizontal = 20.dp, vertical = 5.dp)
                         .testTag("seller_menu_results_heading"))

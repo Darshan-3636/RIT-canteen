@@ -6,6 +6,8 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -15,6 +17,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import edu.msrit.canteen.customer.DevelopmentInsights
 import edu.msrit.canteen.customer.DevelopmentSellerBusiness
+import edu.msrit.canteen.auth.DevelopmentDemoAccounts
 import edu.msrit.canteen.navigation.AppMode
 import edu.msrit.canteen.navigation.AuthorizedIdentity
 import edu.msrit.canteen.navigation.DevelopmentPreviewAccess
@@ -22,21 +25,46 @@ import edu.msrit.canteen.ui.screens.AdminPage
 import edu.msrit.canteen.ui.screens.PlatformAdminScreen
 import edu.msrit.canteen.ui.theme.RitTheme
 import org.junit.Before
+import org.junit.After
 import org.junit.Rule
+import org.junit.rules.RuleChain
 import org.junit.Test
 
 class AdminTaskUiTest {
-    @get:Rule val rule = createAndroidComposeRule<DebugTestingActivity>()
+    private val composeRule = createAndroidComposeRule<MainActivity>()
+    @get:Rule val launchRules = RuleChain.outerRule(ResetDemoBeforeLaunchRule()).around(composeRule)
+    private val rule get() = composeRule
     @Before fun reset() { rule.runOnUiThread {
         DevelopmentInsights.reset(); DevelopmentSellerBusiness.reset(); DevelopmentPreviewAccess.reset()
     } }
+    @After fun logout() = rule.runOnUiThread { DevelopmentDemoAccounts.signOut() }
     private fun back() { rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() } }
     /** A count tile merges its number and label into one clickable node. */
     private fun tile(label: String, value: String) =
         rule.onNode(hasText(label) and hasText(value) and hasClickAction()).assertExists()
+    private fun login(email: String, password: String) {
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("welcome_screen").fetchSemanticsNodes().isNotEmpty() ||
+            rule.onAllNodesWithText("Skip").fetchSemanticsNodes().isNotEmpty() }
+        if (rule.onAllNodesWithText("Skip").fetchSemanticsNodes().isNotEmpty()) rule.onNodeWithText("Skip").performClick()
+        rule.onNodeWithTag("welcome_login").performScrollTo().performClick()
+        rule.onNodeWithTag("demo_login_email").performTextInput(email)
+        rule.onNodeWithTag("demo_login_password").performTextInput(password)
+        rule.onNodeWithTag("demo_login_submit").performScrollTo().performClick()
+    }
     private fun openAdmin(link: String) {
-        rule.onNodeWithTag("debug_role_platformadministrator").performScrollTo().performClick()
-        rule.onNodeWithTag(link).performScrollTo().performClick()
+        login("admin.platform@demo.ritcanteen.test", "RitDemo!Admin01")
+        when (link) {
+            "debug_admin_dashboard" -> Unit
+            "debug_admin_seller_detail" -> {
+                rule.onNodeWithTag("admin_open_sellers").performScrollTo().performClick()
+                rule.onNodeWithTag("admin_seller_north-counter").performScrollTo().performClick()
+            }
+            "debug_admin_ticket" -> {
+                rule.onNodeWithTag("admin_open_support").performScrollTo().performClick()
+                rule.onNodeWithTag("admin_ticket_SAMPLE-T-103").performScrollTo().performClick()
+            }
+            else -> rule.onNodeWithTag(link.replace("debug_admin_", "admin_open_")).performScrollTo().performClick()
+        }
     }
 
     @Test fun overviewShowsDemoCountsAndEscalationFirst() {
@@ -116,7 +144,7 @@ class AdminTaskUiTest {
         rule.onNodeWithTag("admin_ticket_SAMPLE-T-101").assertDoesNotExist()
         rule.onNodeWithText("2 tickets").assertExists()
         back()
-        rule.onNodeWithTag("debug_admin_audit").performScrollTo().performClick()
+        rule.onNodeWithTag("admin_open_audit").performScrollTo().performClick()
         rule.onNodeWithText("Ticket status").performScrollTo().assertExists()
     }
 
@@ -134,7 +162,7 @@ class AdminTaskUiTest {
         rule.onNodeWithText("Pending decision").performScrollTo().assertExists()
         rule.onNodeWithText("Unverified").performScrollTo().assertExists()
         back()
-        rule.onNodeWithTag("debug_admin_audit").performScrollTo().performClick()
+        rule.onNodeWithTag("admin_open_audit").performScrollTo().performClick()
         rule.onNodeWithText("Real-time sync").assertExists()
         rule.onNodeWithText("Sample seller review").performScrollTo().assertExists()
     }
@@ -157,8 +185,8 @@ class AdminTaskUiTest {
         openAdmin("debug_admin_ticket")
         rule.onNodeWithTag("admin_ticket_status_open").performScrollTo().performClick()
         rule.onNodeWithTag("admin_ticket_message").assertDoesNotExist()
-        back()
-        rule.onNodeWithTag("debug_admin_audit").performScrollTo().performClick()
+        back(); back()
+        rule.onNodeWithTag("admin_open_audit").performScrollTo().performClick()
         rule.onNodeWithText("Ticket status").assertDoesNotExist()
     }
 
@@ -194,9 +222,10 @@ class AdminTaskUiTest {
     }
 
     @Test fun sellerOwnerCannotOpenAdminLinks() {
-        rule.onNodeWithTag("debug_role_sellerowner").performScrollTo().performClick()
-        rule.onNodeWithTag("debug_admin_dashboard").performScrollTo().assertIsNotEnabled()
-        rule.onNodeWithTag("debug_admin_users").performScrollTo().assertIsNotEnabled()
+        login("owner.main@demo.ritcanteen.test", "RitDemo!OwnerMain01")
+        rule.onNodeWithTag("seller_daily_overview").assertExists()
+        rule.onNodeWithTag("admin_open_users").assertDoesNotExist()
+        rule.onNodeWithTag("admin_dashboard").assertDoesNotExist()
     }
 }
 

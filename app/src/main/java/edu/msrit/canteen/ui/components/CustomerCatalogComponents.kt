@@ -64,7 +64,8 @@ fun CatalogHeader(title: String, onBack: (() -> Unit)?) {
 
 @Composable
 fun CatalogCategories(categories: List<MenuCategory>, selectedId: String?, onSelect: (String?) -> Unit) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp)) {
+    LazyRow(modifier = Modifier.testTag("catalog_categories"), horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp)) {
         item(key = "all") { RitChip("All", selectedId == null, { onSelect(null) }, Modifier.testTag("catalog_category_all")) }
         items(categories, key = { it.id }) { category ->
             RitChip(category.name, selectedId == category.id, { onSelect(category.id) },
@@ -81,12 +82,72 @@ fun foodPhotoResource(photo: FoodPhoto?): Int? = when (photo) {
     FoodPhoto.IDLI -> R.drawable.food_idli
     FoodPhoto.LEMON_RICE -> R.drawable.food_lemon_rice
     FoodPhoto.WATER_BOTTLE -> R.drawable.food_water_bottle
+    FoodPhoto.PLAIN_DOSA -> R.drawable.demo_food_plain_dosa
+    FoodPhoto.SET_DOSA -> R.drawable.demo_food_set_dosa
+    FoodPhoto.RAVA_IDLI -> R.drawable.demo_food_rava_idli
+    FoodPhoto.VADA_SAMBAR -> R.drawable.demo_food_vada_sambar
+    FoodPhoto.VEN_PONGAL -> R.drawable.demo_food_ven_pongal
+    FoodPhoto.POORI_SAGU -> R.drawable.demo_food_poori_sagu
+    FoodPhoto.VEG_PULAO -> R.drawable.demo_food_veg_pulao
+    FoodPhoto.CURD_RICE -> R.drawable.demo_food_curd_rice
+    FoodPhoto.BISI_BELE_BATH -> R.drawable.demo_food_bisi_bele_bath
+    FoodPhoto.CHAPATI_MEAL -> R.drawable.demo_food_chapati_meal
+    FoodPhoto.VEG_THALI -> R.drawable.demo_food_veg_thali
+    FoodPhoto.TOMATO_RICE -> R.drawable.demo_food_tomato_rice
     FoodPhoto.NORTH_LUNCH -> R.drawable.food_north_lunch
     FoodPhoto.NORTH_SNACK -> R.drawable.food_north_snack
+    FoodPhoto.VEG_SAMOSA -> R.drawable.demo_food_veg_samosa
+    FoodPhoto.KHASTA_KACHORI -> R.drawable.demo_food_khasta_kachori
+    FoodPhoto.ALOO_PUFF -> R.drawable.demo_food_aloo_puff
+    FoodPhoto.VEG_CUTLET -> R.drawable.demo_food_veg_cutlet
+    FoodPhoto.ONION_PAKORA -> R.drawable.demo_food_onion_pakora
+    FoodPhoto.BHEL_PURI -> R.drawable.demo_food_bhel_puri
+    FoodPhoto.SEV_PURI -> R.drawable.demo_food_sev_puri
+    FoodPhoto.MASALA_PURI -> R.drawable.demo_food_masala_puri
+    FoodPhoto.PANEER_ROLL -> R.drawable.demo_food_paneer_roll
+    FoodPhoto.VEG_SANDWICH -> R.drawable.demo_food_veg_sandwich
+    FoodPhoto.GRILLED_CHEESE_SANDWICH -> R.drawable.demo_food_grilled_cheese_sandwich
+    FoodPhoto.CORN_CHAAT -> R.drawable.demo_food_corn_chaat
+    FoodPhoto.BREAD_PAKORA -> R.drawable.demo_food_bread_pakora
+    FoodPhoto.BATATA_VADA -> R.drawable.demo_food_batata_vada
+    FoodPhoto.VEG_MOMOS -> R.drawable.demo_food_veg_momos
+    FoodPhoto.MASALA_FRIES -> R.drawable.demo_food_masala_fries
     FoodPhoto.GROUP_COFFEE -> R.drawable.food_corner_coffee
     FoodPhoto.BISCUITS -> R.drawable.food_corner_biscuits
+    FoodPhoto.BAKERY_VEG_PUFF -> R.drawable.demo_food_bakery_veg_puff
+    FoodPhoto.BAKERY_PANEER_PUFF -> R.drawable.demo_food_bakery_paneer_puff
+    FoodPhoto.BAKERY_MUSHROOM_PUFF -> R.drawable.demo_food_bakery_mushroom_puff
+    FoodPhoto.BUTTER_CROISSANT -> R.drawable.demo_food_butter_croissant
+    FoodPhoto.CHOCOLATE_CROISSANT -> R.drawable.demo_food_chocolate_croissant
+    FoodPhoto.CINNAMON_ROLL -> R.drawable.demo_food_cinnamon_roll
+    FoodPhoto.BANANA_BREAD -> R.drawable.demo_food_banana_bread
+    FoodPhoto.GARLIC_BUN -> R.drawable.demo_food_garlic_bun
+    FoodPhoto.CHEESE_BUN -> R.drawable.demo_food_cheese_bun
+    FoodPhoto.BLUEBERRY_MUFFIN -> R.drawable.demo_food_blueberry_muffin
+    FoodPhoto.CHOCOLATE_MUFFIN -> R.drawable.demo_food_chocolate_muffin
+    FoodPhoto.FUDGE_BROWNIE -> R.drawable.demo_food_fudge_brownie
+    FoodPhoto.VANILLA_PASTRY -> R.drawable.demo_food_vanilla_pastry
+    FoodPhoto.EGGLESS_CHOCOLATE_CAKE -> R.drawable.demo_food_eggless_chocolate_cake
+    FoodPhoto.SHORTBREAD_COOKIES -> R.drawable.demo_food_shortbread_cookies
+    FoodPhoto.ALMOND_COOKIES -> R.drawable.demo_food_almond_cookies
     FoodPhoto.JUICE_CARTON -> R.drawable.food_pantry_juice
     FoodPhoto.PANTRY_WATER -> R.drawable.food_pantry_water
+    FoodPhoto.ORANGE_JUICE_BOTTLE -> R.drawable.demo_food_orange_juice_bottle
+    FoodPhoto.MANGO_JUICE_BOTTLE -> R.drawable.demo_food_mango_juice_bottle
+    FoodPhoto.APPLE_JUICE_BOTTLE -> R.drawable.demo_food_apple_juice_bottle
+    FoodPhoto.LEMON_ICED_TEA -> R.drawable.demo_food_lemon_iced_tea
+    FoodPhoto.COLD_COFFEE_BOTTLE -> R.drawable.demo_food_cold_coffee_bottle
+    FoodPhoto.COCONUT_WATER_PACK -> R.drawable.demo_food_coconut_water_pack
+    FoodPhoto.SALTED_LASSI_PACK -> R.drawable.demo_food_salted_lassi_pack
+    FoodPhoto.SPARKLING_WATER -> R.drawable.demo_food_sparkling_water
+    FoodPhoto.TRAIL_MIX -> R.drawable.demo_food_trail_mix
+    FoodPhoto.ROASTED_PEANUTS -> R.drawable.demo_food_roasted_peanuts
+    FoodPhoto.POTATO_CHIPS -> R.drawable.demo_food_potato_chips
+    FoodPhoto.BANANA_CHIPS -> R.drawable.demo_food_banana_chips
+    FoodPhoto.PANTRY_BISCUIT_PACK -> R.drawable.demo_food_pantry_biscuit_pack
+    FoodPhoto.GRANOLA_BAR -> R.drawable.demo_food_granola_bar
+    FoodPhoto.ENERGY_BAR -> R.drawable.demo_food_energy_bar
+    FoodPhoto.CRACKER_PACK -> R.drawable.demo_food_cracker_pack
     null -> null
 }
 

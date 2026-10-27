@@ -15,7 +15,7 @@ object DevelopmentPromotions : PromotionSource {
         Promotion("north-lunch-demo", "north-counter", "Group lunch feature · demo",
             "Illustrative seller banner for bulk-request discovery. No order or redemption is available.", PromotionKind.BANNER,
             Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-11-30T23:59:59Z"), true,
-            itemIds = setOf("north-lunch"), categoryIds = setOf("rice")),
+            itemIds = setOf("north-lunch"), categoryIds = setOf("combos")),
         Promotion("corner-coffee-demo", "coffee-corner", "Coffee break for groups · demo",
             "Illustrative ₹30 off an eligible bulk request. No automatic pricing or redemption.", PromotionKind.FIXED_DISCOUNT,
             Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-12-31T23:59:59Z"), true,

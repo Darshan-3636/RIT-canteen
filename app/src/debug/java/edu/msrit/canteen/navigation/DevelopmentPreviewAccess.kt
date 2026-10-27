@@ -81,7 +81,7 @@ object DevelopmentPreviewAccess {
             DevelopmentCustomerAccount.deactivate(); DevelopmentIndividualOrders.deactivate()
         }
     }
-    fun clearHubSelection() { activeRole = null }
+    fun clearPreviewSelection() { activeRole = null }
     fun reset() { activeRole = null; DevelopmentDemoAccounts.signOut() }
     fun allows(area: ProtectedArea): Boolean = PresentationAccess.allows(activeIdentity?.authorization, area)
 }

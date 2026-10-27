@@ -18,8 +18,7 @@ import edu.msrit.canteen.ui.theme.RitThemeTokens
 import edu.msrit.canteen.ui.theme.AppearancePreference
 import edu.msrit.canteen.customer.AppearanceChoice
 
-open class MainActivity : ComponentActivity() {
-    protected open val startInDeveloperHub: Boolean = false
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -41,7 +40,7 @@ open class MainActivity : ComponentActivity() {
                     if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
                 }
                 Box(Modifier.fillMaxSize().background(colors.background)) {
-                    RitAppNavigation(startInDeveloperHub = startInDeveloperHub, appearance = appearance)
+                    RitAppNavigation(appearance = appearance)
                 }
             }
         }

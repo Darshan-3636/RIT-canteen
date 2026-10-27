@@ -18,7 +18,7 @@ object DevelopmentInsights {
         val dosaUnits = 1 + (day % 3).toInt()
         buildList {
             add(SampleSale("SAMPLE-NC-L-$day", "north-counter", "sample-buyer-${day % 9}", at(day, 12), listOf(
-                SampleSaleLine("north-lunch", "rice", lunchUnits, lunchUnits * 9_000L,
+                SampleSaleLine("north-lunch", "combos", lunchUnits, lunchUnits * 9_000L,
                     if (day % 7L == 0L) 3_000L else 0L))))
             if (day % 2L == 0L) {
                 val snackUnits = 1 + (day % 3).toInt()
@@ -35,7 +35,7 @@ object DevelopmentInsights {
                     SampleSaleLine("corner-coffee", "drinks", 4, 14_000L, 0))))
             if (day % 5L == 0L) add(SampleSale("SAMPLE-PANTRY-$day", "campus-pantry",
                 "sample-pantry-${day % 4}", at(day, 13), listOf(
-                    SampleSaleLine("pantry-juice", "packs", 6, 18_000L, 0))))
+                    SampleSaleLine("pantry-juice", "drinks", 6, 18_000L, 0))))
         }
     }
     private val ticketFixtures get() = listOf(

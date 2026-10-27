@@ -64,7 +64,7 @@ class CustomerCatalogTest {
 
     @Test fun everyCurrentSellerAndFoodHasDedicatedArtworkWithUnknownFallback() {
         assertEquals(4, catalog.sellers.size)
-        assertEquals(12, catalog.items.size)
+        assertEquals(72, catalog.items.size)
         assertEquals(catalog.sellers.size, catalog.sellers.mapNotNull { CatalogArtwork.sellerPhoto(it.id) }.distinct().size)
         assertEquals(catalog.items.size, catalog.items.mapNotNull { CatalogArtwork.itemPhoto(it.id) }.distinct().size)
         catalog.sellers.forEach { assertEquals(CatalogArtwork.sellerPhoto(it.id), it.photo) }

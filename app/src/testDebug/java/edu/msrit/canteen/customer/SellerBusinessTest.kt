@@ -24,7 +24,7 @@ class SellerBusinessTest {
     @Before fun setUp() = repo.reset()
     @After fun tearDown() = repo.reset()
 
-    private fun item(id: String = "test-item") = MenuItem(id, seller, "rice", "Test lunch", "Sample",
+    private fun item(id: String = "test-item") = MenuItem(id, seller, "combos", "Test lunch", "Sample",
         Price(50), FoodKind.PREPARED, Dietary.VEGETARIAN)
 
     @Test fun itemCreateEditKeepsStableIdAndUpdatesSharedCatalog() {
@@ -68,15 +68,15 @@ class SellerBusinessTest {
         assertTrue(repo.setItemState(ops, seller, "north-lunch", false, true, true))
     }
 
-    @Test fun sharedSeedCategoryRenameDoesNotAffectOtherSeller() {
-        assertTrue(repo.saveCategory(owner, seller, "rice", "North Rice"))
+    @Test fun sellerCategoryRenameDoesNotAffectOtherSeller() {
+        assertTrue(repo.saveCategory(owner, seller, "combos", "North Combos"))
         val north = PreviewCatalog.items.first { it.id == "north-lunch" }
         val main = PreviewCatalog.items.first { it.id == "veg-biryani" }
-        assertNotEquals("rice", north.categoryId)
-        assertEquals("North Rice", PreviewCatalog.categories.first { it.id == north.categoryId }.name)
+        assertEquals("combos", north.categoryId)
+        assertEquals("North Combos", PreviewCatalog.categories.first { it.id == north.categoryId }.name)
         assertEquals("rice", main.categoryId)
-        assertEquals("Rice", PreviewCatalog.categories.first { it.id == "rice" }.name)
-        assertTrue(north.categoryId in DevelopmentPromotions.promotions.first { it.id == "north-lunch-demo" }.categoryIds)
+        assertEquals("Rice Dishes", PreviewCatalog.categories.first { it.id == "rice" }.name)
+        assertTrue("combos" in DevelopmentPromotions.promotions.first { it.id == "north-lunch-demo" }.categoryIds)
     }
 
     @Test fun categoryCreateHideShowAndSafeRemoval() {
@@ -94,7 +94,7 @@ class SellerBusinessTest {
         val old = PreviewCatalog.sellers.first { it.id == seller }.categoryIds.toList()
         assertTrue(repo.moveCategory(owner, seller, old[1], -1))
         assertEquals(old[1], PreviewCatalog.sellers.first { it.id == seller }.categoryIds.first())
-        assertEquals(listOf("dosa", "rice"), PreviewCatalog.sellers.first { it.id == PreviewCatalog.MAIN_ID }.categoryIds.take(2))
+        assertEquals(listOf("dosa", "breakfast"), PreviewCatalog.sellers.first { it.id == PreviewCatalog.MAIN_ID }.categoryIds.take(2))
     }
 
     @Test fun bulkMinimumAndHoursUseSamePolicySource() {

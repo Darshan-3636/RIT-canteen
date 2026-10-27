@@ -131,10 +131,10 @@ class DemoAccountsDeviceTest {
 
     @Test fun everyCurrentCatalogImageResourceDecodesOnDevice() {
         assertEquals(4, PreviewCatalog.sellers.size)
-        assertEquals(12, PreviewCatalog.items.size)
+        assertEquals(72, PreviewCatalog.items.size)
         val ids = PreviewCatalog.sellers.map { requireNotNull(sellerPhotoResource(it.photo)) } +
             PreviewCatalog.items.map { requireNotNull(foodPhotoResource(it.photo)) }
-        assertEquals(16, ids.distinct().size)
+        assertEquals(76, ids.distinct().size)
         ids.forEach { id ->
             val image = BitmapFactory.decodeResource(context.resources, id)
             assertNotNull("Drawable $id must decode", image)

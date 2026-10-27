@@ -16,10 +16,15 @@ import java.util.UUID
 import org.json.JSONArray
 import org.junit.After
 import org.junit.Rule
+import org.junit.rules.RuleChain
 import org.junit.Test
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 
 class DemoLoginNavigationUiTest {
-    @get:Rule val rule = createAndroidComposeRule<MainActivity>()
+    private val composeRule = createAndroidComposeRule<MainActivity>()
+    @get:Rule val launchRules = RuleChain.outerRule(ResetDemoBeforeLaunchRule()).around(composeRule)
+    private val rule get() = composeRule
     private var createdEmail: String? = null
     private var createdId: String? = null
 
@@ -140,6 +145,37 @@ class DemoLoginNavigationUiTest {
         rule.onNodeWithText("Dr Maya Iyer").assertExists()
         rule.onNodeWithTag("profile_account").performScrollTo().performClick()
         rule.onNodeWithTag("account_mock_signout").performScrollTo().performClick()
+    }
+
+    @Test fun customerRootBackExitsRatherThanRevealingLogin() {
+        welcome()
+        login("student.arya@demo.ritcanteen.test", "RitDemo!Student01")
+        rule.onNodeWithTag("choose_seller").assertExists()
+        val activity = rule.activity
+        rule.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+        // A root Back may finish the activity, leaving no Compose hierarchy to query.
+        // The normal launcher is the only entry point and the Hub route is absent.
+        assertNotNull(DevelopmentDemoAccounts.activeAccount)
+    }
+
+    @Test fun sellerRootBackExitsRatherThanRevealingLogin() {
+        welcome()
+        login("owner.main@demo.ritcanteen.test", "RitDemo!OwnerMain01")
+        rule.onNodeWithTag("seller_daily_overview").assertExists()
+        val activity = rule.activity
+        rule.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+        assertNotNull(DevelopmentDemoAccounts.activeAccount)
+    }
+
+    @Test fun logoutThenBackNeverRevealsAuthenticatedSeller() {
+        welcome()
+        login("owner.main@demo.ritcanteen.test", "RitDemo!OwnerMain01")
+        rule.onNodeWithTag("seller_bottom_account").performClick()
+        rule.onNodeWithTag("role_account_logout").performScrollTo().performClick()
+        rule.onNodeWithTag("welcome_screen").assertExists()
+        val activity = rule.activity
+        rule.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+        assertNull(DevelopmentDemoAccounts.activeAccount)
     }
 
     @Test fun newFacultySignsUpLogsOutAndSignsInAgainFromLauncher() {
