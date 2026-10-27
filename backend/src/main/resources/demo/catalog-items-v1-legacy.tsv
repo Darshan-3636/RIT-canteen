@@ -1,0 +1,12 @@
+masala-dosa	main-canteen	dosa	Masala Dosa	Crisp dosa with spiced potato filling, sambar and chutney.	5000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	masala-dosa
+veg-biryani	main-canteen	rice	Veg Biryani	Fragrant rice with vegetables and warm spices.	8500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	veg-biryani
+filter-coffee	main-canteen	drinks	Filter Coffee	South Indian-style coffee served hot.	3000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	filter-coffee
+idli	main-canteen	snacks	Idli	Steamed rice cakes served with sambar and chutney.	3500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	idli
+lemon-rice	main-canteen	rice	Lemon Rice	Rice tempered with lemon, curry leaves and peanuts.	4500	PREPARED	VEGETARIAN	UNAVAILABLE	true	SHOW	lemon-rice
+water-bottle	main-canteen	packs	Bottled Water	Sealed drinking water for group requests.	2000	PACKAGED	VEGETARIAN	AVAILABLE	true	SHOW	water-bottle
+north-lunch	north-counter	rice	North Counter Lunch	Illustrative prepared lunch plate.	9000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	north-lunch
+north-snack	north-counter	snacks	Savoury Snack Box	Assorted prepared savoury bites for a group.	6500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	north-snack
+corner-coffee	coffee-corner	drinks	Group Coffee	Freshly prepared coffee for a group request.	3500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	corner-coffee
+corner-biscuits	coffee-corner	packs	Biscuit Pack	Sealed biscuit pack.	2500	PACKAGED	VEGETARIAN	AVAILABLE	true	SHOW	corner-biscuits
+pantry-juice	campus-pantry	packs	Juice Carton	Packaged fruit drink for group requests.	3000	PACKAGED	VEGETARIAN	AVAILABLE	true	SHOW	pantry-juice
+pantry-water	campus-pantry	drinks	Water Bottle	Sealed drinking water.	2000	PACKAGED	VEGETARIAN	AVAILABLE	true	SHOW	pantry-water

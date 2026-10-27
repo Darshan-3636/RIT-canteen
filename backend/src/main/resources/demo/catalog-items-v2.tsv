@@ -1,0 +1,72 @@
+masala-dosa	main-canteen	dosa	Masala Dosa	Crisp dosa with spiced potato filling, sambar and chutney.	5000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	masala-dosa
+veg-biryani	main-canteen	rice	Veg Biryani	Fragrant rice with vegetables and warm spices.	8500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	veg-biryani
+filter-coffee	main-canteen	drinks	Filter Coffee	South Indian-style coffee served hot.	3000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	filter-coffee
+idli	main-canteen	breakfast	Idli with Sambar	Steamed idlis served with sambar and coconut chutney.	3500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	idli
+lemon-rice	main-canteen	rice	Lemon Rice	Rice tempered with lemon, curry leaves and peanuts.	4500	PREPARED	VEGETARIAN	UNAVAILABLE	true	SHOW	lemon-rice
+water-bottle	main-canteen	drinks	Bottled Water	Sealed unbranded drinking water for group requests.	2000	PACKAGED	VEGETARIAN	AVAILABLE	true	SHOW	water-bottle
+plain-dosa	main-canteen	dosa	Plain Dosa	Thin golden dosa with coconut chutney and sambar.	4000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	plain-dosa
+set-dosa	main-canteen	dosa	Set Dosa	Soft set of small dosas served with chutney and sambar.	5500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	set-dosa
+rava-idli	main-canteen	breakfast	Rava Idli	Steamed semolina idli with spices, chutney and sambar.	4000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	rava-idli
+vada-sambar	main-canteen	breakfast	Vada Sambar	Crisp lentil vadas with warm sambar and chutney.	4500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	vada-sambar
+ven-pongal	main-canteen	breakfast	Ven Pongal	Comforting rice and lentil pongal tempered with pepper and cashew.	5000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	ven-pongal
+poori-sagu	main-canteen	breakfast	Poori Sagu	Puffed pooris with a mildly spiced vegetable sagu.	6000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	poori-sagu
+veg-pulao	main-canteen	rice	Veg Pulao	Fluffy rice cooked with vegetables and aromatic whole spices.	7000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	veg-pulao
+curd-rice	main-canteen	rice	Curd Rice	Creamy curd rice with a South Indian mustard and curry-leaf tempering.	4000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	curd-rice
+bisi-bele-bath	main-canteen	rice	Bisi Bele Bath	Karnataka-style spiced lentil rice with vegetables.	6500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	bisi-bele-bath
+chapati-meal	main-canteen	meals	Chapati Meal	Chapatis with a vegetable curry, dal and simple sides.	8000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	chapati-meal
+veg-thali	main-canteen	meals	Veg Thali	Rice, chapati and a selection of small vegetarian curries and sides.	11000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	veg-thali
+tomato-rice	main-canteen	rice	Tomato Rice	Tangy tomato rice tempered with curry leaves and mustard.	5000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	tomato-rice
+north-lunch	north-counter	combos	North Counter Lunch Combo	A sample quick lunch combo with savoury North Counter bites.	9000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	north-lunch
+north-snack	north-counter	snacks	Assorted Savoury Snack Box	Assorted prepared savoury snacks for sharing.	6500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	north-snack
+veg-samosa	north-counter	snacks	Veg Samosa	Crisp pastry filled with spiced potato and peas.	2500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	veg-samosa
+khasta-kachori	north-counter	snacks	Khasta Kachori	Flaky kachori with a spiced savoury filling.	3000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	khasta-kachori
+aloo-puff	north-counter	snacks	Aloo Puff	Flaky savoury puff pastry with potato filling.	3000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	aloo-puff
+veg-cutlet	north-counter	snacks	Veg Cutlet	Crisp vegetable cutlet with a lightly spiced centre.	3500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	veg-cutlet
+onion-pakora	north-counter	snacks	Onion Pakora	Golden onion fritters with a chutney side.	4000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	onion-pakora
+bhel-puri	north-counter	chaat	Bhel Puri	Puffed rice chaat with vegetables, chutneys and sev.	5000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	bhel-puri
+sev-puri	north-counter	chaat	Sev Puri	Crisp puris topped with potato, chutneys and sev.	5500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	sev-puri
+masala-puri	north-counter	chaat	Masala Puri	Crisp puris with a warm spiced pea gravy and toppings.	5500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	masala-puri
+paneer-roll	north-counter	rolls	Paneer Roll	Soft wrap filled with spiced paneer and vegetables.	8500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	paneer-roll
+veg-sandwich	north-counter	sandwiches	Veg Sandwich	Vegetable sandwich with fresh cucumber, tomato and chutney.	5500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	veg-sandwich
+grilled-cheese-sandwich	north-counter	sandwiches	Grilled Cheese Sandwich	Toasted sandwich with melted cheese and a crisp exterior.	7500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	grilled-cheese-sandwich
+corn-chaat	north-counter	chaat	Sweet Corn Chaat	Sweet corn tossed with onion, tomato, herbs and tangy spice.	5000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	corn-chaat
+bread-pakora	north-counter	snacks	Bread Pakora	Bread slices in a crisp gram-flour coating.	4000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	bread-pakora
+batata-vada	north-counter	snacks	Batata Vada	Spiced potato fritter with a crisp gram-flour shell.	3000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	batata-vada
+veg-momos	north-counter	snacks	Steamed Veg Momos	Steamed vegetable dumplings with a dipping sauce.	7500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	veg-momos
+masala-fries	north-counter	snacks	Masala Fries	Fries tossed with a tangy savoury masala.	6500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	masala-fries
+corner-coffee	coffee-corner	drinks	Fresh Coffee	Freshly prepared coffee for a group request.	3500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	corner-coffee
+corner-biscuits	coffee-corner	cookies	Butter Biscuits	Sealed butter biscuits for a quick bakery snack.	2500	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	corner-biscuits
+bakery-veg-puff	coffee-corner	puffs	Bakery Veg Puff	Flaky bakery puff filled with seasoned vegetables.	3500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	bakery-veg-puff
+bakery-paneer-puff	coffee-corner	puffs	Paneer Puff	Flaky puff pastry with a spiced paneer filling.	4500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	bakery-paneer-puff
+bakery-mushroom-puff	coffee-corner	puffs	Mushroom Puff	Flaky bakery puff with a savoury mushroom filling.	4500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	bakery-mushroom-puff
+butter-croissant	coffee-corner	breads	Butter Croissant	Layered buttery croissant with a crisp golden crust.	6500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	butter-croissant
+chocolate-croissant	coffee-corner	breads	Chocolate Croissant	Flaky croissant with a chocolate centre.	8000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	chocolate-croissant
+cinnamon-roll	coffee-corner	breads	Cinnamon Roll	Soft spiral bun with cinnamon filling and light glaze.	7000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	cinnamon-roll
+banana-bread	coffee-corner	breads	Banana Bread Slice	Moist slice of banana bread with a tender crumb.	6000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	banana-bread
+garlic-bun	coffee-corner	breads	Garlic Bun	Soft baked bun with garlic and herbs.	5000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	garlic-bun
+cheese-bun	coffee-corner	breads	Cheese Bun	Golden baked bun with a cheese filling.	5500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	cheese-bun
+blueberry-muffin	coffee-corner	cakes	Blueberry Muffin	Bakery muffin studded with blueberries.	7500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	blueberry-muffin
+chocolate-muffin	coffee-corner	cakes	Chocolate Muffin	Soft chocolate muffin with chocolate pieces.	7000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	chocolate-muffin
+fudge-brownie	coffee-corner	cakes	Fudge Brownie	Dense chocolate brownie square with a fudgy centre.	8500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	fudge-brownie
+vanilla-pastry	coffee-corner	cakes	Vanilla Pastry	Layered vanilla cream pastry slice.	9000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	vanilla-pastry
+eggless-chocolate-cake	coffee-corner	cakes	Eggless Chocolate Cake Slice	Chocolate cake slice made without egg in this demo description.	9500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	eggless-chocolate-cake
+shortbread-cookies	coffee-corner	cookies	Shortbread Cookies	Sealed pack of crumbly shortbread cookies.	4500	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	shortbread-cookies
+almond-cookies	coffee-corner	cookies	Almond Cookies	Sealed almond cookie pack with visible almond pieces.	5500	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	almond-cookies
+pantry-juice	campus-pantry	drinks	Fruit Juice Carton	Sealed unbranded fruit juice carton for group requests.	3000	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	pantry-juice
+pantry-water	campus-pantry	drinks	Water Bottle	Sealed unbranded drinking water bottle.	2000	PACKAGED	VEGETARIAN	AVAILABLE	true	SHOW	pantry-water
+orange-juice-bottle	campus-pantry	drinks	Orange Juice Bottle	Sealed unbranded orange juice bottle.	4500	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	orange-juice-bottle
+mango-juice-bottle	campus-pantry	drinks	Mango Juice Bottle	Sealed unbranded mango juice bottle.	4500	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	mango-juice-bottle
+apple-juice-bottle	campus-pantry	drinks	Apple Juice Bottle	Sealed unbranded apple juice bottle.	5000	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	apple-juice-bottle
+lemon-iced-tea	campus-pantry	drinks	Lemon Iced Tea	Sealed unbranded lemon iced tea bottle.	5500	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	lemon-iced-tea
+cold-coffee-bottle	campus-pantry	drinks	Cold Coffee Bottle	Sealed unbranded ready-to-drink cold coffee.	6000	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	cold-coffee-bottle
+coconut-water-pack	campus-pantry	drinks	Coconut Water Pack	Sealed unbranded coconut water pack.	5500	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	coconut-water-pack
+salted-lassi-pack	campus-pantry	drinks	Salted Lassi Pack	Sealed unbranded salted lassi pack.	4000	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	salted-lassi-pack
+sparkling-water	campus-pantry	drinks	Sparkling Water	Sealed unbranded sparkling water bottle.	4500	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	sparkling-water
+trail-mix	campus-pantry	packs	Trail Mix Pouch	Sealed pouch of mixed nuts, seeds and dried fruit.	7000	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	trail-mix
+roasted-peanuts	campus-pantry	packs	Roasted Peanuts	Sealed pack of roasted peanuts.	3500	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	roasted-peanuts
+potato-chips	campus-pantry	packs	Potato Chips	Sealed pack of crisp potato chips.	3000	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	potato-chips
+banana-chips	campus-pantry	packs	Banana Chips	Sealed pack of crisp banana chips.	4500	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	banana-chips
+pantry-biscuit-pack	campus-pantry	packs	Biscuit Pack	Sealed assorted biscuit pack.	2500	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	pantry-biscuit-pack
+granola-bar	campus-pantry	packs	Granola Bar	Individually wrapped oat and fruit granola bar.	5000	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	granola-bar
+energy-bar	campus-pantry	packs	Energy Bar	Individually wrapped snack energy bar.	7000	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	energy-bar
+cracker-pack	campus-pantry	packs	Savoury Crackers	Sealed pack of savoury crackers.	3500	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	cracker-pack
