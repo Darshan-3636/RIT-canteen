@@ -99,13 +99,8 @@ class DevelopmentDemoCheckoutTest {
 
     @Test fun withdrawnOrAlreadyConfirmedBulkQuoteCannotBeSimulatedAgain() {
         val fixtureCustomer = AuthorizedIdentity("debug-customer", setOf(AppMode.Customer))
-        assertEquals(DemoTransitionResult.APPLIED,
+        assertEquals(DemoTransitionResult.INVALID_STATE,
             DevelopmentSellerOperations.withdraw("DEMO-NC-UNPAID", fixtureCustomer))
-        assertNull(DevelopmentDemoCheckout.previewBulk("DEMO-NC-UNPAID", fixtureCustomer))
-        assertEquals(DemoActionResult.NOT_FOUND,
-            DevelopmentDemoCheckout.simulatePayment("DEMO-NC-UNPAID", DemoPaymentOutcome.SUCCESS, fixtureCustomer))
-
-        DevelopmentSellerOperations.reset()
         assertEquals(DemoActionResult.APPLIED,
             DevelopmentDemoCheckout.simulatePayment("DEMO-NC-UNPAID", DemoPaymentOutcome.SUCCESS, fixtureCustomer))
         assertEquals(DemoTransitionResult.INVALID_STATE,

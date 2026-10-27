@@ -21,11 +21,7 @@ object DevelopmentBulkPreview : BulkPolicySource {
         }
         return SellerBulkPolicy(
             sellerId = sellerId,
-            minimumOverride = when (sellerId) {
-                "north-counter" -> 10
-                "campus-pantry" -> 12
-                else -> null
-            },
+            minimumOverride = PreviewCatalog.sellers.find { it.id == sellerId }?.bulkMinimumUnits,
             weeklyHours = weekdays + (DayOfWeek.SATURDAY to listOf(BulkTimeWindow(LocalTime.of(10, 0), LocalTime.of(14, 0)))),
             holidays = setOf(today.plusDays(4)),
             temporaryClosures = setOf(today.plusDays(6)),

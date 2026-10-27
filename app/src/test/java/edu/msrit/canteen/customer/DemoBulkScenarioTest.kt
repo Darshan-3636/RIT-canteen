@@ -123,12 +123,12 @@ class DemoBulkScenarioTest {
     @Test fun localSubmissionUsesOneSellerMinimumAndNeverBecomesRealPayment() {
         val scenario = scenario()
         val pickup = scenario.records.first { it.reference == "DEMO-NC-NEW" }.latest.pickup
-        val draft = BulkDraft("north-counter", listOf(BulkLine("north-lunch", 10)), pickup)
+        val draft = BulkDraft("north-counter", listOf(BulkLine("north-lunch", 8)), pickup)
         val (result, reference) = scenario.submitLocalDemo(draft, customer, now)
         assertEquals(DemoTransitionResult.APPLIED, result)
         assertNotNull(reference)
         val saved = scenario.records.first { it.reference == reference }
-        assertEquals(10, saved.appliedMinimum)
+        assertEquals(8, saved.appliedMinimum)
         assertEquals(QuoteStage.SUBMITTED, saved.thread.stage)
         assertFalse(paymentEligibility(saved.thread, now, serverConfirmed = false))
         val mixed = draft.copy(lines = listOf(BulkLine("north-lunch", 9), BulkLine("masala-dosa", 1)))
@@ -148,7 +148,7 @@ class DemoBulkScenarioTest {
         assertEquals(DemoTransitionResult.INVALID_PROPOSAL,
             scenario.propose(record.reference, 1, foreign, owner, now))
         val short = BulkProposal.from(record.latest).copy(lines = listOf(
-            QuoteLineSnapshot("north-lunch", "North Counter Lunch", 9, 9_000)))
+            QuoteLineSnapshot("north-lunch", "North Counter Lunch", 7, 9_000)))
         assertTrue(ProposalIssue.BELOW_MINIMUM in validateBulkProposal(short, record.sellerId,
             record.appliedMinimum, PreviewCatalog, DevelopmentBulkPreview.forSeller(record.sellerId), now))
     }

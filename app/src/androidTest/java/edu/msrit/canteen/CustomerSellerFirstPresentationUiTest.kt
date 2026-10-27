@@ -10,6 +10,8 @@ import edu.msrit.canteen.ui.screens.ChooseSellerScreen
 import edu.msrit.canteen.ui.screens.CustomerPromotionsScreen
 import edu.msrit.canteen.ui.screens.SellerScopedMenuScreen
 import edu.msrit.canteen.ui.theme.RitTheme
+import edu.msrit.canteen.customer.PreviewCatalog
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -17,6 +19,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 class CustomerSellerFirstPresentationUiTest {
     @get:Rule val rule = createComposeRule()
+    @Before fun restoreIsolatedPresentationFixture() { PreviewCatalog.resetDemoSnapshot() }
 
     @Test fun sellerDirectoryFiltersAndReturnsTheChosenSellerId() {
         val chosenSellerId = AtomicReference<String?>(null)

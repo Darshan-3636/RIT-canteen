@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
@@ -38,6 +39,9 @@ import edu.msrit.canteen.customer.BulkTimeWindow
 import edu.msrit.canteen.customer.DevelopmentBulkPreview
 import edu.msrit.canteen.customer.DevelopmentPromotions
 import edu.msrit.canteen.customer.DevelopmentSellerOperations
+import edu.msrit.canteen.customer.DevelopmentSellerBusiness
+import edu.msrit.canteen.customer.DebugSellerCatalogApi
+import edu.msrit.canteen.customer.DebugServerCatalog
 import edu.msrit.canteen.customer.Dietary
 import edu.msrit.canteen.customer.FoodKind
 import edu.msrit.canteen.customer.ItemAvailability
@@ -75,6 +79,9 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 private fun BusinessPage(title: String, tag: String, onBack: () -> Unit, content: @Composable () -> Unit) {
@@ -82,7 +89,7 @@ private fun BusinessPage(title: String, tag: String, onBack: () -> Unit, content
     Column(Modifier.fillMaxSize().background(colors.background).testTag(tag)) {
         CatalogHeader(title, onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
-            RitText("Debug seller preview · local changes only", RitType.small, colors.muted)
+            RitText("Local backend demo · unsupported changes are not saved", RitType.small, colors.muted)
             Spacer(Modifier.height(14.dp))
             content()
             Spacer(Modifier.height(40.dp))
@@ -126,7 +133,7 @@ fun SellerBusinessHomeScreen(sellerId: String, userId: String, repo: SellerBusin
     val caps = repo.capabilities(userId, sellerId)
     BusinessPage("Seller management", "seller_management", onBack) {
         RitText(seller?.name ?: "Seller", RitType.heading)
-        RitText("Only your delegated actions are available. No live seller data is changed.", RitType.body)
+        RitText("Your server-granted capabilities determine available actions.", RitType.body)
         Spacer(Modifier.height(20.dp))
         RitText("Orders & pickup", RitType.title)
         Spacer(Modifier.height(8.dp))
@@ -171,7 +178,7 @@ fun SellerMenuManagementScreen(sellerId: String, userId: String, repo: SellerBus
     Column(Modifier.fillMaxSize().background(colors.background).testTag("seller_menu_management")) {
         CatalogHeader("Menu management", if (rootTab) null else onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
-            RitText("Debug seller preview · local changes only", RitType.small, colors.muted)
+            RitText("Local backend catalog", RitType.small, colors.muted)
             RitText(seller?.name ?: "Seller", RitType.heading)
             RitText("Prepared and packaged eligibility follows fixed platform rules.", RitType.small)
             Spacer(Modifier.height(12.dp))
@@ -187,7 +194,8 @@ fun SellerMenuManagementScreen(sellerId: String, userId: String, repo: SellerBus
             }
             Spacer(Modifier.height(13.dp))
             if (SellerCapability.CATALOG in caps) {
-                RitPrimaryButton("+ Add food item", { onItem(null) }, Modifier.fillMaxWidth().testTag("seller_add_item"))
+                RitPrimaryButton("+ Add food item · unavailable", {}, Modifier.fillMaxWidth().testTag("seller_add_item"),
+                    enabled = false)
                 Spacer(Modifier.height(9.dp))
                 RitSecondaryButton("Manage categories", onCategories, Modifier.fillMaxWidth())
                 Spacer(Modifier.height(12.dp))
@@ -215,6 +223,7 @@ fun SellerMenuManagementScreen(sellerId: String, userId: String, repo: SellerBus
 @Composable
 fun SellerItemEditorScreen(sellerId: String, userId: String, itemId: String?, repo: SellerBusinessRepository,
     onBack: () -> Unit, onSaved: () -> Unit) {
+    val scope = rememberCoroutineScope()
     val old = PreviewCatalog.items.find { it.id == itemId && it.sellerId == sellerId }
     val canChangeAvailability = SellerCapability.AVAILABILITY in repo.capabilities(userId, sellerId)
     var name by remember(itemId) { mutableStateOf(old?.name.orEmpty()) }
@@ -316,7 +325,19 @@ fun SellerItemEditorScreen(sellerId: String, userId: String, itemId: String?, re
                         published, if (showUnavailable) UnavailableVisibility.SHOW else UnavailableVisibility.HIDE,
                         old?.photo, old?.featured ?: false, photoUri,
                         tags.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet())
-                    if (repo.saveItem(userId, item)) { onSaved(); null } else "Could not save: check category and permissions."
+                    if (old == null) "Adding new items is not supported by the current backend."
+                    else {
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) { DebugSellerCatalogApi.saveItem(item) }
+                            if (result.success) {
+                                val snapshot = runCatching { withContext(Dispatchers.IO) {
+                                    DebugServerCatalog.fetch() } }.getOrNull()
+                                if (snapshot != null) DebugServerCatalog.apply(snapshot)
+                                withContext(Dispatchers.Main.immediate) { onSaved() }
+                            } else message = result.message
+                        }
+                        null
+                    }
                 }
             }
         }, Modifier.fillMaxWidth().testTag("seller_save_item"))
@@ -326,6 +347,7 @@ fun SellerItemEditorScreen(sellerId: String, userId: String, itemId: String?, re
 @Composable
 fun SellerAvailabilityScreen(sellerId: String, itemId: String, userId: String, repo: SellerBusinessRepository,
     onBack: () -> Unit) {
+    val scope = rememberCoroutineScope()
     val item = PreviewCatalog.items.find { it.id == itemId && it.sellerId == sellerId }
     var available by remember(itemId) { mutableStateOf(item?.availability != ItemAvailability.UNAVAILABLE) }
     var published by remember(itemId) { mutableStateOf(item?.published ?: false) }
@@ -364,8 +386,15 @@ fun SellerAvailabilityScreen(sellerId: String, itemId: String, userId: String, r
             })
             BusinessMessage(message)
             RitPrimaryButton("Save visibility", {
-                message = if (repo.setItemState(userId, sellerId, itemId, available, published, visible)) "Saved in local demo."
-                    else "Permission denied."
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) {
+                        DebugSellerCatalogApi.setAvailability(sellerId, itemId, available, published, visible)
+                    }
+                    val snapshot = runCatching { withContext(Dispatchers.IO) {
+                        DebugServerCatalog.fetch() } }.getOrNull()
+                    if (snapshot != null) DebugServerCatalog.apply(snapshot)
+                    message = result.message
+                }
             }, Modifier.fillMaxWidth().testTag("seller_save_availability"))
         }
     }
@@ -473,6 +502,7 @@ fun SellerProfileEditorScreen(sellerId: String, userId: String, repo: SellerBusi
 
 @Composable
 fun SellerHoursScreen(sellerId: String, userId: String, repo: SellerBusinessRepository, onBack: () -> Unit) {
+    val scope = rememberCoroutineScope()
     val current = DevelopmentBulkPreview.forSeller(sellerId)
     var hours by remember(sellerId) { mutableStateOf(current?.weeklyHours.orEmpty()) }
     var opening by remember { mutableStateOf("09:00") }
@@ -480,7 +510,7 @@ fun SellerHoursScreen(sellerId: String, userId: String, repo: SellerBusinessRepo
     var selected by remember { mutableStateOf(DayOfWeek.MONDAY) }
     var message by remember { mutableStateOf<String?>(null) }
     BusinessPage("Working hours", "seller_hours", onBack) {
-        RitText("Asia/Kolkata · closed days have no regular pickup window. A special request still needs explicit seller acceptance.", RitType.body)
+        RitText("Asia/Kolkata · this is a draft schedule until saved. The backend does not expose a read-back hours endpoint.", RitType.body)
         Spacer(Modifier.height(14.dp))
         DayOfWeek.entries.forEach { day ->
             val windows = hours[day].orEmpty()
@@ -516,14 +546,18 @@ fun SellerHoursScreen(sellerId: String, userId: String, repo: SellerBusinessRepo
         BusinessMessage(message)
         RitPrimaryButton("Save weekly hours", {
             val policy = current?.copy(weeklyHours = hours) ?: SellerBulkPolicy(sellerId, weeklyHours = hours)
-            message = if (repo.savePolicy(userId, policy, repo.closureReasons[sellerId].orEmpty())) "Saved for customer and pickup previews."
-                else "Schedule invalid or permission denied."
+            scope.launch {
+                val result = withContext(Dispatchers.IO) { DebugSellerCatalogApi.saveHours(sellerId, policy) }
+                if (result.success) DevelopmentSellerBusiness.applyServerPolicy(policy)
+                message = result.message
+            }
         }, Modifier.fillMaxWidth().testTag("seller_save_hours"))
     }
 }
 
 @Composable
 fun SellerClosuresScreen(sellerId: String, userId: String, repo: SellerBusinessRepository, onBack: () -> Unit) {
+    val scope = rememberCoroutineScope()
     val current = DevelopmentBulkPreview.forSeller(sellerId) ?: SellerBulkPolicy(sellerId)
     var date by remember { mutableStateOf("") }
     var reason by remember { mutableStateOf("") }
@@ -540,8 +574,11 @@ fun SellerClosuresScreen(sellerId: String, userId: String, repo: SellerBusinessR
             BusinessCard(day.toString(), "${if (isHoliday) "Holiday" else "Temporary closure"} · $detail")
             RitSecondaryButton("Restore ordinary availability for $day", {
                 val updated = current.copy(holidays = current.holidays - day, temporaryClosures = current.temporaryClosures - day)
-                message = if (repo.savePolicy(userId, updated, reasons.filterNot { it.date == day })) "Closure removed."
-                    else "Permission denied."
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) { DebugSellerCatalogApi.setClosure(sellerId, day, null) }
+                    if (result.success) DevelopmentSellerBusiness.applyServerPolicy(updated, reasons.filterNot { it.date == day })
+                    message = result.message
+                }
             }, Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
         }
@@ -567,9 +604,18 @@ fun SellerClosuresScreen(sellerId: String, userId: String, repo: SellerBusinessR
                 else -> {
                     val updated = if (holiday) current.copy(holidays = current.holidays + parsed)
                         else current.copy(temporaryClosures = current.temporaryClosures + parsed)
-                    if (repo.savePolicy(userId, updated, reasons + SellerClosure(parsed, reason.trim(), holiday))) {
-                        date = ""; reason = ""; "Closed date saved."
-                    } else "Permission denied."
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            DebugSellerCatalogApi.setClosure(sellerId, parsed, reason.trim())
+                        }
+                        if (result.success) {
+                            DevelopmentSellerBusiness.applyServerPolicy(updated,
+                                reasons + SellerClosure(parsed, reason.trim(), holiday))
+                            date = ""; reason = ""
+                        }
+                        message = result.message
+                    }
+                    null
                 }
             }
         }, Modifier.fillMaxWidth().testTag("seller_add_closure"))
@@ -578,6 +624,7 @@ fun SellerClosuresScreen(sellerId: String, userId: String, repo: SellerBusinessR
 
 @Composable
 fun SellerBulkMinimumScreen(sellerId: String, userId: String, repo: SellerBusinessRepository, onBack: () -> Unit) {
+    val scope = rememberCoroutineScope()
     val current = DevelopmentBulkPreview.forSeller(sellerId) ?: SellerBulkPolicy(sellerId)
     var minimum by remember(sellerId) { mutableStateOf(current.minimum.toString()) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -590,9 +637,20 @@ fun SellerBulkMinimumScreen(sellerId: String, userId: String, repo: SellerBusine
         BusinessMessage(message)
         RitPrimaryButton("Save minimum", {
             val parsed = minimum.toIntOrNull()
-            message = if (parsed == null || parsed <= 0) "Enter a positive whole number."
-                else if (repo.savePolicy(userId, current.copy(minimumOverride = parsed), repo.closureReasons[sellerId].orEmpty()))
-                    "Updated debug bulk-cart validation." else "Permission denied."
+            message = if (parsed == null || parsed !in 1..999) "Enter a whole number from 1 to 999."
+                else {
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) { DebugSellerCatalogApi.saveMinimum(sellerId, parsed) }
+                        if (result.success) {
+                            DevelopmentSellerBusiness.applyServerPolicy(current.copy(minimumOverride = parsed))
+                            val snapshot = runCatching { withContext(Dispatchers.IO) {
+                                DebugServerCatalog.fetch() } }.getOrNull()
+                            if (snapshot != null) DebugServerCatalog.apply(snapshot)
+                        }
+                        message = result.message
+                    }
+                    null
+                }
         }, Modifier.fillMaxWidth().testTag("seller_save_minimum"))
     }
 }

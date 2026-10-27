@@ -126,6 +126,7 @@ data class Seller(
     val photo: SellerPhoto? = null,
     val isMainCanteen: Boolean = false,
     val localImageUri: String? = null,
+    val bulkMinimumUnits: Int = DEFAULT_BULK_MINIMUM,
 )
 
 data class MenuItem(

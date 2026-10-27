@@ -3,6 +3,7 @@ package edu.msrit.canteen.customer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import edu.msrit.canteen.auth.DevelopmentDemoAccounts
 
 /** Resettable, in-memory seller administration. No invitation, upload, or merchant request leaves the device. */
 object DevelopmentSellerBusiness : SellerBusinessRepository {
@@ -37,12 +38,22 @@ object DevelopmentSellerBusiness : SellerBusinessRepository {
     private var hiddenCategories by mutableStateOf<Map<String, Set<String>>>(emptyMap())
     override val hiddenCategoryIds: Map<String, Set<String>> get() = hiddenCategories
 
-    override fun capabilities(userId: String, sellerId: String): Set<SellerCapability> = employees
-        .find { it.id == userId && it.sellerId == sellerId }
-        ?.let { effectiveCapabilities(it, employees) }.orEmpty()
+    /** Current-process echo of a confirmed backend policy; never used as server authorization. */
+    fun applyServerPolicy(policy: SellerBulkPolicy, reasons: List<SellerClosure> = closureReasons[policy.sellerId].orEmpty()) {
+        policyOverrides = policyOverrides + (policy.sellerId to policy)
+        closureReasons = closureReasons + (policy.sellerId to reasons)
+    }
+
+    override fun capabilities(userId: String, sellerId: String): Set<SellerCapability> {
+        if (DevelopmentDemoAccounts.activeAccount?.id == userId)
+            return DevelopmentDemoAccounts.serverIdentity?.capabilitiesBySeller?.get(sellerId)
+                .orEmpty().mapNotNull(SellerCapability::fromWire).toSet()
+        return employees.find { it.id == userId && it.sellerId == sellerId }
+            ?.let { effectiveCapabilities(it, employees) }.orEmpty()
+    }
 
     private fun allowed(userId: String, sellerId: String, capability: SellerCapability) =
-        capability in capabilities(userId, sellerId)
+        DevelopmentDemoAccounts.activeAccount?.id != userId && capability in capabilities(userId, sellerId)
 
     override fun saveItem(userId: String, item: MenuItem): Boolean {
         if (!allowed(userId, item.sellerId, SellerCapability.CATALOG)) return false

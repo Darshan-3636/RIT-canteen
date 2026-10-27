@@ -23,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
@@ -48,6 +49,9 @@ import edu.msrit.canteen.ui.components.RitIcon
 import edu.msrit.canteen.ui.components.RitIconKind
 import edu.msrit.canteen.ui.theme.RitThemeTokens
 import edu.msrit.canteen.ui.theme.RitType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun DemoLoginScreen(onBack: () -> Unit, onCreateAccount: () -> Unit,
@@ -60,6 +64,8 @@ fun DemoLoginScreen(onBack: () -> Unit, onCreateAccount: () -> Unit,
     var visible by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var forgot by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().background(colors.background).imePadding().testTag("demo_login_screen")) {
         CatalogHeader("Welcome back", onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
@@ -67,7 +73,7 @@ fun DemoLoginScreen(onBack: () -> Unit, onCreateAccount: () -> Unit,
             RitText("Sign in to RIT Canteen", RitType.heading)
             RitText("Your food, orders and campus seller in one place.", RitType.body, colors.muted)
             Spacer(Modifier.height(10.dp))
-            RitText("Demo mode · this account stays on this device", RitType.small, colors.accent)
+            RitText("Local backend demo · requires USB connection", RitType.small, colors.accent)
             Spacer(Modifier.height(28.dp))
             RitTextField(email, { email = it.take(254); error = null }, "Email address", "you@example.com",
                 Modifier.fillMaxWidth(), KeyboardType.Email, "demo_login_email")
@@ -79,12 +85,23 @@ fun DemoLoginScreen(onBack: () -> Unit, onCreateAccount: () -> Unit,
             error?.let { RitText(it, RitType.body, colors.accent,
                 Modifier.padding(vertical = 10.dp).testTag("demo_login_error")) }
             Spacer(Modifier.height(16.dp))
-            RitPrimaryButton("Sign In", {
-                val result = DevelopmentDemoAccounts.signIn(email, password)
-                password = ""
-                if (result.account != null) onAuthenticated(result.account)
-                else error = result.error ?: "Could not sign in."
-            }, Modifier.fillMaxWidth().testTag("demo_login_submit"), enabled = email.isNotBlank() && password.isNotBlank())
+            RitPrimaryButton(if (busy) "Connecting…" else "Sign In", {
+                if (!busy) {
+                    val submittedEmail = email
+                    val submittedPassword = password
+                    password = ""
+                    busy = true
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            DevelopmentDemoAccounts.signIn(submittedEmail, submittedPassword)
+                        }
+                        busy = false
+                        if (result.account != null) onAuthenticated(result.account)
+                        else error = result.error ?: "Could not sign in."
+                    }
+                }
+            }, Modifier.fillMaxWidth().testTag("demo_login_submit"),
+                enabled = !busy && email.isNotBlank() && password.isNotBlank())
             Spacer(Modifier.height(12.dp))
             RitSecondaryButton("Create customer account", onCreateAccount,
                 Modifier.fillMaxWidth().testTag("demo_login_create"))
@@ -97,7 +114,7 @@ fun DemoLoginScreen(onBack: () -> Unit, onCreateAccount: () -> Unit,
 }
 
 @Composable
-fun DemoSignupScreen(onBack: () -> Unit, onAuthenticated: (DemoAccount) -> Unit) {
+fun DemoSignupScreen(onBack: () -> Unit, onRegistered: () -> Unit) {
     BackHandler(onBack = onBack)
     val colors = RitThemeTokens.colors
     var name by rememberSaveable { mutableStateOf("") }
@@ -108,12 +125,14 @@ fun DemoSignupScreen(onBack: () -> Unit, onAuthenticated: (DemoAccount) -> Unit)
     var affiliation by rememberSaveable { mutableStateOf(CustomerAffiliation.STUDENT) }
     var department by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().background(colors.background).imePadding().testTag("demo_signup_screen")) {
         CatalogHeader("Create account", onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 20.dp)) {
             RitText("Join RIT Canteen", RitType.heading)
-            RitText("Create a local Student or Faculty demo account.", RitType.body, colors.muted)
+            RitText("Create a Student or Faculty account on the local demo server.", RitType.body, colors.muted)
             Spacer(Modifier.height(8.dp))
             RitText("No email is verified or sent. Seller accounts are invitation-only.", RitType.small, colors.accent)
             Spacer(Modifier.height(22.dp))
@@ -146,11 +165,27 @@ fun DemoSignupScreen(onBack: () -> Unit, onAuthenticated: (DemoAccount) -> Unit)
             error?.let { RitText(it, RitType.body, colors.accent,
                 Modifier.padding(vertical = 10.dp).testTag("demo_signup_error")) }
             Spacer(Modifier.height(16.dp))
-            RitPrimaryButton("Create local account", {
-                val result = DevelopmentDemoAccounts.register(name, email, password, confirmation, affiliation, department)
-                if (result.account != null) { password = ""; confirmation = ""; onAuthenticated(result.account) }
-                else error = result.error ?: "Could not create this account."
-            }, Modifier.fillMaxWidth().testTag("demo_signup_submit"))
+            RitPrimaryButton(if (busy) "Creating…" else "Create account", {
+                if (!busy) {
+                    val submittedName = name
+                    val submittedEmail = email
+                    val submittedPassword = password
+                    val submittedConfirmation = confirmation
+                    val submittedAffiliation = affiliation
+                    val submittedDepartment = department
+                    password = ""; confirmation = ""
+                    busy = true
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            DevelopmentDemoAccounts.register(submittedName, submittedEmail, submittedPassword,
+                                submittedConfirmation, submittedAffiliation, submittedDepartment)
+                        }
+                        busy = false
+                        if (result.account != null) onRegistered()
+                        else error = result.error ?: "Could not create this account."
+                    }
+                }
+            }, Modifier.fillMaxWidth().testTag("demo_signup_submit"), enabled = !busy)
         }
     }
 }

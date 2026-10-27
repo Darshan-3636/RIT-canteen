@@ -50,7 +50,7 @@ private fun bulkPrimaryState(record: BulkRequestRecord): String = when (record.t
     QuoteStage.SUBMITTED -> "Waiting for seller review"
     QuoteStage.COUNTEROFFER -> if (record.latest.actor == edu.msrit.canteen.customer.QuoteActor.SELLER)
         "Review seller's updated offer" else "Waiting for seller's response"
-    QuoteStage.AGREED_AWAITING_PAYMENT -> "Agreed · demo checkout available"
+    QuoteStage.AGREED_AWAITING_PAYMENT -> "Agreed · payment unverified"
     QuoteStage.PAID_CONFIRMED -> "Demo state · no actual payment"
     QuoteStage.EXPIRED -> "Offer expired"
     QuoteStage.REJECTED -> "Seller declined"
@@ -78,7 +78,7 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
             contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp)) {
             item {
                 RitText("Your activity", RitType.heading)
-                RitText("Local demo only · no actual orders or charges", RitType.small, colors.muted,
+                RitText("Stored on local demo server · no actual orders or charges", RitType.small, colors.muted,
                     Modifier.testTag("orders_demo_disclosure"))
                 Spacer(Modifier.height(14.dp))
             }
@@ -95,7 +95,7 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                         it.customerId == customerUserId && it.kind == DemoOrderKind.INDIVIDUAL })
                     item { RitEmptyState("No individual previews", "Select prepared food from Main Canteen to build a demo order.") }
                 items(individual, key = { it.id }) { record ->
-                    OrderCard("Individual · Main Canteen", if (record.locallySaved) "Saved locally · not submitted" else "Sample history · not a real purchase",
+                    OrderCard("Individual · Main Canteen", if (record.locallySaved) "Saved on demo server · not placed" else "Sample history · not a real purchase",
                         record.lines.joinToString { "${it.quantity}× ${it.title}" },
                         "${record.placedAt.format(orderDate)} · ${displayPaise(record.totalPaise)}",
                         { onIndividual(record.id) }, "orders_individual_${record.id}", record.lines.firstOrNull()?.itemId)

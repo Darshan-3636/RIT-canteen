@@ -43,6 +43,9 @@ class NormalCatalogFlowUiTest {
         rule.onNodeWithTag("demo_login_email").performTextInput(email)
         rule.onNodeWithTag("demo_login_password").performTextInput(password)
         rule.onNodeWithTag("demo_login_submit").performScrollTo().performClick()
+        val destination = if (email.startsWith("owner.") || email.startsWith("staff."))
+            "seller_daily_overview" else "choose_seller"
+        rule.waitUntil(25_000) { rule.onAllNodesWithTag(destination).fetchSemanticsNodes().isNotEmpty() }
     }
 
     private fun customer() = login("student.arya@demo.ritcanteen.test", "RitDemo!Student01")
@@ -134,6 +137,7 @@ class NormalCatalogFlowUiTest {
         rule.onNodeWithText("Plain Dosa").assertExists()
         rule.onNodeWithText("Unavailable").performScrollTo().performClick()
         rule.onNodeWithTag("seller_save_item").performScrollTo().performClick()
+        rule.waitUntil(25_000) { rule.onAllNodesWithTag("seller_menu_management").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithTag("seller_menu_management").assertExists()
         rule.onNodeWithTag("seller_menu_items").performScrollToNode(hasTestTag("seller_item_plain-dosa"))
         rule.onNodeWithTag("seller_item_plain-dosa").assertExists()

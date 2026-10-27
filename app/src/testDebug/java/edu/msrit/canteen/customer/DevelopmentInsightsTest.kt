@@ -15,8 +15,13 @@ import java.time.LocalDate
 
 class DevelopmentInsightsTest {
     private val range = InsightRange(LocalDate.now(RIT_TIME_ZONE).minusDays(30), LocalDate.now(RIT_TIME_ZONE))
-    private fun role(role: DevelopmentRole) = DevelopmentPreviewAccess.select(role).let {
-        DevelopmentPreviewAccess.activeIdentity!!.authorization }
+    // Exercise the isolated analytics fixture without granting a runtime session.
+    private fun role(role: DevelopmentRole) =
+        DevelopmentPreviewAccess.identities.first { it.role == role }.authorization.let { fixture ->
+            fixture.copy(capabilitiesBySeller = fixture.capabilitiesBySeller.mapValues { (seller, grants) ->
+                grants + DevelopmentSellerBusiness.capabilities(fixture.userId, seller).map { it.wire }
+            })
+        }
     @Before fun before() { DevelopmentSellerBusiness.reset(); DevelopmentInsights.reset(); DevelopmentPreviewAccess.reset() }
     @After fun after() { DevelopmentSellerBusiness.reset(); DevelopmentInsights.reset(); DevelopmentPreviewAccess.reset() }
 
@@ -124,7 +129,7 @@ class DevelopmentInsightsTest {
     }
     @Test fun activeMockRoleSeparationStillHolds() {
         role(DevelopmentRole.PlatformAdministrator)
-        assertTrue(DevelopmentPreviewAccess.allows(ProtectedArea.Administrator))
+        assertFalse(DevelopmentPreviewAccess.allows(ProtectedArea.Administrator))
         assertFalse(DevelopmentPreviewAccess.allows(ProtectedArea.Seller("north-counter", "catalog.edit")))
         role(DevelopmentRole.Customer)
         assertFalse(DevelopmentPreviewAccess.allows(ProtectedArea.Administrator))

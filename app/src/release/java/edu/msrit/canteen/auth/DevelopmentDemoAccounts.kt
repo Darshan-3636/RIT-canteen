@@ -8,6 +8,7 @@ object DevelopmentDemoAccounts {
     val activeAccount: DemoAccount? get() = null
     val seededAccounts: List<DemoAccount> get() = emptyList()
     fun initialize(context: Context) = Unit
+    fun restore(): Boolean = false
     fun signIn(email: String, password: String) = DemoAuthResult(error = "Demo sign-in is unavailable in this build.")
     fun register(name: String, email: String, password: String, confirmation: String,
                  affiliation: CustomerAffiliation, department: String) =

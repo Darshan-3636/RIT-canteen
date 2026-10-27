@@ -217,7 +217,7 @@ class SellerBusinessTest {
         assertTrue(repo.savePolicy(owner, DevelopmentBulkPreview.forSeller(seller)!!.copy(minimumOverride = 18), emptyList()))
         repo.reset()
         assertFalse(PreviewCatalog.items.any { it.id == "test-item" })
-        assertEquals(10, DevelopmentBulkPreview.forSeller(seller)?.minimum)
+        assertEquals(8, DevelopmentBulkPreview.forSeller(seller)?.minimum)
         assertEquals(8, repo.employees.size)
         assertTrue(repo.employees.any { it.id == "demo-owner-main" && it.sellerId == "main-canteen" })
         assertTrue(repo.employees.any { it.id == "demo-owner-north" && it.sellerId == "north-counter" })

@@ -219,7 +219,8 @@ private fun CartLine(name: String, price: String, photo: edu.msrit.canteen.custo
 
 @Composable
 fun IndividualReviewScreen(individual: IndividualCartSession, onBack: () -> Unit,
-                           onSaveDemo: () -> Unit, catalog: CustomerCatalogSource = PreviewCatalog) {
+                           onSaveDemo: () -> Unit, catalog: CustomerCatalogSource = PreviewCatalog,
+                           errorMessage: String? = null) {
     val colors = RitThemeTokens.colors
     val check = checkIndividualCart(individual.draft, catalog)
     Column(Modifier.fillMaxSize().background(colors.background).testTag("individual_review")) {
@@ -237,9 +238,13 @@ fun IndividualReviewScreen(individual: IndividualCartSession, onBack: () -> Unit
             Spacer(Modifier.height(14.dp))
             RitText("Subtotal  ${displayPaise(check.subtotalPaise)}", RitType.title)
             Spacer(Modifier.height(15.dp))
-            BulkInfoCard("Demo only", "This creates a local simulated seller request. No kitchen is notified, no food is reserved and no money is charged.")
+            BulkInfoCard("Saved demo history only", "This is stored by the local server. It is not a kitchen request, payment, reservation or pickup promise.")
+            if (errorMessage != null) {
+                Spacer(Modifier.height(10.dp))
+                RitText(errorMessage, RitType.body, colors.accent)
+            }
         }
-        RitPrimaryButton("Submit demo request", onSaveDemo, Modifier.fillMaxWidth().padding(20.dp)
+        RitPrimaryButton("Save demo order", onSaveDemo, Modifier.fillMaxWidth().padding(20.dp)
             .testTag("individual_save_demo"), enabled = check.readyForReview)
     }
 }

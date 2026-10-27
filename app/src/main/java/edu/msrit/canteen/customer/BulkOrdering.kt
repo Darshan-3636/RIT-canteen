@@ -8,6 +8,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
+import java.util.UUID
 
 val RIT_TIME_ZONE: ZoneId = ZoneId.of("Asia/Kolkata")
 const val DEFAULT_BULK_MINIMUM = 8
@@ -27,10 +28,15 @@ data class BulkDraft(
 class BulkDraftSession {
     var draft by mutableStateOf(BulkDraft())
         private set
+    private var submissionKey: String = UUID.randomUUID().toString()
+
+    /** Stable across transport retries; changing the draft starts a new server attempt. */
+    fun idempotencyKey(): String = submissionKey
+    private fun changed() { submissionKey = UUID.randomUUID().toString() }
 
     fun selectSeller(sellerId: String): Boolean {
         if (draft.sellerId != null && draft.sellerId != sellerId && draft.lines.isNotEmpty()) return false
-        draft = if (draft.sellerId == sellerId) draft else BulkDraft(sellerId = sellerId)
+        if (draft.sellerId != sellerId) { draft = BulkDraft(sellerId = sellerId); changed() }
         return true
     }
 
@@ -38,14 +44,15 @@ class BulkDraftSession {
         if (item.sellerId != draft.sellerId || quantity < 0 || quantity > 999) return false
         val other = draft.lines.filterNot { it.itemId == item.id }
         draft = draft.copy(lines = if (quantity == 0) other else other + BulkLine(item.id, quantity))
+        changed()
         return true
     }
 
-    fun setPickup(value: LocalDateTime?) { draft = draft.copy(pickup = value) }
-    fun setSpecial(value: Boolean) { draft = draft.copy(specialPickup = value, specialReason = if (value) draft.specialReason else "") }
-    fun setSpecialReason(value: String) { draft = draft.copy(specialReason = value.take(500)) }
-    fun setInstructions(value: String) { draft = draft.copy(instructions = value.take(500)) }
-    fun clear() { draft = BulkDraft() }
+    fun setPickup(value: LocalDateTime?) { draft = draft.copy(pickup = value); changed() }
+    fun setSpecial(value: Boolean) { draft = draft.copy(specialPickup = value, specialReason = if (value) draft.specialReason else ""); changed() }
+    fun setSpecialReason(value: String) { draft = draft.copy(specialReason = value.take(500)); changed() }
+    fun setInstructions(value: String) { draft = draft.copy(instructions = value.take(500)); changed() }
+    fun clear() { draft = BulkDraft(); changed() }
 }
 
 data class BulkTimeWindow(val opens: LocalTime, val closes: LocalTime) {

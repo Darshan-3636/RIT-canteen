@@ -30,6 +30,12 @@ object DevelopmentIndividualOrders {
     }
     fun deactivate() { byUser[activeUser] = records; activeUser = ""; records = emptyList() }
 
+    /** Replace process-local previews with the server-owned history after an authenticated read. */
+    fun applyServer(recordsFromServer: List<IndividualOrderPreview>) {
+        records = recordsFromServer
+        byUser[activeUser] = recordsFromServer
+    }
+
     fun saveLocal(draft: IndividualDraft, catalog: CustomerCatalogSource = PreviewCatalog): Boolean {
         val check = checkIndividualCart(draft, catalog)
         if (!check.readyForReview) return false

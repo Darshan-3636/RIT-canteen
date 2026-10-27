@@ -28,7 +28,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import edu.msrit.canteen.customer.DebugCustomerAccountApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -159,6 +164,7 @@ fun CustomerProfileScreen(repo: CustomerAccountRepository, onBack: () -> Unit, o
 
 @Composable
 fun CustomerProfileEditScreen(repo: CustomerAccountRepository, userId: String?, onBack: () -> Unit) {
+    val scope = rememberCoroutineScope()
     val original = repo.profile ?: return
     var name by remember(original) { mutableStateOf(original.fullName) }
     var affiliation by remember(original) { mutableStateOf(original.affiliation) }
@@ -170,7 +176,7 @@ fun CustomerProfileEditScreen(repo: CustomerAccountRepository, userId: String?, 
     }
     val colors = RitThemeTokens.colors
     CustomerShell("Edit profile", "customer_profile_edit", onBack) {
-        RitText("Mock-account edits stay on this device. Email and seller/admin roles cannot be changed here.",
+        RitText("Profile details are saved on the local backend. Email and seller/admin roles cannot be changed here.",
             RitType.body, colors.muted)
         Spacer(Modifier.height(16.dp))
         CustomerAvatar(original.copy(fullName = name, photoUri = photoUri))
@@ -194,9 +200,16 @@ fun CustomerProfileEditScreen(repo: CustomerAccountRepository, userId: String?, 
         RitText("Affiliation is self-reported until institutional verification exists.", RitType.small, colors.muted)
         message?.let { RitText(it, RitType.body, colors.accent, Modifier.padding(vertical = 10.dp).testTag("profile_edit_feedback")) }
         Spacer(Modifier.height(16.dp))
-        RitPrimaryButton("Save local profile", {
+        RitPrimaryButton("Save profile", {
             val updated = original.copy(fullName = name, affiliation = affiliation, department = department, photoUri = photoUri)
-            message = validateCustomerProfile(updated) ?: if (repo.updateProfile(updated, userId)) "Saved to this debug preview only." else "Mock access required."
+            message = validateCustomerProfile(updated)
+            if (message == null) scope.launch {
+                val result = withContext(Dispatchers.IO) { DebugCustomerAccountApi.updateProfile(updated) }
+                if (result.profile != null) {
+                    repo.updateProfile(result.profile.copy(photoUri = photoUri), userId)
+                    message = "Saved on local backend. Photo remains on this device."
+                } else message = result.error ?: "Profile update failed."
+            }
         }, Modifier.fillMaxWidth().testTag("profile_save"))
     }
 }

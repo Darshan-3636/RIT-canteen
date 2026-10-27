@@ -18,6 +18,18 @@ class BulkOrderingTest {
         override fun forSeller(sellerId: String): SellerBulkPolicy? = if (sellerId == policy.sellerId) policy else null
     }
 
+    @Test fun unchangedBulkDraftKeepsRetryKeyButEditsStartNewAttempt() {
+        val session = BulkDraftSession()
+        val initial = session.idempotencyKey()
+        assertEquals(initial, session.idempotencyKey())
+        assertTrue(session.selectSeller(PreviewCatalog.MAIN_ID))
+        val selected = session.idempotencyKey()
+        assertTrue(initial != selected)
+        assertEquals(selected, session.idempotencyKey())
+        session.setPickup(pickup)
+        assertTrue(selected != session.idempotencyKey())
+    }
+
     @Test fun combinedUnitsAndPackagedItemsCountForOneSeller() {
         val draft = BulkDraft(PreviewCatalog.MAIN_ID,
             listOf(BulkLine("masala-dosa", 3), BulkLine("water-bottle", 5)), pickup)

@@ -61,6 +61,13 @@ class DemoLoginNavigationUiTest {
         rule.onNodeWithTag("demo_login_email").performTextInput(email)
         rule.onNodeWithTag("demo_login_password").performTextInput(password)
         rule.onNodeWithTag("demo_login_submit").performScrollTo().performClick()
+        val destination = when {
+            password == "wrong-password" -> "demo_login_error"
+            email.startsWith("admin.") -> "admin_demo_banner"
+            email.startsWith("owner.") || email.startsWith("manager.") || email.startsWith("staff.") -> "seller_daily_overview"
+            else -> "choose_seller"
+        }
+        rule.waitUntil(25_000) { rule.onAllNodesWithTag(destination).fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test fun studentCanLoginFromLauncherSeeProfileAndSafelyLogout() {
@@ -190,6 +197,11 @@ class DemoLoginNavigationUiTest {
         rule.onNodeWithTag("demo_signup_password").performScrollTo().performTextInput("DemoPassword123")
         rule.onNodeWithTag("demo_signup_confirmation").performScrollTo().performTextInput("DemoPassword123")
         rule.onNodeWithTag("demo_signup_submit").performScrollTo().performClick()
+        rule.waitUntil(25_000) { rule.onAllNodesWithTag("demo_login_screen").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("demo_login_email").performTextInput(email)
+        rule.onNodeWithTag("demo_login_password").performTextInput("DemoPassword123")
+        rule.onNodeWithTag("demo_login_submit").performScrollTo().performClick()
+        rule.waitUntil(25_000) { rule.onAllNodesWithTag("choose_seller").fetchSemanticsNodes().isNotEmpty() }
         createdId = DevelopmentDemoAccounts.activeAccount?.id
         rule.onNodeWithTag("choose_seller").assertExists()
         rule.onNodeWithTag("customer_bottom_profile").performClick()

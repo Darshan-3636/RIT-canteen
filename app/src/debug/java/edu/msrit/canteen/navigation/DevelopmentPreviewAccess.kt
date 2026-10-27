@@ -11,7 +11,7 @@ import edu.msrit.canteen.customer.CustomerProfile
 import edu.msrit.canteen.customer.DevelopmentCustomerAccount
 import edu.msrit.canteen.customer.DevelopmentIndividualOrders
 
-/** Debug-only mock login. Never writes to or substitutes for a real authenticated session. */
+/** Isolated legacy presentation fixtures. Only a verified backend session grants runtime access. */
 object DevelopmentPreviewAccess {
     private const val SELLER_ID = "north-counter"
 
@@ -37,17 +37,10 @@ object DevelopmentPreviewAccess {
         private set
 
     val activeIdentity: DevelopmentTestIdentity?
-        get() = (DevelopmentDemoAccounts.activeAccount?.let(::asIdentity)
-            ?: identities.firstOrNull { it.role == activeRole })?.let { identity ->
-            val sellerId = identity.authorization.modes.firstNotNullOfOrNull { mode -> when (mode) {
-                is AppMode.SellerOwner -> mode.sellerId
-                is AppMode.SellerManager -> mode.sellerId
-                is AppMode.OperationalStaff -> mode.sellerId
-                else -> null
-            } }
-            if (sellerId == null) identity else identity.copy(authorization = identity.authorization.copy(
-                capabilitiesBySeller = mapOf(sellerId to DevelopmentSellerBusiness.capabilities(
-                    identity.authorization.userId, sellerId).map { it.wire }.toSet())))
+        get() {
+            val account = DevelopmentDemoAccounts.activeAccount ?: return null
+            val identity = DevelopmentDemoAccounts.serverIdentity ?: return null
+            return asIdentity(account).copy(authorization = identity)
         }
 
     private fun asIdentity(account: DemoAccount): DevelopmentTestIdentity {

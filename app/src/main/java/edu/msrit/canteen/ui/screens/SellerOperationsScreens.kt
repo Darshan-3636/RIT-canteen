@@ -186,7 +186,7 @@ fun SellerInboxScreen(records: List<BulkRequestRecord>, sellerId: String, onBack
         LazyColumn(modifier = Modifier.weight(1f).testTag("seller_inbox_list"),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
-                RitStatusIndicator("Seller-scoped demo · no backend delivery")
+                RitStatusIndicator("Seller-scoped local backend · payment unverified")
                 Spacer(Modifier.height(12.dp))
                 if (onIndividual != null) {
                     RitSecondaryButton("Individual demo orders · $newIndividualCount new", onIndividual,
@@ -348,7 +348,7 @@ fun SellerRevisionCompareScreen(record: BulkRequestRecord, onBack: () -> Unit) {
 
 @Composable
 fun SellerFinalApprovalScreen(record: BulkRequestRecord, canRespond: Boolean, onBack: () -> Unit,
-                              onSpecial: () -> Unit, onApprove: () -> DemoTransitionResult) {
+                              onSpecial: () -> Unit, onApprove: ((String) -> Unit) -> Unit) {
     val colors = RitThemeTokens.colors
     var feedback by remember { mutableStateOf("") }
     val latest = record.latest
@@ -379,13 +379,13 @@ fun SellerFinalApprovalScreen(record: BulkRequestRecord, canRespond: Boolean, on
                 Spacer(Modifier.height(12.dp))
                 BulkInfoCard("Customer response", "Customer approval of revision ${latest.version}: ${if (record.thread.customerAcceptedVersion == latest.version) "recorded in demo" else "not recorded"}. Seller approval alone cannot trigger payment.")
                 Spacer(Modifier.height(12.dp))
-                RitPrimaryButton("Approve exact revision in demo", { feedback = onApprove().explanation },
+                RitPrimaryButton("Approve exact revision", { onApprove { feedback = it } },
                     Modifier.fillMaxWidth().testTag("seller_final_approve_action"), enabled = canApprove)
                 if (!specialReady) RitText("Accept exceptional pickup separately before approving the quote.",
                     RitType.small, colors.accent)
                 if (feedback.isNotBlank()) RitText(feedback, RitType.small, colors.accent)
                 Spacer(Modifier.height(12.dp))
-                RitText("This is not a server acknowledgement or a payment request.", RitType.small, colors.muted)
+                RitText("An agreement is not a payment or pickup confirmation.", RitType.small, colors.muted)
             }
         }
     }
@@ -393,7 +393,8 @@ fun SellerFinalApprovalScreen(record: BulkRequestRecord, canRespond: Boolean, on
 
 @Composable
 fun SellerSpecialPickupScreen(record: BulkRequestRecord, canRespond: Boolean, onBack: () -> Unit,
-                              onAccept: () -> DemoTransitionResult, onReject: () -> DemoTransitionResult) {
+                              onAccept: ((String) -> Unit) -> Unit,
+                              onReject: ((String) -> Unit) -> Unit) {
     val colors = RitThemeTokens.colors
     var feedback by remember { mutableStateOf("") }
     val latest = record.latest
@@ -418,13 +419,13 @@ fun SellerSpecialPickupScreen(record: BulkRequestRecord, canRespond: Boolean, on
                 RitText(if (record.thread.specialAcceptedVersion == latest.version) "Accepted for this exact revision"
                     else "Not accepted for this revision", RitType.label)
                 Spacer(Modifier.height(12.dp))
-                RitPrimaryButton("Explicitly accept special timing", { feedback = onAccept().explanation },
+                RitPrimaryButton("Explicitly accept special timing", { onAccept { feedback = it } },
                     Modifier.fillMaxWidth().testTag("seller_special_accept"),
                     enabled = canRespond && latest.specialPickup && record.thread.specialAcceptedVersion != latest.version &&
                         record.thread.stage in setOf(QuoteStage.SUBMITTED, QuoteStage.COUNTEROFFER))
                 Spacer(Modifier.height(9.dp))
                 if (canRespond && record.thread.stage in setOf(QuoteStage.SUBMITTED, QuoteStage.COUNTEROFFER)) {
-                    RitSecondaryButton("Reject this special request", { feedback = onReject().explanation },
+                    RitSecondaryButton("Reject this special request", { onReject { feedback = it } },
                         Modifier.fillMaxWidth().testTag("seller_special_reject"))
                 }
                 if (!canRespond) RitText("View only: this mock role cannot decide exceptional pickup.", RitType.small, colors.muted)
@@ -558,8 +559,9 @@ fun CustomerDemoRequestsScreen(records: List<BulkRequestRecord>, customerId: Str
 
 @Composable
 fun CustomerDemoRequestScreen(record: BulkRequestRecord, onBack: () -> Unit,
-                              onCounter: () -> Unit, onCompare: () -> Unit,
-                              onApprove: () -> DemoTransitionResult, onWithdraw: () -> DemoTransitionResult,
+                              onCounter: (() -> Unit)?, onCompare: () -> Unit,
+                              onApprove: ((String) -> Unit) -> Unit,
+                              onWithdraw: ((String) -> Unit) -> Unit,
                               onCheckout: (() -> Unit)? = null,
                               demoOrder: DemoOrder? = null, onTrack: (() -> Unit)? = null) {
     val colors = RitThemeTokens.colors
@@ -576,7 +578,7 @@ fun CustomerDemoRequestScreen(record: BulkRequestRecord, onBack: () -> Unit,
         CatalogHeader("Demo bulk request", onBack)
         LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
-                RitStatusIndicator("Local scenario · no seller notification or payment")
+                RitStatusIndicator("Stored on local backend · payment unverified")
                 Spacer(Modifier.height(12.dp))
                 RitText(record.reference, RitType.heading)
                 SellerStatus(record)
@@ -603,13 +605,13 @@ fun CustomerDemoRequestScreen(record: BulkRequestRecord, onBack: () -> Unit,
                 }
                 if (record.thread.revisions.size > 1) RitSecondaryButton("Compare revisions", onCompare,
                     Modifier.fillMaxWidth().testTag("customer_demo_compare"))
-                if (record.thread.stage == QuoteStage.COUNTEROFFER && latest.actor == QuoteActor.SELLER) {
+                if (onCounter != null && record.thread.stage == QuoteStage.COUNTEROFFER && latest.actor == QuoteActor.SELLER) {
                     Spacer(Modifier.height(9.dp))
                     RitSecondaryButton("Propose a revision in demo", onCounter,
                         Modifier.fillMaxWidth().testTag("customer_demo_counter"))
                 }
                 Spacer(Modifier.height(10.dp))
-                RitPrimaryButton("Approve exact revision in demo", { feedback = onApprove().explanation },
+                RitPrimaryButton("Approve exact revision", { onApprove { feedback = it } },
                     Modifier.fillMaxWidth().testTag("customer_demo_approve"), enabled = canApprove)
                 if (onTrack != null && demoOrder?.state in setOf(DemoOrderState.DEMO_CONFIRMED,
                         DemoOrderState.DEMO_COLLECTED)) {
@@ -627,7 +629,7 @@ fun CustomerDemoRequestScreen(record: BulkRequestRecord, onBack: () -> Unit,
                 }
                 if (canWithdraw) {
                     Spacer(Modifier.height(9.dp))
-                    RitSecondaryButton("Withdraw unpaid demo request", { feedback = onWithdraw().explanation },
+                    RitSecondaryButton("Withdraw unpaid request", { onWithdraw { feedback = it } },
                         Modifier.fillMaxWidth().testTag("customer_demo_withdraw"))
                 }
                 if (feedback.isNotBlank()) RitText(feedback, RitType.small, colors.accent)

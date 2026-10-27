@@ -6,5 +6,6 @@ object DevelopmentIndividualOrders {
     fun saveLocal(draft: IndividualDraft, catalog: CustomerCatalogSource = PreviewCatalog): Boolean = false
     fun activate(userId: String) = Unit
     fun deactivate() = Unit
+    fun applyServer(recordsFromServer: List<IndividualOrderPreview>) = Unit
     fun reset() = Unit
 }
