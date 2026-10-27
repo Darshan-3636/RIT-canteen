@@ -48,7 +48,7 @@ import androidx.compose.ui.draw.clip
 @Composable
 fun ChooseSellerScreen(
     onSellerChosen: (String) -> Unit,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     favorites: FavoritesRepository? = null,
     customerId: String? = null,
     catalog: CustomerCatalogSource = PreviewCatalog,
@@ -58,8 +58,7 @@ fun ChooseSellerScreen(
 ) {
     val colors = RitThemeTokens.colors
     var query by rememberSaveable { mutableStateOf("") }
-    var categoryId by rememberSaveable { mutableStateOf<String?>(null) }
-    val sellers = catalog.visibleSellers(query, categoryId)
+    val sellers = catalog.visibleSellers(query, null)
 
     Column(Modifier.fillMaxSize().background(colors.background).testTag("choose_seller")) {
         CatalogHeader("Choose Seller", onBack)
@@ -72,11 +71,9 @@ fun ChooseSellerScreen(
             RitSearchField(query, { query = it }, hint = "Find a seller…", onClearClick = { query = "" })
             Spacer(Modifier.height(14.dp))
         }
-        CatalogCategories(catalog.categories, categoryId) { categoryId = it }
-        Spacer(Modifier.height(8.dp))
         when {
             isLoading -> RitLoadingIndicator(Modifier.padding(24.dp))
-            sellers.isEmpty() -> RitEmptyState("No sellers match", "Try another seller name or food category.")
+            sellers.isEmpty() -> RitEmptyState("No sellers match", "Try another seller name.")
             else -> LazyColumn(
                 modifier = Modifier.weight(1f).testTag("choose_seller_results"),
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),

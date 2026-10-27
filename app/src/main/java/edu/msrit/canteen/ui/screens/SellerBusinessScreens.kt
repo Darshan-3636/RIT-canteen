@@ -117,21 +117,33 @@ fun SellerBusinessHomeScreen(sellerId: String, userId: String, repo: SellerBusin
     BusinessPage("Seller management", "seller_management", onBack) {
         RitText(seller?.name ?: "Seller", RitType.heading)
         RitText("Only your delegated actions are available. No live seller data is changed.", RitType.body)
-        Spacer(Modifier.height(15.dp))
+        Spacer(Modifier.height(20.dp))
+        RitText("Orders & pickup", RitType.title)
+        Spacer(Modifier.height(8.dp))
         BusinessCard("Bulk requests", "Review current demo requests", onRequests, "seller_manage_requests")
         BusinessCard("Schedule", "Pickup requests and operational times", onSchedule, "seller_manage_schedule")
+        Spacer(Modifier.height(12.dp))
+        RitText("Menu & catalog", RitType.title)
+        Spacer(Modifier.height(8.dp))
         if (SellerCapability.CATALOG in caps || SellerCapability.AVAILABILITY in caps)
             BusinessCard("Menu management", "Items, availability and categories", onMenu, "seller_manage_menu")
         if (SellerCapability.CATALOG in caps) BusinessCard("Categories", "Organize your menu", onCategories, "seller_manage_categories")
+        Spacer(Modifier.height(12.dp))
+        RitText("People & promotions", RitType.title)
+        Spacer(Modifier.height(8.dp))
         if (SellerCapability.PROMOTIONS in caps) BusinessCard("Promotions", "Drafts, scheduled and expired placements", onPromotions, "seller_manage_promotions")
         if (SellerCapability.EMPLOYEES in caps) BusinessCard("Team and permissions", "Seller-scoped delegated access", onEmployees, "seller_manage_employees")
+        Spacer(Modifier.height(12.dp))
+        RitText("Business profile & settings", RitType.title)
+        Spacer(Modifier.height(8.dp))
         BusinessCard("Business settings", "Profile, hours, closures, bulk minimum", onSettings, "seller_manage_settings")
     }
 }
 
 @Composable
 fun SellerMenuManagementScreen(sellerId: String, userId: String, repo: SellerBusinessRepository,
-    onBack: () -> Unit, onItem: (String?) -> Unit, onCategories: () -> Unit, onAvailability: (String) -> Unit) {
+    onBack: () -> Unit, onItem: (String?) -> Unit, onCategories: () -> Unit, onAvailability: (String) -> Unit,
+    rootTab: Boolean = false) {
     val caps = repo.capabilities(userId, sellerId)
     var query by remember { mutableStateOf("") }
     var category by remember { mutableStateOf<String?>(null) }
@@ -140,7 +152,7 @@ fun SellerMenuManagementScreen(sellerId: String, userId: String, repo: SellerBus
         (category == null || it.categoryId == category) && it.name.contains(query, true) }
     val colors = RitThemeTokens.colors
     Column(Modifier.fillMaxSize().background(colors.background).testTag("seller_menu_management")) {
-        CatalogHeader("Menu management", onBack)
+        CatalogHeader("Menu management", if (rootTab) null else onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
             RitText("Debug seller preview · local changes only", RitType.small, colors.muted)
             RitText(seller?.name ?: "Seller", RitType.heading)

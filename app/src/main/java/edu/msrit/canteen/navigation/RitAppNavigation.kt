@@ -1,6 +1,7 @@
 package edu.msrit.canteen.navigation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -45,6 +46,8 @@ import edu.msrit.canteen.customer.BulkLine
 import edu.msrit.canteen.customer.CartMode
 import edu.msrit.canteen.customer.IndividualCartSession
 import edu.msrit.canteen.customer.DevelopmentIndividualOrders
+import edu.msrit.canteen.customer.DevelopmentDemoCheckout
+import edu.msrit.canteen.customer.DemoActionResult
 import edu.msrit.canteen.customer.DevelopmentBulkPreview
 import edu.msrit.canteen.customer.DevelopmentSellerOperations
 import edu.msrit.canteen.customer.DevelopmentSellerBusiness
@@ -68,6 +71,11 @@ import edu.msrit.canteen.ui.screens.CustomerCartScreen
 import edu.msrit.canteen.ui.screens.IndividualReviewScreen
 import edu.msrit.canteen.ui.screens.CustomerOrdersScreen
 import edu.msrit.canteen.ui.screens.IndividualOrderDetailScreen
+import edu.msrit.canteen.ui.screens.DemoCheckoutScreen
+import edu.msrit.canteen.ui.screens.DemoOrderDetailScreen
+import edu.msrit.canteen.ui.screens.SellerDemoIndividualQueue
+import edu.msrit.canteen.ui.screens.SellerDemoPickupScreen
+import edu.msrit.canteen.ui.screens.SellerDemoOrderDetailScreen
 import edu.msrit.canteen.ui.screens.RitConfirmDialog
 import edu.msrit.canteen.ui.screens.CustomerOfflineInfoScreen
 import edu.msrit.canteen.ui.screens.RitStoryDetailScreen
@@ -116,11 +124,12 @@ import edu.msrit.canteen.ui.screens.BulkCounterproposalScreen
 import edu.msrit.canteen.ui.screens.BulkFinalQuoteScreen
 import edu.msrit.canteen.ui.screens.BulkPaymentEligibilityScreen
 import edu.msrit.canteen.ui.components.RitBottomItem
+import edu.msrit.canteen.ui.components.SellerBottomItem
+import edu.msrit.canteen.ui.components.SellerBottomNavigation
 import edu.msrit.canteen.ui.screens.EmailEntryScreen
 import edu.msrit.canteen.ui.screens.DemoLoginScreen
 import edu.msrit.canteen.ui.screens.DemoSignupScreen
 import edu.msrit.canteen.ui.screens.DemoRoleAccountScreen
-import edu.msrit.canteen.ui.screens.SellerOnboardingEntryScreen
 import edu.msrit.canteen.ui.screens.ModeSelectionPreviewScreen
 import edu.msrit.canteen.ui.screens.OnboardingScreen
 import edu.msrit.canteen.ui.screens.OtpPreviewScreen
@@ -135,7 +144,6 @@ internal object Route {
     const val Splash = "startup"
     const val Onboarding = "onboarding"
     const val Welcome = "welcome"
-    const val SellerOnboardingEntry = "seller-onboarding-entry"
     const val EmailEntry = "email-entry/{intent}"
     const val DemoAccountPage = "debug/demo-account"
     fun emailEntry(intent: AuthEntryIntent) = "email-entry/${intent.routeValue}"
@@ -166,6 +174,10 @@ internal object Route {
     const val Orders = "debug/orders"
     const val IndividualOrderDetail = "debug/orders/individual/{id}"
     fun individualOrderDetail(id: String) = "debug/orders/individual/$id"
+    const val DemoOrderDetail = "debug/demo-orders/{reference}"
+    fun demoOrderDetail(reference: String) = "debug/demo-orders/$reference"
+    const val DemoCheckout = "debug/demo-orders/{reference}/checkout"
+    fun demoCheckout(reference: String) = "debug/demo-orders/$reference/checkout"
     const val BulkSellers = "debug/bulk/sellers"
     const val BulkCart = "debug/bulk/cart"
     const val BulkPickup = "debug/bulk/pickup"
@@ -180,6 +192,10 @@ internal object Route {
     const val BulkExpired = "debug/bulk/expired"
     const val SellerOverview = "debug/seller/overview"
     const val SellerInbox = "debug/seller/inbox"
+    const val SellerIndividualQueue = "debug/seller/individual"
+    const val SellerDemoPickup = "debug/seller/pickup-verify"
+    const val SellerDemoOrderDetail = "debug/seller/demo-orders/{reference}"
+    fun sellerDemoOrderDetail(reference: String) = "debug/seller/demo-orders/$reference"
     const val SellerDetail = "debug/seller/requests/{reference}"
     const val SellerCounter = "debug/seller/requests/{reference}/counter"
     const val SellerCompare = "debug/seller/requests/{reference}/compare"
@@ -233,10 +249,11 @@ internal object Route {
 
     val debugOnly = setOf(DeveloperPanel, StoriesPreview, StoryDetail, CustomerAccount, CustomerPreview, OrderFood, Sellers, SellerProfile, SellerMenu,
         FoodDetails, CustomerUnavailable, Search, Favorites, Promotions, PromotionDetail, QuickReorderEmpty,
-        QuickReorderSample, Cart, IndividualReview, Orders, IndividualOrderDetail,
+        QuickReorderSample, Cart, IndividualReview, Orders, IndividualOrderDetail, DemoOrderDetail, DemoCheckout,
         BulkSellers, BulkCart, BulkPickup, BulkReview, BulkOrders, BulkOrdersDemo,
         BulkNegotiation, BulkCompare, BulkCounter, BulkFinal, BulkPayment, BulkExpired,
-        SellerOverview, SellerInbox, SellerDetail, SellerCounter, SellerCompare, SellerApproval,
+        SellerOverview, SellerInbox, SellerIndividualQueue, SellerDemoPickup, SellerDemoOrderDetail,
+        SellerDetail, SellerCounter, SellerCompare, SellerApproval,
         SellerSpecial, SellerSchedule, SellerHistory, CustomerDemoList, CustomerDemoDetail,
         CustomerDemoCounter, CustomerDemoCompare,
         SellerManagement, SellerManageMenu, SellerManageItem, SellerManageAvailability,
@@ -300,6 +317,14 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
             launchSingleTop = true
         }
     }
+    fun returnToAuthorizedHome() {
+        val account = DevelopmentDemoAccounts.activeAccount
+        val destination = account?.let(::homeFor) ?: Route.Welcome
+        navController.navigate(destination) {
+            popUpTo(navController.graph.id) { inclusive = false }
+            launchSingleTop = true
+        }
+    }
     fun openAsDemoCustomer(route: String) {
         DevelopmentPreviewAccess.select(DevelopmentRole.Customer)
         navController.navigate(route)
@@ -316,12 +341,32 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
         it.reference == reference && it.sellerId == activeSellerId()
     }
     fun openCustomerBottom(item: RitBottomItem) {
-        when (item) {
-            RitBottomItem.Home -> navController.navigate(Route.CustomerPreview) { launchSingleTop = true }
-            RitBottomItem.Cart -> navController.navigate(Route.cart()) { launchSingleTop = true }
-            RitBottomItem.Favourites -> navController.navigate(Route.Favorites) { launchSingleTop = true }
-            RitBottomItem.Orders -> navController.navigate(Route.Orders) { launchSingleTop = true }
-            RitBottomItem.Profile -> navController.navigate(Route.customerAccount("profile")) { launchSingleTop = true }
+        if (item == RitBottomItem.Cart && navController.currentDestination?.route == Route.Cart) return
+        val destination = when (item) {
+            RitBottomItem.Home -> Route.CustomerPreview
+            RitBottomItem.Cart -> Route.cart()
+            RitBottomItem.Favourites -> Route.Favorites
+            RitBottomItem.Orders -> Route.Orders
+            RitBottomItem.Profile -> Route.customerAccount("profile")
+        }
+        navController.navigate(destination) {
+            popUpTo(Route.CustomerPreview)
+            launchSingleTop = true
+        }
+    }
+    fun openSellerBottom(item: SellerBottomItem) {
+        val destination = when (item) {
+            SellerBottomItem.Dashboard -> Route.SellerOverview
+            SellerBottomItem.Orders -> Route.SellerInbox
+            SellerBottomItem.Menu -> Route.SellerManageMenu
+            SellerBottomItem.Insights -> Route.sellerInsight(SellerInsightPage.OVERVIEW)
+            SellerBottomItem.Account -> Route.DemoAccountPage
+        }
+        if (item == SellerBottomItem.Insights && activeSellerId()?.let {
+            !DevelopmentPreviewAccess.allows(ProtectedArea.Seller(it, "analytics.view")) } == true) return
+        navController.navigate(destination) {
+            popUpTo(Route.SellerOverview)
+            launchSingleTop = true
         }
     }
     NavHost(navController = navController,
@@ -352,16 +397,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
             InsetScreen {
                 WelcomeScreen(
                     onGetStarted = { navController.navigate(Route.emailEntry(AuthEntryIntent.GetStarted)) },
-                    onGetStartedAsSeller = { navController.navigate(Route.SellerOnboardingEntry) },
                     onLogin = { navController.navigate(Route.emailEntry(AuthEntryIntent.Login)) },
-                )
-            }
-        }
-        composable(Route.SellerOnboardingEntry) {
-            InsetScreen {
-                SellerOnboardingEntryScreen(
-                    onBack = { navController.popBackStack() },
-                    onInvitedLogin = { navController.navigate(Route.emailEntry(AuthEntryIntent.Login)) },
                 )
             }
         }
@@ -500,7 +536,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                         activeRole = DevelopmentPreviewAccess.activeRole,
                         onSelectRole = DevelopmentPreviewAccess::select,
                         onReset = {
-                            demoFavorites.resetAll(); bulkDraft.clear(); individualCart.clear(); DevelopmentIndividualOrders.reset(); DevelopmentSellerOperations.reset()
+                            demoFavorites.resetAll(); bulkDraft.clear(); individualCart.clear(); DevelopmentIndividualOrders.reset(); DevelopmentSellerOperations.reset(); DevelopmentDemoCheckout.reset()
                             DevelopmentSellerBusiness.reset(); DevelopmentInsights.reset(); customerAccount.reset()
                             selectedCustomerSellerId = null
                             DevelopmentPreviewAccess.reset()
@@ -515,24 +551,28 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                         CustomerUnavailableScreen("account", { navController.navigate(Route.Welcome) {
                             popUpTo(navController.graph.id) { inclusive = false }
                         } })
-                    } else DemoRoleAccountScreen(account, appearance,
+                    } else {
+                        val accountContent: @Composable () -> Unit = { DemoRoleAccountScreen(account, appearance,
                         onBack = { navController.popBackStack() },
                         onDashboard = { navController.navigate(homeFor(account)) { launchSingleTop = true } },
                         onSettings = { navController.navigate(if (account.role == DevelopmentRole.PlatformAdministrator)
                             Route.admin(AdminPage.SETTINGS) else Route.SellerManageSettings) },
                         onSupport = { navController.navigate(if (account.role == DevelopmentRole.PlatformAdministrator)
                             Route.admin(AdminPage.SUPPORT) else Route.sellerInsight(SellerInsightPage.SUPPORT)) },
-                        onLogout = ::signOutDemo)
+                        onLogout = ::signOutDemo) }
+                        if (account.role == DevelopmentRole.PlatformAdministrator) accountContent()
+                        else SellerTabFrame(SellerBottomItem.Account, ::openSellerBottom, accountContent)
+                    }
                 }
             }
             composable(Route.StoriesPreview) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     RitStoriesPreviewScreen(onBack = { navController.popBackStack() },
                         onTheme = { navController.navigate(Route.storyDetail(it)) })
                 } }
             }
             composable(Route.StoryDetail, arguments = listOf(navArgument("theme") { type = NavType.StringType })) { entry ->
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     val theme = ThemeId.entries.find { it.name == entry.arguments?.getString("theme") }
                     if (theme == null) CustomerUnavailableScreen("story", { navController.popBackStack() })
                     else RitStoryDetailScreen(theme, { navController.popBackStack() })
@@ -540,7 +580,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
             }
             composable(Route.CustomerAccount, arguments = listOf(
                 navArgument("page") { type = NavType.StringType }, navArgument("id") { type = NavType.StringType })) { entry ->
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     val page = entry.arguments?.getString("page").orEmpty()
                     val id = entry.arguments?.getString("id").orEmpty()
                     val userId = DevelopmentPreviewAccess.activeIdentity?.authorization?.userId
@@ -605,13 +645,13 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 }
             }
             composable(Route.CustomerPreview) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     ChooseSellerScreen(
                         onSellerChosen = { sellerId ->
                             selectedCustomerSellerId = sellerId
                             navController.navigate(Route.sellerMenu(sellerId))
                         },
-                        onBack = { navController.popBackStack() },
+                        onBack = null,
                         onBottom = ::openCustomerBottom,
                         cartCount = cartCount,
                         favorites = demoFavorites,
@@ -620,14 +660,14 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.OrderFood) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     CustomerMenuScreen(edu.msrit.canteen.customer.PreviewCatalog.MAIN_ID, preparedOnly = true,
                         onBack = { navController.popBackStack() }, onFood = { navController.navigate(Route.foodDetails(it)) },
                         favorites = demoFavorites, customerId = demoCustomerId)
                 } }
             }
             composable(Route.Sellers) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) { ExploreSellersScreen(
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) { ExploreSellersScreen(
                     onBack = { navController.popBackStack() }, onSeller = { navController.navigate(Route.sellerProfile(it)) },
                     onBottom = { item ->
                         if (item == RitBottomItem.Home) {
@@ -639,7 +679,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
             }
             composable(Route.SellerProfile, arguments = listOf(navArgument("sellerId") { type = NavType.StringType })) { entry ->
                 var pendingSeller by remember { mutableStateOf<String?>(null) }
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) { SellerProfileScreen(entry.arguments?.getString("sellerId").orEmpty(),
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) { SellerProfileScreen(entry.arguments?.getString("sellerId").orEmpty(),
                     onBack = { navController.popBackStack() }, onMenu = {
                         selectedCustomerSellerId = it
                         navController.navigate(Route.sellerMenu(it))
@@ -659,7 +699,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
             }
             composable(Route.SellerMenu, arguments = listOf(navArgument("sellerId") { type = NavType.StringType })) { entry ->
                 val sellerId = entry.arguments?.getString("sellerId").orEmpty()
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     SellerScopedMenuScreen(sellerId,
                         onBack = { navController.popBackStack() },
                         onFood = { navController.navigate(Route.foodDetails(it)) },
@@ -676,7 +716,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
             }
             composable(Route.FoodDetails, arguments = listOf(navArgument("itemId") { type = NavType.StringType })) { entry ->
                 var pendingBulkItem by remember { mutableStateOf<String?>(null) }
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     FoodDetailsScreen(entry.arguments?.getString("itemId").orEmpty(), onBack = { navController.popBackStack() },
                         onAddIndividual = { itemId -> PreviewCatalog.items.firstOrNull { it.id == itemId }?.let(individualCart::add) },
                         onViewCart = { navController.navigate(Route.cart()) },
@@ -706,7 +746,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 navArgument("categoryId") { type = NavType.StringType; defaultValue = "" },
                 navArgument("filters") { type = NavType.BoolType; defaultValue = false },
             )) { entry ->
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     CustomerSearchScreen(
                         initialCategoryId = entry.arguments?.getString("categoryId")?.takeIf(String::isNotEmpty),
                         initiallyShowFilters = entry.arguments?.getBoolean("filters") == true,
@@ -718,7 +758,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.Favorites) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     CustomerFavoritesScreen(demoCustomerId, demoFavorites,
                         onBack = { navController.popBackStack() },
                         onFood = { navController.navigate(Route.foodDetails(it)) },
@@ -727,14 +767,14 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.Promotions) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     CustomerPromotionsScreen(onBack = { navController.popBackStack() },
                         onPromotion = { navController.navigate(Route.promotionDetail(it)) },
                         sellerId = selectedCustomerSellerId)
                 } }
             }
             composable(Route.PromotionDetail, arguments = listOf(navArgument("promotionId") { type = NavType.StringType })) { entry ->
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     CustomerPromotionDetailScreen(entry.arguments?.getString("promotionId").orEmpty(),
                         onBack = { navController.popBackStack() },
                         onSeller = { navController.navigate(Route.sellerProfile(it)) },
@@ -742,14 +782,14 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.QuickReorderEmpty) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     CustomerQuickReorderScreen(onBack = { navController.popBackStack() },
                         onFood = { navController.navigate(Route.foodDetails(it)) },
                         onSeller = { navController.navigate(Route.sellerProfile(it)) })
                 } }
             }
             composable(Route.QuickReorderSample) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     CustomerQuickReorderScreen(onBack = { navController.popBackStack() },
                         onFood = { navController.navigate(Route.foodDetails(it)) },
                         onSeller = { navController.navigate(Route.sellerProfile(it)) },
@@ -757,7 +797,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.Cart, arguments = listOf(navArgument("mode") { type = NavType.StringType })) { entry ->
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     CustomerCartScreen(individualCart, bulkDraft, DevelopmentBulkPreview,
                         if (entry.arguments?.getString("mode") == "bulk") CartMode.BULK else CartMode.INDIVIDUAL,
                         onBack = { navController.popBackStack() },
@@ -765,42 +805,74 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                         onBulkItems = { navController.navigate(Route.BulkCart) },
                         onChooseSeller = { navController.navigate(Route.BulkSellers) },
                         onIndividualReview = { navController.navigate(Route.IndividualReview) },
-                        onBulkPickup = { navController.navigate(Route.BulkPickup) })
+                        onBulkPickup = { navController.navigate(Route.BulkPickup) },
+                        onBottom = ::openCustomerBottom, cartCount = cartCount)
                 } }
             }
             composable(Route.IndividualReview) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     IndividualReviewScreen(individualCart, { navController.popBackStack() }, {
-                        if (DevelopmentIndividualOrders.saveLocal(individualCart.draft)) {
-                            individualCart.clear(); navController.navigate(Route.Orders)
+                        val (result, reference) = DevelopmentDemoCheckout.submitIndividual(individualCart.draft,
+                            DevelopmentPreviewAccess.activeIdentity?.authorization)
+                        if (result == DemoActionResult.APPLIED && reference != null) {
+                            individualCart.clear(); navController.navigate(Route.demoOrderDetail(reference))
                         }
                     })
                 } }
             }
             composable(Route.Orders) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     CustomerOrdersScreen(DevelopmentIndividualOrders.records, DevelopmentSellerOperations.records,
                         { navController.popBackStack() },
                         { navController.navigate(Route.individualOrderDetail(it)) },
                         { navController.navigate(Route.customerDemoDetail(it)) },
                         { navController.navigate(Route.cart()) }, ::openCustomerBottom, cartCount,
-                        customerUserId = demoCustomerId)
+                        customerUserId = demoCustomerId,
+                        demoOrders = DevelopmentDemoCheckout.orders,
+                        onDemoOrder = { navController.navigate(Route.demoOrderDetail(it)) })
                 } }
             }
             composable(Route.IndividualOrderDetail, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     IndividualOrderDetailScreen(DevelopmentIndividualOrders.records.find { it.id == entry.arguments?.getString("id") },
                         { navController.popBackStack() })
                 } }
             }
+            composable(Route.DemoOrderDetail, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
+                val reference = entry.arguments?.getString("reference").orEmpty()
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
+                    val order = DevelopmentDemoCheckout.orders.find {
+                        it.reference == reference && it.customerId == demoCustomerId }
+                    if (order == null) CustomerUnavailableScreen("order", { navController.popBackStack() })
+                    else DemoOrderDetailScreen(order, { navController.popBackStack() },
+                        { navController.navigate(Route.demoCheckout(reference)) },
+                        { navController.navigate(Route.Orders) },
+                        { navController.navigate(Route.CustomerPreview) })
+                } }
+            }
+            composable(Route.DemoCheckout, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
+                val reference = entry.arguments?.getString("reference").orEmpty()
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
+                    val actor = DevelopmentPreviewAccess.activeIdentity?.authorization
+                    val order = DevelopmentDemoCheckout.orders.find {
+                        it.reference == reference && it.customerId == demoCustomerId }
+                        ?: DevelopmentDemoCheckout.previewBulk(reference, actor)
+                    if (order == null) CustomerUnavailableScreen("checkout", { navController.popBackStack() })
+                    else DemoCheckoutScreen(order, { navController.popBackStack() },
+                        { DevelopmentDemoCheckout.simulatePayment(reference, it, actor) },
+                        { navController.navigate(Route.demoOrderDetail(reference)) {
+                            popUpTo(Route.DemoCheckout) { inclusive = true }
+                        } })
+                } }
+            }
             composable(Route.BulkSellers) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     BulkSellerPickerScreen(bulkDraft, DevelopmentBulkPreview,
                         onBack = { navController.popBackStack() }, onSelected = { navController.navigate(Route.BulkCart) })
                 } }
             }
             composable(Route.BulkCart) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     BulkCartScreen(bulkDraft, DevelopmentBulkPreview, onBack = { navController.popBackStack() },
                         onChooseSeller = { navController.navigate(Route.BulkSellers) },
                         onPickup = { navController.navigate(Route.BulkPickup) },
@@ -808,13 +880,13 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.BulkPickup) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     BulkPickupScreen(bulkDraft, DevelopmentBulkPreview, onBack = { navController.popBackStack() },
                         onReview = { navController.navigate(Route.BulkReview) })
                 } }
             }
             composable(Route.BulkReview) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     BulkReviewScreen(bulkDraft, DevelopmentBulkPreview,
                         onBack = { navController.popBackStack() },
                         onEditItems = { navController.navigate(Route.BulkCart) },
@@ -830,7 +902,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.BulkOrders) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     BulkOrdersScreen(onBack = { navController.popBackStack() },
                         onDraft = { navController.navigate(Route.BulkSellers) },
                         onQuickReorder = { navController.navigate(Route.QuickReorderEmpty) },
@@ -839,7 +911,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.BulkOrdersDemo) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     BulkOrdersScreen(onBack = { navController.popBackStack() },
                         onDraft = { navController.navigate(Route.BulkSellers) },
                         onQuickReorder = { navController.navigate(Route.QuickReorderSample) },
@@ -848,7 +920,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.BulkNegotiation) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     BulkNegotiationScreen(DevelopmentBulkPreview.sample(QuoteStage.COUNTEROFFER),
                         onBack = { navController.popBackStack() },
                         onCompare = { navController.navigate(Route.BulkCompare) },
@@ -857,33 +929,33 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.BulkCompare) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     BulkCompareScreen(DevelopmentBulkPreview.sample(QuoteStage.COUNTEROFFER),
                         onBack = { navController.popBackStack() },
                         onCounterDraft = { navController.navigate(Route.BulkCounter) })
                 } }
             }
             composable(Route.BulkCounter) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     BulkCounterproposalScreen(DevelopmentBulkPreview.sample(QuoteStage.COUNTEROFFER),
                         DevelopmentBulkPreview, onBack = { navController.popBackStack() })
                 } }
             }
             composable(Route.BulkFinal) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     BulkFinalQuoteScreen(DevelopmentBulkPreview.sample(QuoteStage.AGREED_AWAITING_PAYMENT),
                         onBack = { navController.popBackStack() },
                         onPayment = { navController.navigate(Route.BulkPayment) })
                 } }
             }
             composable(Route.BulkPayment) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     BulkPaymentEligibilityScreen(DevelopmentBulkPreview.sample(QuoteStage.AGREED_AWAITING_PAYMENT),
                         onBack = { navController.popBackStack() })
                 } }
             }
             composable(Route.BulkExpired) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     BulkNegotiationScreen(DevelopmentBulkPreview.sample(QuoteStage.EXPIRED),
                         onBack = { navController.popBackStack() },
                         onCompare = { navController.navigate(Route.BulkCompare) },
@@ -892,8 +964,8 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.SellerOverview) {
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
                     SellerDailyOperationsOverview(
                         records = DevelopmentSellerOperations.records, sellerId = sellerId,
                         sellerName = PreviewCatalog.sellers.find { it.id == sellerId }?.name ?: "Seller",
@@ -913,21 +985,76 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                             ({ navController.navigate(Route.SellerHistory) }) else null,
                         onOpenSupport = { navController.navigate(Route.sellerInsight(SellerInsightPage.SUPPORT)) },
                         onOpenAccount = if (DevelopmentDemoAccounts.activeAccount != null)
-                            ({ navController.navigate(Route.DemoAccountPage) }) else null)
+                            ({ navController.navigate(Route.DemoAccountPage) }) else null,
+                        onBottom = ::openSellerBottom,
+                        canViewInsights = DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "analytics.view")),
+                        demoOrders = DevelopmentDemoCheckout.orders,
+                        onOpenIndividual = { navController.navigate(Route.SellerIndividualQueue) },
+                        onVerifyPickup = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "bulk.respond")))
+                            ({ navController.navigate(Route.SellerDemoPickup) }) else null,
+                        onOpenHours = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "hours.edit")))
+                            ({ navController.navigate(Route.SellerManageHours) }) else null,
+                        onOpenTeam = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "employees.manage")))
+                            ({ navController.navigate(Route.SellerManageEmployees) }) else null,
+                        onOpenPromotions = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "promotions.manage")))
+                            ({ navController.navigate(Route.SellerManagePromotions) }) else null)
+                } }
+            }
+            composable(Route.SellerIndividualQueue) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
+                    SellerDemoIndividualQueue(DevelopmentDemoCheckout.orders.filter { it.sellerId == sellerId },
+                        onBack = { navController.popBackStack() },
+                        onRespond = { reference, accept ->
+                            DevelopmentDemoCheckout.respondIndividual(reference, accept,
+                                DevelopmentPreviewAccess.activeIdentity?.authorization)
+                        }, onVerify = { navController.navigate(Route.SellerDemoPickup) },
+                        canRespond = DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "bulk.respond")),
+                        onOrder = { navController.navigate(Route.sellerDemoOrderDetail(it)) })
+                } }
+            }
+            composable(Route.SellerDemoOrderDetail,
+                arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
+                    val order = DevelopmentDemoCheckout.orders.find {
+                        it.reference == entry.arguments?.getString("reference") && it.sellerId == sellerId }
+                    if (order == null) CustomerUnavailableScreen("order", { navController.popBackStack() })
+                    else SellerDemoOrderDetailScreen(order, { navController.popBackStack() },
+                        { navController.navigate(Route.SellerDemoPickup) },
+                        canVerify = DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "bulk.respond")))
+                } }
+            }
+            composable(Route.SellerDemoPickup) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "bulk.respond", { returnToAuthorizedHome() }) {
+                    SellerDemoPickupScreen(onBack = { navController.popBackStack() },
+                        onVerify = { DevelopmentDemoCheckout.verifyCode(it,
+                            DevelopmentPreviewAccess.activeIdentity?.authorization) },
+                        onCollect = { DevelopmentDemoCheckout.collect(it,
+                            DevelopmentPreviewAccess.activeIdentity?.authorization) })
                 } }
             }
             composable(Route.SellerInbox) {
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
+                    SellerTabFrame(SellerBottomItem.Orders, ::openSellerBottom) {
                     SellerInboxScreen(DevelopmentSellerOperations.records, sellerId,
                         onBack = { navController.popBackStack() },
-                        onRequest = { navController.navigate(Route.sellerDetail(it)) })
+                        onRequest = { navController.navigate(Route.sellerDetail(it)) },
+                        onIndividual = { navController.navigate(Route.SellerIndividualQueue) },
+                        newIndividualCount = DevelopmentDemoCheckout.orders.count {
+                            it.sellerId == sellerId && it.kind == edu.msrit.canteen.customer.DemoOrderKind.INDIVIDUAL &&
+                                it.state == edu.msrit.canteen.customer.DemoOrderState.SUBMITTED },
+                        onVerifyPickup = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "bulk.respond")))
+                            ({ navController.navigate(Route.SellerDemoPickup) }) else null)
+                    }
                 } }
             }
             composable(Route.SellerDetail, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
-                val sellerId = activeSellerId() ?: "north-counter"
+                val sellerId = activeSellerId() ?: ""
                 val reference = entry.arguments?.getString("reference").orEmpty()
-                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
                     val record = scopedSellerRecord(reference)
                     if (record == null) CustomerUnavailableScreen("request", { navController.popBackStack() })
                     else SellerDailyRequestDetailPresentation(record,
@@ -942,9 +1069,9 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.SellerCounter, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
-                val sellerId = activeSellerId() ?: "north-counter"
+                val sellerId = activeSellerId() ?: ""
                 val reference = entry.arguments?.getString("reference").orEmpty()
-                InsetScreen { DebugSellerGate(sellerId, "bulk.respond", { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugSellerGate(sellerId, "bulk.respond", { returnToAuthorizedHome() }) {
                     val record = scopedSellerRecord(reference)
                     if (record == null) CustomerUnavailableScreen("request", { navController.popBackStack() })
                     else DemoQuoteEditorScreen(record, true, DevelopmentBulkPreview,
@@ -956,18 +1083,18 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.SellerCompare, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
-                val sellerId = activeSellerId() ?: "north-counter"
+                val sellerId = activeSellerId() ?: ""
                 val reference = entry.arguments?.getString("reference").orEmpty()
-                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
                     val record = scopedSellerRecord(reference)
                     if (record == null) CustomerUnavailableScreen("request", { navController.popBackStack() })
                     else SellerRevisionCompareScreen(record, onBack = { navController.popBackStack() })
                 } }
             }
             composable(Route.SellerApproval, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
-                val sellerId = activeSellerId() ?: "north-counter"
+                val sellerId = activeSellerId() ?: ""
                 val reference = entry.arguments?.getString("reference").orEmpty()
-                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
                     val record = scopedSellerRecord(reference)
                     if (record == null) CustomerUnavailableScreen("request", { navController.popBackStack() })
                     else SellerFinalApprovalScreen(record,
@@ -980,9 +1107,9 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.SellerSpecial, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
-                val sellerId = activeSellerId() ?: "north-counter"
+                val sellerId = activeSellerId() ?: ""
                 val reference = entry.arguments?.getString("reference").orEmpty()
-                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
                     val record = scopedSellerRecord(reference)
                     if (record == null) CustomerUnavailableScreen("request", { navController.popBackStack() })
                     else SellerSpecialPickupScreen(record,
@@ -997,8 +1124,8 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.SellerSchedule) {
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
                     SellerPickupSchedulePresentation(DevelopmentSellerOperations.records, sellerId,
                         onBack = { navController.popBackStack() },
                         onOpenRequest = { navController.navigate(Route.sellerDetail(it)) },
@@ -1006,16 +1133,18 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.SellerHistory) {
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "operations.history", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "operations.history", { returnToAuthorizedHome() }) {
                     SellerHistoryScreen(DevelopmentSellerOperations.records, sellerId,
                         onBack = { navController.popBackStack() },
-                        onRequest = { navController.navigate(Route.sellerDetail(it)) })
+                        onRequest = { navController.navigate(Route.sellerDetail(it)) },
+                        demoOrders = DevelopmentDemoCheckout.orders,
+                        onDemoOrder = { navController.navigate(Route.sellerDemoOrderDetail(it)) })
                 } }
             }
             composable(Route.SellerManagement) {
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
                     SellerBusinessHomeScreen(sellerId, DevelopmentPreviewAccess.activeIdentity?.authorization?.userId.orEmpty(),
                         DevelopmentSellerBusiness, { navController.popBackStack() },
                         { navController.navigate(Route.SellerInbox) }, { navController.navigate(Route.SellerSchedule) },
@@ -1025,40 +1154,42 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.SellerManageMenu) {
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
+                    SellerTabFrame(SellerBottomItem.Menu, ::openSellerBottom) {
                     SellerMenuManagementScreen(sellerId, DevelopmentPreviewAccess.activeIdentity?.authorization?.userId.orEmpty(),
                         DevelopmentSellerBusiness, { navController.popBackStack() },
                         { navController.navigate(Route.manageItem(it)) }, { navController.navigate(Route.SellerManageCategories) },
-                        { navController.navigate(Route.manageAvailability(it)) })
+                        { navController.navigate(Route.manageAvailability(it)) }, rootTab = true)
+                    }
                 } }
             }
             composable(Route.SellerManageItem, arguments = listOf(navArgument("itemId") { type = NavType.StringType })) { entry ->
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "catalog.edit", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "catalog.edit", { returnToAuthorizedHome() }) {
                     SellerItemEditorScreen(sellerId, DevelopmentPreviewAccess.activeIdentity?.authorization?.userId.orEmpty(),
                         entry.arguments?.getString("itemId")?.takeUnless { it == "new" }, DevelopmentSellerBusiness,
                         { navController.popBackStack() }, { navController.popBackStack() })
                 } }
             }
             composable(Route.SellerManageAvailability, arguments = listOf(navArgument("itemId") { type = NavType.StringType })) { entry ->
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "availability.edit", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "availability.edit", { returnToAuthorizedHome() }) {
                     SellerAvailabilityScreen(sellerId, entry.arguments?.getString("itemId").orEmpty(),
                         DevelopmentPreviewAccess.activeIdentity?.authorization?.userId.orEmpty(), DevelopmentSellerBusiness,
                         { navController.popBackStack() })
                 } }
             }
             composable(Route.SellerManageCategories) {
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "catalog.edit", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "catalog.edit", { returnToAuthorizedHome() }) {
                     SellerCategoriesScreen(sellerId, DevelopmentPreviewAccess.activeIdentity?.authorization?.userId.orEmpty(),
                         DevelopmentSellerBusiness, { navController.popBackStack() })
                 } }
             }
             composable(Route.SellerManageSettings) {
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
                     SellerBusinessSettingsScreen(sellerId, DevelopmentPreviewAccess.activeIdentity?.authorization?.userId.orEmpty(),
                         DevelopmentSellerBusiness, { navController.popBackStack() },
                         { navController.navigate(Route.SellerManageProfile) }, { navController.navigate(Route.SellerManageHours) },
@@ -1067,60 +1198,60 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.SellerManageProfile) {
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "profile.edit", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "profile.edit", { returnToAuthorizedHome() }) {
                     SellerProfileEditorScreen(sellerId, DevelopmentPreviewAccess.activeIdentity?.authorization?.userId.orEmpty(),
                         DevelopmentSellerBusiness, { navController.popBackStack() })
                 } }
             }
             composable(Route.SellerManageHours) {
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "hours.edit", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "hours.edit", { returnToAuthorizedHome() }) {
                     SellerHoursScreen(sellerId, DevelopmentPreviewAccess.activeIdentity?.authorization?.userId.orEmpty(),
                         DevelopmentSellerBusiness, { navController.popBackStack() })
                 } }
             }
             composable(Route.SellerManageClosures) {
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "hours.edit", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "hours.edit", { returnToAuthorizedHome() }) {
                     SellerClosuresScreen(sellerId, DevelopmentPreviewAccess.activeIdentity?.authorization?.userId.orEmpty(),
                         DevelopmentSellerBusiness, { navController.popBackStack() })
                 } }
             }
             composable(Route.SellerManageMinimum) {
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "hours.edit", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "hours.edit", { returnToAuthorizedHome() }) {
                     SellerBulkMinimumScreen(sellerId, DevelopmentPreviewAccess.activeIdentity?.authorization?.userId.orEmpty(),
                         DevelopmentSellerBusiness, { navController.popBackStack() })
                 } }
             }
             composable(Route.SellerManageEmployees) {
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "employees.manage", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "employees.manage", { returnToAuthorizedHome() }) {
                     SellerEmployeesScreen(sellerId, DevelopmentPreviewAccess.activeIdentity?.authorization?.userId.orEmpty(),
                         DevelopmentSellerBusiness, { navController.popBackStack() },
                         { navController.navigate(Route.manageEmployee(it)) })
                 } }
             }
             composable(Route.SellerManageEmployee, arguments = listOf(navArgument("employeeId") { type = NavType.StringType })) { entry ->
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "employees.manage", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "employees.manage", { returnToAuthorizedHome() }) {
                     SellerEmployeeEditorScreen(sellerId, DevelopmentPreviewAccess.activeIdentity?.authorization?.userId.orEmpty(),
                         entry.arguments?.getString("employeeId")?.takeUnless { it == "new" }, DevelopmentSellerBusiness,
                         { navController.popBackStack() }, { navController.popBackStack() })
                 } }
             }
             composable(Route.SellerManagePromotions) {
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "promotions.manage", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "promotions.manage", { returnToAuthorizedHome() }) {
                     SellerPromotionsScreen(sellerId, DevelopmentPreviewAccess.activeIdentity?.authorization?.userId.orEmpty(),
                         DevelopmentSellerBusiness, { navController.popBackStack() },
                         { navController.navigate(Route.managePromotion(it)) })
                 } }
             }
             composable(Route.SellerManagePromotion, arguments = listOf(navArgument("promotionId") { type = NavType.StringType })) { entry ->
-                val sellerId = activeSellerId() ?: "north-counter"
-                InsetScreen { DebugSellerGate(sellerId, "promotions.manage", { navController.navigate(Route.DeveloperPanel) }) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "promotions.manage", { returnToAuthorizedHome() }) {
                     SellerPromotionEditorScreen(sellerId, DevelopmentPreviewAccess.activeIdentity?.authorization?.userId.orEmpty(),
                         entry.arguments?.getString("promotionId")?.takeUnless { it == "new" }, DevelopmentSellerBusiness,
                         { navController.popBackStack() }, { navController.popBackStack() })
@@ -1129,7 +1260,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
             composable(Route.SellerInsights, arguments = listOf(
                 navArgument("page") { type = NavType.StringType }, navArgument("id") { type = NavType.StringType },
                 navArgument("sample") { type = NavType.BoolType; defaultValue = true })) { entry ->
-                val sellerId = activeSellerId() ?: "north-counter"
+                val sellerId = activeSellerId() ?: ""
                 val page = runCatching { SellerInsightPage.valueOf(entry.arguments?.getString("page").orEmpty()) }
                     .getOrDefault(SellerInsightPage.OVERVIEW)
                 val capability = when (page) {
@@ -1138,13 +1269,15 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                     SellerInsightPage.REPORT_BUILDER, SellerInsightPage.REPORT_HISTORY -> "reports.export"
                     else -> "bulk.view"
                 }
-                InsetScreen { DebugSellerGate(sellerId, capability, { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugSellerGate(sellerId, capability, { returnToAuthorizedHome() }) {
+                    SellerTabFrame(SellerBottomItem.Insights, ::openSellerBottom) {
                     SellerInsightScreen(page, sellerId, DevelopmentPreviewAccess.activeIdentity?.authorization,
                         entry.arguments?.getBoolean("sample") != false,
                         entry.arguments?.getString("id")?.takeUnless { it == "none" },
                         onBack = { navController.popBackStack() },
                         onNavigate = { navController.navigate(Route.sellerInsight(it)) },
                         onTicket = { navController.navigate(Route.sellerInsight(SellerInsightPage.TICKET_DETAIL, it)) })
+                    }
                 } }
             }
             composable(Route.Admin, arguments = listOf(
@@ -1153,7 +1286,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 val page = runCatching { AdminPage.valueOf(entry.arguments?.getString("page").orEmpty()) }
                     .getOrDefault(AdminPage.DASHBOARD)
                 val id = entry.arguments?.getString("id")?.takeUnless { it == "none" }
-                InsetScreen { DebugAdminGate({ navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugAdminGate({ returnToAuthorizedHome() }) {
                     PlatformAdminScreen(page, DevelopmentPreviewAccess.activeIdentity?.authorization,
                         entry.arguments?.getBoolean("sample") != false,
                         if (page == AdminPage.SELLER_DETAIL || page == AdminPage.SELLER_ANALYTICS) id else null,
@@ -1168,7 +1301,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.CustomerDemoList) {
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     CustomerDemoRequestsScreen(DevelopmentSellerOperations.records, demoCustomerId,
                         onBack = { navController.popBackStack() },
                         onRequest = { navController.navigate(Route.customerDemoDetail(it)) })
@@ -1176,7 +1309,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
             }
             composable(Route.CustomerDemoDetail, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
                 val reference = entry.arguments?.getString("reference").orEmpty()
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     val record = DevelopmentSellerOperations.records.find {
                         it.reference == reference && it.customerUserId == demoCustomerId }
                     if (record == null) CustomerUnavailableScreen("request", { navController.popBackStack() })
@@ -1188,12 +1321,16 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                             DevelopmentPreviewAccess.activeIdentity?.authorization,
                             java.time.LocalDateTime.now(RIT_TIME_ZONE)) },
                         onWithdraw = { DevelopmentSellerOperations.withdraw(reference,
-                            DevelopmentPreviewAccess.activeIdentity?.authorization) })
+                            DevelopmentPreviewAccess.activeIdentity?.authorization) },
+                        onCheckout = { navController.navigate(Route.demoCheckout(reference)) },
+                        demoOrder = DevelopmentDemoCheckout.orders.find {
+                            it.reference == reference && it.customerId == demoCustomerId },
+                        onTrack = { navController.navigate(Route.demoOrderDetail(reference)) })
                 } }
             }
             composable(Route.CustomerDemoCounter, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
                 val reference = entry.arguments?.getString("reference").orEmpty()
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     val record = DevelopmentSellerOperations.records.find {
                         it.reference == reference && it.customerUserId == demoCustomerId }
                     if (record == null) CustomerUnavailableScreen("request", { navController.popBackStack() })
@@ -1207,7 +1344,7 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
             }
             composable(Route.CustomerDemoCompare, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
                 val reference = entry.arguments?.getString("reference").orEmpty()
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     val record = DevelopmentSellerOperations.records.find {
                         it.reference == reference && it.customerUserId == demoCustomerId }
                     if (record == null) CustomerUnavailableScreen("request", { navController.popBackStack() })
@@ -1215,10 +1352,28 @@ fun RitAppNavigation(startInDeveloperHub: Boolean = false, appearance: Appearanc
                 } }
             }
             composable(Route.CustomerUnavailable, arguments = listOf(navArgument("section") { type = NavType.StringType })) { entry ->
-                InsetScreen { DebugCustomerGate(onDenied = { navController.navigate(Route.DeveloperPanel) }) {
+                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     CustomerUnavailableScreen(entry.arguments?.getString("section").orEmpty(), onBack = { navController.popBackStack() }) } }
             }
         }
+    }
+}
+
+@Composable
+private fun SellerTabFrame(selected: SellerBottomItem, onSelect: (SellerBottomItem) -> Unit,
+                           content: @Composable () -> Unit) {
+    val sellerId = DevelopmentPreviewAccess.activeIdentity?.authorization?.modes?.firstNotNullOfOrNull {
+        when (it) {
+            is AppMode.SellerOwner -> it.sellerId
+            is AppMode.SellerManager -> it.sellerId
+            is AppMode.OperationalStaff -> it.sellerId
+            else -> null
+        }
+    }
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f)) { content() }
+        SellerBottomNavigation(selected, onSelect, showInsights = sellerId != null &&
+            DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "analytics.view")))
     }
 }
 

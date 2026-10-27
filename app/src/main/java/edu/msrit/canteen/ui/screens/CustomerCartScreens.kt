@@ -44,6 +44,8 @@ import edu.msrit.canteen.customer.checkIndividualCart
 import edu.msrit.canteen.ui.components.CatalogHeader
 import edu.msrit.canteen.ui.components.FoodPhotoContent
 import edu.msrit.canteen.ui.components.RitChip
+import edu.msrit.canteen.ui.components.RitBottomItem
+import edu.msrit.canteen.ui.components.RitBottomNavigation
 import edu.msrit.canteen.ui.components.RitEmptyState
 import edu.msrit.canteen.ui.components.RitPrimaryButton
 import edu.msrit.canteen.ui.components.RitSecondaryButton
@@ -96,7 +98,9 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
                        policies: BulkPolicySource, initialMode: CartMode, onBack: () -> Unit,
                        onBrowse: () -> Unit, onBulkItems: () -> Unit, onChooseSeller: () -> Unit,
                        onIndividualReview: () -> Unit, onBulkPickup: () -> Unit,
-                       catalog: CustomerCatalogSource = PreviewCatalog) {
+                       catalog: CustomerCatalogSource = PreviewCatalog,
+                       onBottom: ((RitBottomItem) -> Unit)? = null,
+                       cartCount: Int = 0) {
     val colors = RitThemeTokens.colors
     var mode by remember(initialMode) { mutableStateOf(initialMode) }
     var clearMode by remember { mutableStateOf<CartMode?>(null) }
@@ -136,7 +140,7 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
                     Spacer(Modifier.height(14.dp))
                     RitText("Subtotal  ${displayPaise(individualCheck.subtotalPaise)}", RitType.title,
                         modifier = Modifier.testTag("individual_subtotal"))
-                    RitText("Illustrative price. Payment and kitchen submission are unavailable.", RitType.small, colors.muted)
+                    RitText("Illustrative price. Real payment and kitchen submission are unavailable; local demo review is available.", RitType.small, colors.muted)
                     Spacer(Modifier.height(9.dp))
                     RitSecondaryButton("Clear individual cart", { clearMode = CartMode.INDIVIDUAL }, Modifier.fillMaxWidth())
                 }
@@ -184,6 +188,7 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
                     edu.msrit.canteen.customer.BulkDraftIssue.CROSS_SELLER_ITEM,
                     edu.msrit.canteen.customer.BulkDraftIssue.SELLER_NOT_BULK) })
         }
+        if (onBottom != null) RitBottomNavigation(RitBottomItem.Cart, onBottom, cartCount = cartCount)
     }
     clearMode?.let { target -> RitConfirmDialog("Clear ${if (target == CartMode.BULK) "bulk" else "individual"} cart?",
         "Only this cart will be cleared. Your other cart stays as it is.", { clearMode = null }, {
@@ -232,9 +237,9 @@ fun IndividualReviewScreen(individual: IndividualCartSession, onBack: () -> Unit
             Spacer(Modifier.height(14.dp))
             RitText("Subtotal  ${displayPaise(check.subtotalPaise)}", RitType.title)
             Spacer(Modifier.height(15.dp))
-            BulkInfoCard("Demo only", "Saving this preview does not submit to a seller, charge you, reserve food or promise pickup. Real checkout awaits approved kitchen and payment rules.")
+            BulkInfoCard("Demo only", "This creates a local simulated seller request. No kitchen is notified, no food is reserved and no money is charged.")
         }
-        RitPrimaryButton("Save Demo Order", onSaveDemo, Modifier.fillMaxWidth().padding(20.dp)
+        RitPrimaryButton("Submit demo request", onSaveDemo, Modifier.fillMaxWidth().padding(20.dp)
             .testTag("individual_save_demo"), enabled = check.readyForReview)
     }
 }

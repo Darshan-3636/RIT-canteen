@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import edu.msrit.canteen.customer.DevelopmentCustomerAccount
 import edu.msrit.canteen.customer.DevelopmentIndividualOrders
+import edu.msrit.canteen.customer.DevelopmentDemoCheckout
 import edu.msrit.canteen.navigation.DevelopmentPreviewAccess
 import org.junit.Before
 import org.junit.Rule
@@ -21,11 +22,12 @@ class Prompt91DemoUiTest {
     @get:Rule val rule = createAndroidComposeRule<DebugTestingActivity>()
     @Before fun reset() = rule.runOnUiThread {
         DevelopmentPreviewAccess.reset(); DevelopmentIndividualOrders.reset(); DevelopmentCustomerAccount.reset()
+        DevelopmentDemoCheckout.reset()
     }
     private fun hub(tag: String) = rule.onNodeWithTag(tag).performScrollTo().performClick()
     private fun back() = rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
 
-    @Test fun preparedFoodCanBuildAndSaveMultiItemDemoOrder() {
+    @Test fun preparedFoodCanBuildAndSubmitLocalSimulatedRequest() {
         hub("debug_role_customer")
         hub("debug_open_food_details")
         rule.onNodeWithTag("food_add_individual").performClick()
@@ -36,8 +38,10 @@ class Prompt91DemoUiTest {
         rule.onNodeWithText("Subtotal  ₹100").assertExists()
         rule.onNodeWithTag("cart_review_individual").assertIsEnabled().performClick()
         rule.onNodeWithTag("individual_save_demo").performClick()
+        rule.onNodeWithTag("demo_order_detail").assertExists()
+        rule.onNodeWithTag("demo_detail_orders").performClick()
         rule.onNodeWithTag("customer_orders").assertExists()
-        rule.onNodeWithTag("orders_individual_LOCAL-FOOD-1").assertExists()
+        rule.onNodeWithTag("orders_demo_DEMO-IND-0001").assertExists()
         rule.onNodeWithTag("orders_list").performScrollToNode(hasTestTag("orders_bulk_DEMO-NC-NEW"))
         rule.onNodeWithTag("orders_bulk_DEMO-NC-NEW").assertExists()
     }

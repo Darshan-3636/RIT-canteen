@@ -126,6 +126,7 @@ fun RitTextField(
     inputTag: String? = null,
     singleLine: Boolean = true,
     visualTransformation: VisualTransformation = VisualTransformation.None,
+    trailingContent: @Composable (() -> Unit)? = null,
 ) {
     val colors = RitThemeTokens.colors
     val shape = RoundedCornerShape(RitRadii.card)
@@ -138,10 +139,11 @@ fun RitTextField(
     ) {
         RitText(label, RitType.small, colors.muted)
         Spacer(Modifier.height(5.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth().then(if (singleLine) Modifier.heightIn(min = 28.dp) else Modifier.heightIn(min = 84.dp))
+            modifier = Modifier.weight(1f).then(if (singleLine) Modifier.heightIn(min = 28.dp) else Modifier.heightIn(min = 84.dp))
                 .then(if (inputTag == null) Modifier else Modifier.testTag(inputTag)),
             textStyle = RitType.body.copy(color = colors.foreground),
             singleLine = singleLine,
@@ -155,6 +157,8 @@ fun RitTextField(
                 }
             },
         )
+        trailingContent?.invoke()
+        }
     }
 }
 

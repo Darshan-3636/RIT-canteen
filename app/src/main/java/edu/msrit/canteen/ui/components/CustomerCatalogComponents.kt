@@ -48,14 +48,16 @@ import edu.msrit.canteen.ui.theme.RitThemeTokens
 import edu.msrit.canteen.ui.theme.RitType
 
 @Composable
-fun CatalogHeader(title: String, onBack: () -> Unit) {
+fun CatalogHeader(title: String, onBack: (() -> Unit)?) {
     val colors = RitThemeTokens.colors
     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).background(colors.warmCard)
-            .clickable(role = Role.Button, onClick = onBack).semantics { contentDescription = "Back" }, contentAlignment = Alignment.Center) {
-            RitIcon(RitIconKind.Back, colors.foreground)
+        if (onBack != null) {
+            Box(Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).background(colors.warmCard)
+                .clickable(role = Role.Button, onClick = onBack).semantics { contentDescription = "Back" }, contentAlignment = Alignment.Center) {
+                RitIcon(RitIconKind.Back, colors.foreground)
+            }
+            Spacer(Modifier.width(12.dp))
         }
-        Spacer(Modifier.width(12.dp))
         RitText(title, RitType.title)
     }
 }

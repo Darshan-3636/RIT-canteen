@@ -41,6 +41,9 @@ import edu.msrit.canteen.customer.BulkLine
 import edu.msrit.canteen.customer.BulkRequestRecord
 import edu.msrit.canteen.customer.CustomerCatalogSource
 import edu.msrit.canteen.customer.DemoTransitionResult
+import edu.msrit.canteen.customer.DemoOrder
+import edu.msrit.canteen.customer.DemoOrderKind
+import edu.msrit.canteen.customer.DemoOrderState
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.QuoteActor
 import edu.msrit.canteen.customer.QuoteRevision
@@ -60,6 +63,8 @@ import edu.msrit.canteen.ui.components.RitPrimaryButton
 import edu.msrit.canteen.ui.components.RitSecondaryButton
 import edu.msrit.canteen.ui.components.RitStatusIndicator
 import edu.msrit.canteen.ui.components.RitText
+import edu.msrit.canteen.ui.components.SellerBottomItem
+import edu.msrit.canteen.ui.components.SellerBottomNavigation
 import edu.msrit.canteen.ui.screens.displayPaise
 import edu.msrit.canteen.ui.screens.displayPickup
 import edu.msrit.canteen.ui.theme.RitRadii
@@ -98,6 +103,14 @@ fun SellerDailyOperationsOverview(
     onOpenReports: (() -> Unit)? = null,
     onOpenSupport: (() -> Unit)? = null,
     onOpenAccount: (() -> Unit)? = null,
+    onBottom: ((SellerBottomItem) -> Unit)? = null,
+    canViewInsights: Boolean = true,
+    demoOrders: List<DemoOrder> = emptyList(),
+    onOpenIndividual: (() -> Unit)? = null,
+    onVerifyPickup: (() -> Unit)? = null,
+    onOpenHours: (() -> Unit)? = null,
+    onOpenTeam: (() -> Unit)? = null,
+    onOpenPromotions: (() -> Unit)? = null,
 ) {
     val colors = RitThemeTokens.colors
     val sellerRecords = records.filter { it.sellerId == sellerId }
@@ -116,6 +129,18 @@ fun SellerDailyOperationsOverview(
         }
         .sortedBy { it.latest.pickup }
     val nextPickup = upcoming.firstOrNull()
+    val newIndividual = demoOrders.count {
+        it.sellerId == sellerId && it.kind == DemoOrderKind.INDIVIDUAL &&
+            it.state == DemoOrderState.SUBMITTED
+    }
+    val newBulk = sellerRecords.count { it.thread.stage == QuoteStage.SUBMITTED && !isRequestQuoteExpired(it, now) }
+    val waiting = sellerRecords.count {
+        it.thread.stage == QuoteStage.AGREED_AWAITING_PAYMENT ||
+            (it.thread.stage == QuoteStage.COUNTEROFFER && it.thread.sellerAcceptedVersion == it.latest.version)
+    } + demoOrders.count {
+        it.sellerId == sellerId && it.kind == DemoOrderKind.INDIVIDUAL &&
+            it.state in setOf(DemoOrderState.SELLER_ACCEPTED, DemoOrderState.PAYMENT_PENDING)
+    }
 
     Column(
         modifier = modifier
@@ -123,9 +148,12 @@ fun SellerDailyOperationsOverview(
             .background(colors.background)
             .testTag("seller_daily_overview"),
     ) {
-        CatalogHeader("Seller day", onBack)
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
+            RitText("Seller Dashboard", RitType.heading, modifier = Modifier.testTag("seller_dashboard_title"))
+            RitText("Overview and actions for today", RitType.small, colors.muted)
+        }
         LazyColumn(
-            modifier = Modifier.testTag("seller_daily_overview_list"),
+            modifier = Modifier.weight(1f).testTag("seller_daily_overview_list"),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -177,6 +205,30 @@ fun SellerDailyOperationsOverview(
                     )
                 }
             }
+            item {
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                    DailyFocusCard("New requests", newBulk + newIndividual,
+                        "$newBulk bulk · $newIndividual individual demo", "Open orders", onOpenRequests,
+                        Modifier.weight(1f).fillMaxHeight().testTag("seller_dashboard_new_summary"), RitIconKind.Orders)
+                    DailyFocusCard("Waiting", waiting, "Customer reply or demo payment",
+                        "Review orders", onOpenRequests,
+                        Modifier.weight(1f).fillMaxHeight().testTag("seller_dashboard_waiting_summary"), RitIconKind.Bulk)
+                }
+            }
+
+            if (onOpenIndividual != null) item {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    RitText("Individual demo orders", RitType.title)
+                    RitText("$newIndividual new · local requests, not kitchen tickets", RitType.body, colors.muted)
+                    RitSecondaryButton("Review individual requests", onOpenIndividual,
+                        Modifier.fillMaxWidth().testTag("seller_dashboard_individual"))
+                }
+            }
+            if (onVerifyPickup != null) item {
+                RitSecondaryButton("Verify demo pickup code", onVerifyPickup,
+                    Modifier.fillMaxWidth().testTag("seller_dashboard_verify"))
+            }
 
             if (onOpenMenu != null || onOpenSales != null) {
                 item {
@@ -206,6 +258,18 @@ fun SellerDailyOperationsOverview(
                             }
                         }
                     }
+                }
+            }
+
+            if (onOpenHours != null || onOpenTeam != null || onOpenPromotions != null) item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RitText("Quick management", RitType.title)
+                    if (onOpenHours != null) RitSecondaryButton("Hours & closures", onOpenHours,
+                        Modifier.fillMaxWidth().testTag("seller_dashboard_hours"))
+                    if (onOpenTeam != null) RitSecondaryButton("Team & permissions", onOpenTeam,
+                        Modifier.fillMaxWidth().testTag("seller_dashboard_team"))
+                    if (onOpenPromotions != null) RitSecondaryButton("Promotions", onOpenPromotions,
+                        Modifier.fillMaxWidth().testTag("seller_dashboard_promotions"))
                 }
             }
 
@@ -315,6 +379,8 @@ fun SellerDailyOperationsOverview(
             }
 
         }
+        if (onBottom != null) SellerBottomNavigation(SellerBottomItem.Dashboard, onBottom,
+            showInsights = canViewInsights)
     }
 }
 

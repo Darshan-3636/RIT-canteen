@@ -144,6 +144,9 @@ class DemoBulkScenario(
     override fun withdraw(reference: String, actor: AuthorizedIdentity?): DemoTransitionResult {
         val record = records.find { it.reference == reference } ?: return DemoTransitionResult.NOT_FOUND
         if (!isCustomer(record, actor)) return DemoTransitionResult.UNAUTHORIZED
+        if (DevelopmentDemoCheckout.orders.any { it.reference == reference &&
+                it.state in setOf(DemoOrderState.DEMO_CONFIRMED, DemoOrderState.DEMO_COLLECTED) })
+            return DemoTransitionResult.INVALID_STATE
         if (record.thread.stage !in setOf(QuoteStage.SUBMITTED, QuoteStage.COUNTEROFFER,
                 QuoteStage.AGREED_AWAITING_PAYMENT)) return DemoTransitionResult.INVALID_STATE
         update(reference, record.copy(thread = record.thread.copy(stage = QuoteStage.WITHDRAWN)))

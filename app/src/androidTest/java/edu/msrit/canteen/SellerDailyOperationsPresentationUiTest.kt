@@ -91,16 +91,18 @@ class SellerDailyOperationsPresentationUiTest {
             .performScrollToNode(hasTestTag("seller_daily_reply_card_DEMO-NC-NEW"))
         rule.onNodeWithTag("seller_daily_reply_card_DEMO-NC-NEW").assertExists()
         rule.onNodeWithText("Review and reply", useUnmergedTree = true).assertDoesNotExist()
-        rule.onNodeWithContentDescription(
+        rule.onAllNodesWithContentDescription(
             "Needs seller reply",
             substring = true,
-        ).assertExists()
+        )[0].assertExists()
     }
 
     @Test fun noRecordsShowHelpfulEmptyStates() {
         render(records = emptyList(), sellerId = "north-counter", canRespond = true)
         rule.onNodeWithTag("seller_daily_no_replies").performScrollTo().assertExists()
-        rule.onNodeWithTag("seller_daily_no_pickups").performScrollTo().assertExists()
+        rule.onNodeWithTag("seller_daily_overview_list")
+            .performScrollToNode(hasTestTag("seller_daily_no_pickups"))
+        rule.onNodeWithTag("seller_daily_no_pickups").assertExists()
         rule.onNodeWithText("You're all caught up").assertExists()
     }
 

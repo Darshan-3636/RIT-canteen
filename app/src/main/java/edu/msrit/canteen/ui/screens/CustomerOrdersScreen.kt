@@ -25,6 +25,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import edu.msrit.canteen.customer.BulkRequestRecord
 import edu.msrit.canteen.customer.IndividualOrderPreview
+import edu.msrit.canteen.customer.DemoOrder
+import edu.msrit.canteen.customer.DemoOrderKind
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.QuoteStage
 import edu.msrit.canteen.ui.components.CatalogHeader
@@ -48,7 +50,7 @@ private fun bulkPrimaryState(record: BulkRequestRecord): String = when (record.t
     QuoteStage.SUBMITTED -> "Waiting for seller review"
     QuoteStage.COUNTEROFFER -> if (record.latest.actor == edu.msrit.canteen.customer.QuoteActor.SELLER)
         "Review seller's updated offer" else "Waiting for seller's response"
-    QuoteStage.AGREED_AWAITING_PAYMENT -> "Agreed · payment unavailable"
+    QuoteStage.AGREED_AWAITING_PAYMENT -> "Agreed · demo checkout available"
     QuoteStage.PAID_CONFIRMED -> "Demo state · no actual payment"
     QuoteStage.EXPIRED -> "Offer expired"
     QuoteStage.REJECTED -> "Seller declined"
@@ -59,7 +61,8 @@ private fun bulkPrimaryState(record: BulkRequestRecord): String = when (record.t
 fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<BulkRequestRecord>,
                          onBack: () -> Unit, onIndividual: (String) -> Unit, onBulk: (String) -> Unit,
                          onCart: () -> Unit, onBottom: (RitBottomItem) -> Unit, cartCount: Int = 0,
-                         customerUserId: String = "debug-customer") {
+                         customerUserId: String = "debug-customer",
+                         demoOrders: List<DemoOrder> = emptyList(), onDemoOrder: (String) -> Unit = {}) {
     val colors = RitThemeTokens.colors
     var tab by remember { mutableStateOf(OrdersTab.ALL) }
     val bulkVisible = bulk.filter { it.customerUserId == customerUserId }
@@ -75,13 +78,22 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
             contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp)) {
             item {
                 RitText("Your activity", RitType.heading)
-                RitText("Demo only · nothing submitted or charged", RitType.small, colors.muted,
+                RitText("Local demo only · no actual orders or charges", RitType.small, colors.muted,
                     Modifier.testTag("orders_demo_disclosure"))
                 Spacer(Modifier.height(14.dp))
             }
             if (tab != OrdersTab.BULK) {
                 item { RitText("Individual food", RitType.title); Spacer(Modifier.height(7.dp)) }
-                if (individual.isEmpty()) item { RitEmptyState("No individual previews", "Select prepared food from Main Canteen to build a demo order.") }
+                items(demoOrders.filter { it.customerId == customerUserId && it.kind == DemoOrderKind.INDIVIDUAL },
+                    key = { "demo_${it.reference}" }) { order ->
+                    OrderCard("Individual · Main Canteen", order.state.name.lowercase().replace('_', ' '),
+                        order.lines.joinToString { "${it.quantity}× ${it.title}" },
+                        "${order.reference} · ${displayPaise(order.totalPaise)} · local simulation",
+                        { onDemoOrder(order.reference) }, "orders_demo_${order.reference}", order.lines.firstOrNull()?.itemId)
+                }
+                if (individual.isEmpty() && demoOrders.none {
+                        it.customerId == customerUserId && it.kind == DemoOrderKind.INDIVIDUAL })
+                    item { RitEmptyState("No individual previews", "Select prepared food from Main Canteen to build a demo order.") }
                 items(individual, key = { it.id }) { record ->
                     OrderCard("Individual · Main Canteen", if (record.locallySaved) "Saved locally · not submitted" else "Sample history · not a real purchase",
                         record.lines.joinToString { "${it.quantity}× ${it.title}" },
@@ -91,10 +103,22 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
             }
             if (tab != OrdersTab.INDIVIDUAL) {
                 item { Spacer(Modifier.height(12.dp)); RitText("Bulk requests", RitType.title); Spacer(Modifier.height(7.dp)) }
-                if (bulkVisible.isEmpty()) item { RitEmptyState("No bulk requests", "Group requests and seller offers will appear here.") }
+                items(demoOrders.filter { it.customerId == customerUserId && it.kind == DemoOrderKind.BULK },
+                    key = { "demo_${it.reference}" }) { order ->
+                    OrderCard("Bulk · ${PreviewCatalog.sellers.find { it.id == order.sellerId }?.name ?: "Seller"}",
+                        order.state.name.lowercase().replace('_', ' '),
+                        order.lines.joinToString { "${it.quantity}× ${it.title}" },
+                        "${order.reference} · ${displayPaise(order.totalPaise)} · local simulation",
+                        { onDemoOrder(order.reference) }, "orders_demo_${order.reference}", order.lines.firstOrNull()?.itemId)
+                }
+                if (bulkVisible.isEmpty() && demoOrders.none {
+                        it.customerId == customerUserId && it.kind == DemoOrderKind.BULK })
+                    item { RitEmptyState("No bulk requests", "Group requests and seller offers will appear here.") }
                 items(bulkVisible, key = { it.reference }) { record ->
                     val seller = PreviewCatalog.sellers.find { it.id == record.sellerId }?.name ?: "Seller"
-                    OrderCard("Bulk · $seller", bulkPrimaryState(record),
+                    val simulated = demoOrders.find { it.reference == record.reference && it.customerId == customerUserId }
+                    OrderCard("Bulk quote · $seller", simulated?.state?.name?.lowercase()?.replace('_', ' ')
+                        ?: bulkPrimaryState(record),
                         "${record.latest.lines.sumOf { it.quantity }} items · pickup ${record.latest.pickup.format(orderDate)}",
                         "${record.reference} · ${displayPaise(record.latest.totalPaise)} · Demo data",
                         { onBulk(record.reference) }, "orders_bulk_${record.reference}", record.latest.lines.firstOrNull()?.itemId)

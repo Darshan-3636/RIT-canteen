@@ -4,6 +4,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -61,6 +62,10 @@ class DemoLoginNavigationUiTest {
         welcome()
         login("student.arya@demo.ritcanteen.test", "RitDemo!Student01")
         rule.onNodeWithTag("choose_seller").assertExists()
+        rule.onNodeWithTag("catalog_category_all").assertDoesNotExist()
+        rule.onNodeWithTag("choose_seller_card_main-canteen").performScrollTo().performClick()
+        rule.onNodeWithTag("seller_scoped_menu").assertExists()
+        rule.onNodeWithTag("catalog_category_all").assertExists()
         rule.onNodeWithTag("customer_bottom_profile").performClick()
         rule.onNodeWithTag("customer_profile").assertExists()
         rule.onNodeWithText("Arya Rao").assertExists()
@@ -91,6 +96,37 @@ class DemoLoginNavigationUiTest {
         login("student.arya@demo.ritcanteen.test", "wrong-password")
         rule.onNodeWithTag("demo_login_error").assertExists()
         rule.onNodeWithTag("choose_seller").assertDoesNotExist()
+    }
+
+    @Test fun customerCartKeepsPrimaryNavigationAndSellerDashboardHasNoRootBack() {
+        welcome()
+        login("student.arya@demo.ritcanteen.test", "RitDemo!Student01")
+        rule.onNodeWithTag("customer_bottom_cart").performClick()
+        rule.onNodeWithTag("customer_cart").assertExists()
+        rule.onNodeWithTag("customer_bottom_orders").assertExists().performClick()
+        rule.onNodeWithTag("customer_orders").assertExists()
+        rule.onNodeWithTag("customer_bottom_profile").performClick()
+        rule.onNodeWithTag("profile_account").performScrollTo().performClick()
+        rule.onNodeWithTag("account_mock_signout").performScrollTo().performClick()
+        login("manager.main@demo.ritcanteen.test", "RitDemo!Manager01")
+        rule.onNodeWithTag("seller_dashboard_title").assertExists()
+        rule.onNodeWithContentDescription("Back").assertDoesNotExist()
+        rule.onNodeWithTag("seller_bottom_orders").assertExists().performClick()
+        rule.onNodeWithTag("seller_inbox").assertExists()
+        rule.onNodeWithTag("seller_bottom_menu").performClick()
+        rule.onNodeWithTag("seller_bottom_account").performClick()
+        rule.onNodeWithTag("role_account_logout").performScrollTo().performClick()
+    }
+
+    @Test fun staffCannotUseSellerResponseOrCustomerTabs() {
+        welcome()
+        login("staff.main@demo.ritcanteen.test", "RitDemo!Staff01")
+        rule.onNodeWithTag("seller_dashboard_title").assertExists()
+        rule.onNodeWithTag("customer_bottom_cart").assertDoesNotExist()
+        rule.onNodeWithTag("seller_bottom_insights").assertDoesNotExist()
+        rule.onNodeWithTag("seller_dashboard_verify").assertDoesNotExist()
+        rule.onNodeWithTag("seller_bottom_account").performClick()
+        rule.onNodeWithTag("role_account_logout").performScrollTo().performClick()
     }
 
     @Test fun signedInCustomerSurvivesActivityRecreation() {

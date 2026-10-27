@@ -4,6 +4,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -34,12 +35,10 @@ class WelcomeRegistrationUiTest {
         rule.onNodeWithTag("customer_home").assertDoesNotExist()
     }
 
-    @Test fun sellerEntryIsInvitationOnlyAndLeadsToSharedLogin() {
+    @Test fun sellerSignupForkIsAbsentAndSharedLoginIsProminent() {
         reachWelcome()
-        rule.onNodeWithTag("welcome_get_started_seller").performScrollTo().performClick()
-        rule.onNodeWithTag("seller_onboarding_entry").assertExists()
-        rule.onNodeWithText("Seller accounts begin with an invitation, not a public sign-up.").assertExists()
-        rule.onNodeWithTag("seller_invitation_login").performClick()
+        rule.onNodeWithTag("welcome_get_started_seller").assertDoesNotExist()
+        rule.onNodeWithTag("welcome_login").assertExists().performScrollTo().performClick()
         rule.onNodeWithTag("demo_login_screen").assertExists()
         rule.onNodeWithTag("customer_home").assertDoesNotExist()
     }
@@ -50,6 +49,9 @@ class WelcomeRegistrationUiTest {
         rule.onNodeWithTag("demo_login_screen").assertExists()
         rule.onNodeWithTag("demo_login_email").assertExists()
         rule.onNodeWithTag("demo_login_password").assertExists()
+        rule.onNodeWithContentDescription("Show password").assertExists()
+        rule.onNodeWithTag("demo_login_visibility").performClick()
+        rule.onNodeWithContentDescription("Hide password").assertExists()
         rule.onNodeWithTag("demo_login_submit").assertExists()
         rule.onNodeWithTag("demo_signup_screen").assertDoesNotExist()
     }

@@ -2,8 +2,10 @@ package edu.msrit.canteen.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -20,7 +24,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -36,6 +44,8 @@ import edu.msrit.canteen.ui.components.RitPrimaryButton
 import edu.msrit.canteen.ui.components.RitSecondaryButton
 import edu.msrit.canteen.ui.components.RitText
 import edu.msrit.canteen.ui.components.RitTextField
+import edu.msrit.canteen.ui.components.RitIcon
+import edu.msrit.canteen.ui.components.RitIconKind
 import edu.msrit.canteen.ui.theme.RitThemeTokens
 import edu.msrit.canteen.ui.theme.RitType
 
@@ -64,11 +74,8 @@ fun DemoLoginScreen(onBack: () -> Unit, onCreateAccount: () -> Unit,
             Spacer(Modifier.height(12.dp))
             RitTextField(password, { password = it; error = null }, "Password", "Enter password",
                 Modifier.fillMaxWidth(), KeyboardType.Password, "demo_login_password",
-                visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation())
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                RitSecondaryButton(if (visible) "Hide password" else "Show password",
-                    { visible = !visible }, Modifier.testTag("demo_login_visibility"))
-            }
+                visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingContent = { PasswordVisibility(visible, { visible = !visible }, "demo_login_visibility") })
             error?.let { RitText(it, RitType.body, colors.accent,
                 Modifier.padding(vertical = 10.dp).testTag("demo_login_error")) }
             Spacer(Modifier.height(16.dp))
@@ -129,13 +136,13 @@ fun DemoSignupScreen(onBack: () -> Unit, onAuthenticated: (DemoAccount) -> Unit)
             Spacer(Modifier.height(10.dp))
             RitTextField(password, { password = it; error = null }, "Password", "At least 10 characters",
                 Modifier.fillMaxWidth(), KeyboardType.Password, "demo_signup_password",
-                visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation())
+                visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingContent = { PasswordVisibility(visible, { visible = !visible }, "demo_signup_visibility") })
             Spacer(Modifier.height(10.dp))
             RitTextField(confirmation, { confirmation = it; error = null }, "Confirm password", "Repeat password",
                 Modifier.fillMaxWidth(), KeyboardType.Password, "demo_signup_confirmation",
-                visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation())
-            RitSecondaryButton(if (visible) "Hide passwords" else "Show passwords", { visible = !visible },
-                Modifier.fillMaxWidth().testTag("demo_signup_visibility"))
+                visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingContent = { PasswordVisibility(visible, { visible = !visible }, "demo_signup_confirmation_visibility") })
             error?.let { RitText(it, RitType.body, colors.accent,
                 Modifier.padding(vertical = 10.dp).testTag("demo_signup_error")) }
             Spacer(Modifier.height(16.dp))
@@ -145,5 +152,15 @@ fun DemoSignupScreen(onBack: () -> Unit, onAuthenticated: (DemoAccount) -> Unit)
                 else error = result.error ?: "Could not create this account."
             }, Modifier.fillMaxWidth().testTag("demo_signup_submit"))
         }
+    }
+}
+
+@Composable
+private fun PasswordVisibility(visible: Boolean, onClick: () -> Unit, tag: String) {
+    val colors = RitThemeTokens.colors
+    Box(Modifier.size(48.dp).clickable(role = Role.Button, onClick = onClick)
+        .semantics { contentDescription = if (visible) "Hide password" else "Show password" }
+        .testTag(tag), contentAlignment = Alignment.Center) {
+        RitIcon(if (visible) RitIconKind.EyeOff else RitIconKind.Eye, colors.muted)
     }
 }

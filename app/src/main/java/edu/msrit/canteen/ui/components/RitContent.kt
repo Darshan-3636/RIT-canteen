@@ -196,6 +196,34 @@ enum class RitBottomItem(val label: String, val icon: RitIconKind) {
     Home("Home", RitIconKind.Home), Cart("Cart", RitIconKind.Cart), Orders("Orders", RitIconKind.Orders), Favourites("Saved", RitIconKind.Heart), Profile("Profile", RitIconKind.Person)
 }
 
+enum class SellerBottomItem(val label: String, val icon: RitIconKind) {
+    Dashboard("Dashboard", RitIconKind.Home), Orders("Orders", RitIconKind.Orders),
+    Menu("Menu", RitIconKind.Food), Insights("Insights", RitIconKind.Bulk),
+    Account("Account", RitIconKind.Person)
+}
+
+@Composable
+fun SellerBottomNavigation(selected: SellerBottomItem, onSelect: (SellerBottomItem) -> Unit,
+                           modifier: Modifier = Modifier, showInsights: Boolean = true) {
+    val colors = RitThemeTokens.colors
+    Row(modifier.fillMaxWidth().border(1.dp, colors.outline).background(colors.surface)
+        .padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+        SellerBottomItem.entries.filter { showInsights || it != SellerBottomItem.Insights }.forEach { item ->
+            val active = item == selected
+            Column(Modifier.weight(1f).heightIn(min = 54.dp)
+                .clickable(role = Role.Tab) { onSelect(item) }
+                .testTag("seller_bottom_${item.name.lowercase()}")
+                .semantics { stateDescription = if (active) "Selected" else "Not selected" },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center) {
+                RitIcon(item.icon, if (active) colors.accent else colors.muted, size = 23.dp)
+                Spacer(Modifier.height(2.dp))
+                RitText(item.label, RitType.small, if (active) colors.accent else colors.muted)
+            }
+        }
+    }
+}
+
 @Composable
 fun RitBottomNavigation(selected: RitBottomItem, onSelect: (RitBottomItem) -> Unit, modifier: Modifier = Modifier,
                         cartCount: Int = 0) {
