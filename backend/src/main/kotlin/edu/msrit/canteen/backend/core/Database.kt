@@ -2,6 +2,7 @@ package edu.msrit.canteen.backend.core
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import edu.msrit.canteen.backend.auth.DemoIdentitySeed
 import org.flywaydb.core.Flyway
 import java.sql.Connection
 import javax.sql.DataSource
@@ -26,7 +27,9 @@ object BackendBootstrap {
                 .load()
                 .migrate()
             if (config.demoSeedEnabled) seedPreviewSellers(pool)
-            return BackendContext(pool, config)
+            val context = BackendContext(pool, config)
+            if (config.demoSeedEnabled) DemoIdentitySeed.seed(context)
+            return context
         } catch (failure: Throwable) {
             pool.close()
             throw failure

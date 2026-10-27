@@ -122,7 +122,10 @@ class AuthorizationService(private val dataSource: DataSource, private val clock
                                       visited: MutableSet<UUID>): Set<String> {
         if (!visited.add(membershipId)) return emptySet()
         val member = connection.prepareStatement(
-            "SELECT seller_id, role, supervisor_membership_id, active FROM seller_memberships WHERE id = ?"
+            """SELECT m.seller_id, m.role, m.supervisor_membership_id,
+                      m.active AND u.status = 'ACTIVE' AND s.active
+               FROM seller_memberships m JOIN users u ON u.id = m.user_id
+               JOIN sellers s ON s.id = m.seller_id WHERE m.id = ?"""
         ).use { statement ->
             statement.setObject(1, membershipId)
             statement.executeQuery().use { rows ->

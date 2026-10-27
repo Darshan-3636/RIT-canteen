@@ -37,3 +37,44 @@ The attached plan's broader objective includes Phase B auth, but the owner expli
 ## Contributor startup
 
 Clone/fetch the published feature branch and branch from the **full `FOUNDATION_SHA`**, not its moving future HEAD. Read `backend/README.md`, `FOUNDATION_HANDOFF.md` and `API_CONTRACT_V1.md`. Copy `backend/.env.example` to a private `.env`, set a unique local PostgreSQL password, and run backend `./gradlew test` and `./gradlew run` (Windows: `.\gradlew.bat`). Do not edit core migrations/auth symbols or root Android Gradle; use the assigned migration range and route registration seam. The project owner should share this checkpoint before any Phase B work begins.
+
+---
+
+## Phase B addendum — operational local-demo authentication
+
+The historical Phase A checkpoint above remains `FOUNDATION_SHA=05e55583e38b942b58a208c78dedd0959a101e62`. Phase B advances the same owner branch without changing `V001`–`V005`, the frozen V1 DTOs/API document, migration ownership, seller IDs, Android `app/**`, or the root Gradle build. The full distinct `PHASE_B_SHA` is in the owner's final pushed-commit handoff (a commit cannot contain its own SHA).
+
+### Live V1 routes and semantics
+
+- `POST /api/v1/auth/register` now decodes the frozen `RegisterRequest`, normalizes email, validates name/password/department, rejects unknown fields including role/admin, inserts a customer with `STUDENT` or `FACULTY`, and returns `201 RegisterResponse` without a token. A duplicate normalized email returns `409 EMAIL_IN_USE`.
+- `POST /api/v1/auth/login` verifies a salted slow password hash and `ACTIVE` user status, returns `200 LoginResponse` with one 32-byte-random base64url bearer and UTC `expiresAt`, and persists only SHA-256 of the token. Unknown email, wrong password and inactive account share `401 INVALID_CREDENTIALS`. Sessions last 24 hours.
+- `POST /api/v1/auth/logout` requires a live bearer, revokes only its own session in a transaction, returns empty `204`; subsequent bearer use is `401 UNAUTHENTICATED`.
+- `GET /api/v1/auth/me` returns `MeResponse.user` from live DB state with no token. It includes only active seller memberships with nonempty *effective* capabilities after same-seller supervisor and current account checks. `platformAdmin` is a separate live flag.
+- `GET /api/v1/me/profile` returns only the live caller's `ProfileDto`. `PATCH /api/v1/me/profile` updates only caller `fullName`, `affiliation`, `department` under a rechecked, locked session/user transaction and returns the same shape. Omitted fields stay unchanged; explicit `department:null` clears it; explicit null for name or affiliation is `400`. Unknown keys including email/user ID/roles are `400 INVALID_JSON`. Nullable output fields are emitted explicitly.
+
+Auth failures use the frozen `{ "error": { "code", "message", "details": null } }` envelope. JSON input is capped at 16 KiB and decoded with unknown keys rejected. SQL exceptions and traces are never returned in HTTP responses. `PasswordHasher` uses PBKDF2-HMAC-SHA256 with a fresh 256-bit salt, 600,000 iterations and a versioned stored format. The service never persists raw passwords or bearer tokens. Session revocation/expiry and disabled accounts are checked on every request. The original seller/admin helper signatures remain compatible; delegated capability evaluation now also drops access immediately if a supervisor's *user* account is disabled.
+
+### Explicit local-only demo personas
+
+These **public fixture credentials are for an isolated local demo only**. They are never inserted unless `RIT_ENV=local` and `DEMO_SEED_ENABLED=true`; `test`/`production` modes reject demo seed mode. Backend user UUIDs are stable, distinct and derived from normalized fixture emails, not Android debug account IDs. `ON CONFLICT` never overwrites a pre-existing email or grants privileges to an account that merely registered that address.
+
+| Email | Demo password | Identity |
+| --- | --- | --- |
+| `student.arya@demo.ritcanteen.test` | `RitDemo!Student01` | Student customer |
+| `student.kiran@demo.ritcanteen.test` | `RitDemo!Student02` | Student customer |
+| `faculty.maya@demo.ritcanteen.test` | `RitDemo!Faculty01` | Faculty customer |
+| `owner.main@demo.ritcanteen.test` | `RitDemo!OwnerMain01` | OWNER, `main-canteen` |
+| `owner.secondary@demo.ritcanteen.test` | `RitDemo!OwnerOther01` | OWNER, `north-counter` |
+| `manager.main@demo.ritcanteen.test` | `RitDemo!Manager01` | MANAGER, `main-canteen`, supervised by its owner |
+| `staff.main@demo.ritcanteen.test` | `RitDemo!Staff01` | STAFF, `main-canteen`, supervised by its manager |
+| `admin.platform@demo.ritcanteen.test` | `RitDemo!Admin01` | Platform admin, no seller membership |
+
+Manager's direct grants mirror the Android local-demo manager fixture: `bulk.view`, `bulk.respond`, `operations.history`, `catalog.edit`, `availability.edit`, `hours.edit`, `promotions.manage`, `employees.manage`, `analytics.view`. Staff receives only `bulk.view`. Effective grants intersect with live supervisors; owner receives the frozen full set. No grant is silently restored after removal on restart. Four seller seeds remain unchanged.
+
+### Verification and integration boundary
+
+Using a disposable `postgres:16-alpine` Podman container bound only to `127.0.0.1:5433`, a separate isolated test DB, private ignored `backend/.env` with generated local password, and no shared database: `env RIT_TEST_DATABASE_URL=jdbc:postgresql://127.0.0.1:5433/rit_canteen_test RIT_TEST_DATABASE_USER=rit_canteen RIT_TEST_DATABASE_PASSWORD=<private-local-value> ./gradlew clean build --no-daemon --max-workers=1` passed **13 tests, 0 failures, 0 skips**. These include four configuration tests, the focused later-migration compatibility test, Phase A real-DB regression tests and Phase B real-DB/Ktor auth tests. The inherited migration assertion now verifies core `001`–`005` in order and successful while permitting later `V020+`/`V040+` migrations. No teammate migration was merged to run that scenario end-to-end yet.
+
+Live Netty smoke against a separate disposable local app DB: `/health` `200`, `/ready` `200`, registration `201`, login `200`, auth/me `200`, profile GET `200`, profile PATCH `200`, logout `204`, and same bearer after logout `401 UNAUTHENTICATED`. The bearer and local DB password were not printed or committed. Automated tests also covered eight distinct fixture logins/UUIDs and non-plaintext hashes, duplicate/malformed/privilege-field rejection, cross-seller denial, wrong/disabled credentials, two independent sessions, expiry, profile persistence over restart, supervisor disabling, revoked grant staying revoked after restart, seed preservation of edited profile/password/UUID, and a fresh non-seeded test schema with zero demo users/sellers.
+
+Phase B changed `backend/README.md`, `Application.kt`, `AuthorizationService.kt`, `Database.kt`, `DatabaseFoundationTest.kt`; added `AccountService.kt`, `PasswordHasher.kt`, `DemoIdentitySeed.kt`, `AuthIntegrationTest.kt`; and appended this response. **No new migration** was needed because `V001`–`V005` already support these records. No commerce/admin module was merged or mounted; no Android API integration was started. Remaining production work includes anti-abuse/rate-limiting, transport/TLS deployment, password reset/verification/OTP policy, session cleanup, operational monitoring and integration with the independent commerce/engagement modules. This is a local-demo auth service, not a production identity deployment.

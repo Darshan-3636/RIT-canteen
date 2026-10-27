@@ -42,7 +42,15 @@ class DatabaseFoundationTest {
         BackendBootstrap.open(config).useContext { first ->
             val installed = Flyway.configure().dataSource(first.dataSource)
                 .locations("classpath:db/migration").load().info().applied()
-            assertEquals(listOf("001", "002", "003", "004", "005"), installed.map { it.version.version })
+            assertCoreMigrations(installed.map { it.version.version })
+            val coreSuccess = first.dataSource.connection.use { db ->
+                db.createStatement().use { stmt ->
+                    stmt.executeQuery("SELECT version, success FROM flyway_schema_history WHERE version IN ('001','002','003','004','005') ORDER BY installed_rank").use { rows ->
+                        buildList { while (rows.next()) add(rows.getString(1) to rows.getBoolean(2)) }
+                    }
+                }
+            }
+            assertEquals(listOf("001", "002", "003", "004", "005").map { it to true }, coreSuccess)
             val sellers = first.dataSource.connection.use { connection ->
                 connection.createStatement().use { statement ->
                     statement.executeQuery("SELECT id FROM sellers ORDER BY id").use { rows ->
@@ -63,13 +71,21 @@ class DatabaseFoundationTest {
         }
     }
 
-    @Test fun healthReadyAndReservedAuthRoutesBehaveHonestly() {
+    @Test fun coreMigrationCheckAllowsLaterTeamRanges() {
+        assertCoreMigrations(listOf("001", "002", "003", "004", "005", "020", "040"))
+    }
+
+    private fun assertCoreMigrations(versions: List<String>) {
+        assertEquals(listOf("001", "002", "003", "004", "005"), versions.take(5))
+    }
+
+    @Test fun healthReadyAndAuthRoutesBehaveHonestly() {
         BackendBootstrap.open(testConfig()).useContext { context ->
             testApplication {
                 application { backendModule(context) }
                 assertEquals(HttpStatusCode.OK, client.get("/health").status)
                 assertEquals(HttpStatusCode.OK, client.get("/ready").status)
-                assertEquals(HttpStatusCode.ServiceUnavailable, client.post("/api/v1/auth/login").status)
+                assertEquals(HttpStatusCode.BadRequest, client.post("/api/v1/auth/login").status)
                 assertEquals(HttpStatusCode.Unauthorized, client.get("/api/v1/auth/me").status)
                 assertEquals(HttpStatusCode.NotFound, client.get("/api/v1/not-a-route").status)
             }
