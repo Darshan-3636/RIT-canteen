@@ -5,7 +5,7 @@
 - Base: `bd34ac87548bec9c07465516eff5056f4812687b` from `origin/integration/rit-ui-teams-01-04`.
 - Work branch: `feat/rit-demo-auth-catalog-images`. Neither `main` nor the tested integration branch was edited or merged.
 - `feat/rit-account-debug-login-ux` was absent from the fetched remote, so no Team 05 commit or response file was merged or fabricated. The lead implemented its intended features directly, reusing the existing customer account/settings/support, seller operations, administrator and Developer Testing Hub UI.
-- Commit details and final remote SHA are recorded in the feature-branch history and final handoff response. Only this feature branch is pushed; no merge or force-push is performed.
+- Implementation, tests, 13 app artwork resources and this report were committed as `3427b2e` (`Add debug demo accounts and complete catalog artwork`, 46 files changed). The final remote SHA and push verification belong in the handoff response. Only this feature branch is a push target; no merge or force-push is performed.
 
 ## B. Login team integration
 
