@@ -1,6 +1,7 @@
 package edu.msrit.canteen.auth
 
 import android.content.Context
+import edu.msrit.canteen.BuildConfig
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -23,17 +24,6 @@ object DevelopmentDemoAccounts {
     var connectionMessage by mutableStateOf<String?>(null)
         private set
 
-    val seededAccounts = listOf(
-        DemoAccount("hint-arya", "Arya Rao", "student.arya@demo.ritcanteen.test", DevelopmentRole.Customer, CustomerAffiliation.STUDENT),
-        DemoAccount("hint-kiran", "Kiran Shah", "student.kiran@demo.ritcanteen.test", DevelopmentRole.Customer, CustomerAffiliation.STUDENT),
-        DemoAccount("hint-maya", "Dr Maya Iyer", "faculty.maya@demo.ritcanteen.test", DevelopmentRole.Customer, CustomerAffiliation.FACULTY),
-        DemoAccount("hint-owner-main", "Main Canteen Owner", "owner.main@demo.ritcanteen.test", DevelopmentRole.SellerOwner, sellerId = "main-canteen"),
-        DemoAccount("hint-owner-north", "North Counter Owner", "owner.secondary@demo.ritcanteen.test", DevelopmentRole.SellerOwner, sellerId = "north-counter"),
-        DemoAccount("hint-manager", "Main Canteen Manager", "manager.main@demo.ritcanteen.test", DevelopmentRole.SellerManager, sellerId = "main-canteen"),
-        DemoAccount("hint-staff", "Main Canteen Staff", "staff.main@demo.ritcanteen.test", DevelopmentRole.SellerStaff, sellerId = "main-canteen"),
-        DemoAccount("hint-admin", "Platform Administrator", "admin.platform@demo.ritcanteen.test", DevelopmentRole.PlatformAdministrator),
-    )
-
     fun initialize(context: Context) {
         if (bearerStore == null) bearerStore = DebugBearerStore(context)
     }
@@ -54,7 +44,7 @@ object DevelopmentDemoAccounts {
                 DemoAuthResult(error = connectionMessage ?: "Could not verify this server session.")
             else DemoAuthResult(account = activeAccount)
         } catch (_: Exception) {
-            connectionMessage = "Local backend unavailable. Start it and reconnect USB forwarding."
+            connectionMessage = unavailableMessage()
             DemoAuthResult(error = connectionMessage)
         }
     }
@@ -81,7 +71,7 @@ object DevelopmentDemoAccounts {
             if (response.status != 201) DemoAuthResult(error = response.error ?: "Registration failed (" + response.status + ").")
             else DemoAuthResult(account = toAccount(response.body!!.getJSONObject("user")))
         } catch (_: Exception) {
-            DemoAuthResult(error = "Local backend unavailable. Start it and reconnect USB forwarding.")
+            DemoAuthResult(error = unavailableMessage())
         }
     }
 
@@ -138,8 +128,14 @@ object DevelopmentDemoAccounts {
     } catch (_: Exception) {
         activeAccount = null
         serverIdentity = null
-        connectionMessage = "Local backend unavailable. Start it and reconnect USB forwarding."
+        connectionMessage = unavailableMessage()
         false
+    }
+
+    private fun unavailableMessage(): String = if (BuildConfig.RIT_CLOUD_DEMO) {
+        "Cloud service is waking or unavailable. Wait briefly and retry."
+    } else {
+        "Local backend unavailable. Start it and reconnect USB forwarding."
     }
 
     private fun toAccount(user: JSONObject): DemoAccount {

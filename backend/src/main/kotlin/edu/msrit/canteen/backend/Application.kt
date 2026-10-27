@@ -12,6 +12,7 @@ import edu.msrit.canteen.backend.api.requireAuthenticatedUser
 import edu.msrit.canteen.backend.api.respondApiError
 import edu.msrit.canteen.backend.auth.AccountService
 import edu.msrit.canteen.backend.auth.ApiProblem
+import edu.msrit.canteen.backend.auth.CloudDemoIdentitySeed
 import edu.msrit.canteen.backend.auth.ProfilePatch
 import edu.msrit.canteen.backend.core.BackendBootstrap
 import edu.msrit.canteen.backend.core.BackendConfig
@@ -49,7 +50,8 @@ fun main() {
     val config = BackendConfig.fromEnvironment()
     val context = BackendBootstrap.open(config)
     try {
-        if (config.demoSeedEnabled) seedCommerceFixtures(context)
+        if (config.demoSeedEnabled || config.cloudDemoSeedEnabled) seedCommerceFixtures(context)
+        if (config.cloudDemoSeedEnabled) CloudDemoIdentitySeed.seed(context)
     } catch (failure: Throwable) {
         context.close()
         throw failure
@@ -93,6 +95,11 @@ fun Application.backendModule(context: BackendContext, mountContributorRoutes: B
                 registerEngagementRoutes(context, PostgresCommerceReadPort(context))
             }
             post("/auth/register") {
+                if (context.config.environment == edu.msrit.canteen.backend.core.RuntimeEnvironment.CLOUD_DEMO) {
+                    call.respondApiError(HttpStatusCode.Forbidden, "REGISTRATION_DISABLED",
+                        "Public account registration is disabled for this cloud demo")
+                    return@post
+                }
                 val request = call.readJson<RegisterRequest>()
                 call.respond(HttpStatusCode.Created, RegisterResponse(accounts.register(request)))
             }

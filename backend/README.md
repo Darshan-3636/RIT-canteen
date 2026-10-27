@@ -1,6 +1,6 @@
 # RIT Canteen backend — integrated local-demo API
 
-This is an independent Kotlin/JVM Ktor service. Run Gradle **from this directory**; the Android root Gradle project is not involved. The Phase A checkpoint remains immutable at `05e55583e38b942b58a208c78dedd0959a101e62`. The integration branch mounts Phase B auth, Commerce, Engagement and Admin routes. Android networking is not included.
+This is an independent Kotlin/JVM Ktor service. Run Gradle **from this directory**; the Android root Gradle project is not involved. The integrated baseline mounts Phase B auth, Commerce, Engagement and Admin routes. Android networking lives in the app's debug source set.
 
 ## Requirements
 
@@ -47,6 +47,8 @@ curl -i http://127.0.0.1:8080/ready
 ```
 
 The service runs Flyway before opening HTTP. If the database is unavailable or a migration fails, startup fails; if a running database becomes unreachable, `/ready` returns `503` while `/health` remains `200`. Migrations are in `src/main/resources/db/migration`. On local startup with `DEMO_SEED_ENABLED=true`, the four illustrative sellers, eight distinct local-demo users and 72 catalog items (18 per seller) are inserted idempotently. Seller memberships and grants are created only when the corresponding fixture user is first inserted; restarts never overwrite edited profiles/passwords or restore revoked grants. Commerce seeding preserves seller edits and only upgrades pristine older 12-item fixture rows. See `docs/backend/DEMO_CATALOG_PARITY.md`. `RIT_ENV=production` and `RIT_ENV=test` refuse demo seeding. No `.env`, PostgreSQL volume or bearer token belongs in Git.
+
+For the owner-operated Render Free + Supabase Free cloud demo, use `RIT_ENV=cloud_demo` and `RIT_CLOUD_DEMO_SEED_ENABLED=true`, with the two private account pairs documented in `docs/cloud-demo/OWNER_DEPLOYMENT_HANDOFF.md`. Never set the local `DEMO_SEED_ENABLED` flag on a public service. Cloud mode rejects public registration, requires SSL PostgreSQL and binds `0.0.0.0`; Render supplies `PORT`. A small pool defaults to two connections. Cloud mode refuses public local fixture identities and does not provision an admin. This remains a demo-only service, not production. The reproducible Docker image is `backend/Dockerfile`.
 
 The six live V1 auth/profile methods are `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`, `GET /api/v1/me/profile`, and `PATCH /api/v1/me/profile`. Registration creates a customer account without a session. Login returns a 24-hour opaque bearer; only its SHA-256 hash is stored. Supply `Authorization: Bearer <token>` on protected routes. Profile PATCH leaves omitted fields unchanged; explicit `department:null` clears that field, while explicit null for name or affiliation is rejected. Demo identities/passwords and exact authorization boundaries are in `docs/backend/TEAM_BACKEND_01_RESPONSE.md`. Commerce and Engagement/Admin are mounted under `/api/v1`; see `docs/backend/ANDROID_API_HANDOFF.md`, `COMMERCE_API.md` and `ENGAGEMENT_ADMIN_API.md`. The frozen `docs/backend/API_CONTRACT_V1.md` still describes the immutable Phase A state and V1 JSON shapes.
 

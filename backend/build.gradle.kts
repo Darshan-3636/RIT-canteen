@@ -32,4 +32,9 @@ application { mainClass.set("edu.msrit.canteen.backend.ApplicationKt") }
 
 tasks.test { useJUnitPlatform() }
 
+// Docker resolves runtime artifacts before copying source files so code-only edits reuse its dependency layer.
+tasks.register("resolveRuntimeDependencies") {
+    doLast { configurations.getByName("runtimeClasspath").resolve() }
+}
+
 kotlin { compilerOptions { freeCompilerArgs.add("-Xjsr305=strict") } }

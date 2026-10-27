@@ -5,11 +5,14 @@ import edu.msrit.canteen.backend.core.RuntimeEnvironment
 import edu.msrit.canteen.backend.core.transaction
 import java.sql.Connection
 
-/** Local-only, Android-derived catalog fixture. Seller edits and policy/hours are never overwritten. */
+/** Explicit local/cloud-demo catalog fixture. Seller edits and policy/hours are never overwritten. */
 fun seedCommerceFixtures(context: BackendContext) {
     check(context.config.environment != RuntimeEnvironment.PRODUCTION) { "Commerce demo seed is forbidden in production" }
-    if (!context.config.demoSeedEnabled) return
-    check(context.config.environment == RuntimeEnvironment.LOCAL) { "Commerce demo seed requires local mode" }
+    if (!context.config.demoSeedEnabled && !context.config.cloudDemoSeedEnabled) return
+    check(context.config.environment == RuntimeEnvironment.LOCAL ||
+        (context.config.environment == RuntimeEnvironment.CLOUD_DEMO && context.config.cloudDemoSeedEnabled)) {
+        "Commerce demo seed requires explicit local or cloud-demo mode"
+    }
 
     val categories = fixtureRows("catalog-categories-v2.tsv", 2)
     val items = fixtureRows("catalog-items-v2.tsv", 12).map(::fixtureItem)

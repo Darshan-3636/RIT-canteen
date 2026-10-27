@@ -15,14 +15,15 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
+import edu.msrit.canteen.BuildConfig
 
-/** USB-forwarded, loopback-only local demo transport. This file is absent from release. */
+/** Explicit local transport or HTTPS cloud-demo transport, injected at build time. Absent from release. */
 internal object DebugBackendApi {
-    private const val BASE = "http://127.0.0.1:8080"
+    private val base: String = validateBaseUrl(BuildConfig.RIT_API_BASE_URL, BuildConfig.RIT_CLOUD_DEMO)
     private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(8, TimeUnit.SECONDS)
-        .callTimeout(12, TimeUnit.SECONDS)
+        .connectTimeout(if (BuildConfig.RIT_CLOUD_DEMO) 20 else 5, TimeUnit.SECONDS)
+        .readTimeout(if (BuildConfig.RIT_CLOUD_DEMO) 165 else 8, TimeUnit.SECONDS)
+        .callTimeout(if (BuildConfig.RIT_CLOUD_DEMO) 180 else 12, TimeUnit.SECONDS)
         .build()
     private val jsonType = "application/json; charset=utf-8".toMediaType()
 
@@ -33,7 +34,7 @@ internal object DebugBackendApi {
     fun request(method: String, path: String, body: JSONObject? = null, token: String? = null,
                 idempotencyKey: String? = null): Response {
         require(path.startsWith("/") && !path.startsWith("//"))
-        val request = Request.Builder().url(BASE + path).header("Accept", "application/json").apply {
+        val request = Request.Builder().url(base + path).header("Accept", "application/json").apply {
             if (token != null) header("Authorization", "Bearer $token")
             if (idempotencyKey != null) header("Idempotency-Key", idempotencyKey)
             method(method, body?.toString()?.toRequestBody(jsonType)
@@ -45,6 +46,18 @@ internal object DebugBackendApi {
             if (response.code == 401 && token != null) DevelopmentDemoAccounts.invalidateIfCurrent(token)
             return Response(response.code, raw.takeIf { it.isNotBlank() }?.let(::JSONObject))
         }
+    }
+
+    private fun validateBaseUrl(value: String, cloud: Boolean): String {
+        val uri = runCatching { java.net.URI(value) }.getOrElse { error("Invalid RIT API base URL") }
+        if (cloud) require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null &&
+            uri.query == null && uri.fragment == null && uri.path.isNullOrEmpty()) {
+            "Cloud demo requires a valid HTTPS origin"
+        }
+        else require(uri.scheme == "http" && uri.host == "127.0.0.1" && uri.port == 8080) {
+            "Local debug mode may connect only to 127.0.0.1:8080"
+        }
+        return value.trimEnd('/')
     }
 }
 

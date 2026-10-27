@@ -1,0 +1,12 @@
+.git
+.gradle
+build
+**/build
+.env
+.env.*
+*.log
+*.dump
+*.sql.gz
+test-results
+reports
+compose.yaml

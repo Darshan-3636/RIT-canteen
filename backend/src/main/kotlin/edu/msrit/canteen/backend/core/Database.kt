@@ -13,9 +13,12 @@ object BackendBootstrap {
             jdbcUrl = config.databaseUrl
             username = config.databaseUser
             password = config.databasePassword
-            maximumPoolSize = 8
+            maximumPoolSize = config.databasePoolSize
             minimumIdle = 1
             connectionTimeout = 10_000
+            validationTimeout = 5_000
+            idleTimeout = 60_000
+            maxLifetime = 300_000
             connectionInitSql = "SET TIME ZONE 'UTC'"
             poolName = "rit-canteen-backend"
         })
@@ -26,7 +29,7 @@ object BackendBootstrap {
                 .validateMigrationNaming(true)
                 .load()
                 .migrate()
-            if (config.demoSeedEnabled) seedPreviewSellers(pool)
+            if (config.demoSeedEnabled || config.cloudDemoSeedEnabled) seedPreviewSellers(pool)
             val context = BackendContext(pool, config)
             if (config.demoSeedEnabled) DemoIdentitySeed.seed(context)
             return context
