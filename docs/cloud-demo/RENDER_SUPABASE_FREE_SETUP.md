@@ -1,5 +1,7 @@
 # Render Free + Supabase Free setup
 
+> Historical service-creation guide. The Render service now exists; use [the current rollout gate](CURRENT_RENDER_SUPABASE_ROLLOUT.md) to verify its settings and deploy the integration branch. Do not create another service or use the old branch named below.
+
 This is an operator procedure for the existing Supabase Free project `rit-canteen` and Render account already linked to GitHub. The developer has not created a Render service or accessed either account. No live hostname exists yet.
 
 ## 1. Confirm free selections

@@ -1,5 +1,7 @@
 # Owner deployment handoff — resume here
 
+> Historical first-deployment instructions. A Render service now exists at `https://rit-canteen-cloud-demo.onrender.com`; use [the current rollout gate](CURRENT_RENDER_SUPABASE_ROLLOUT.md) for this integration branch. Do not create a second service or follow the old branch selection below.
+
 ## Verified setup status at handoff
 
 - Supabase Free project `rit-canteen` already exists in the `RIT Canteen` organization. The owner privately saved the database password and the **Connect → Direct or ORM → Session pooler → URI** string. The exact region sublocation, pooler host, port, and username must be read from that dashboard.
