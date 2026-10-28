@@ -72,7 +72,7 @@ class CommerceIntegrationTest {
         val user=UUID.randomUUID();val session=UUID.randomUUID();val token=(prefix+UUID.randomUUID().toString().replace("-","" )+UUID.randomUUID().toString().replace("-","" )).take(64)
         val hash=MessageDigest.getInstance("SHA-256").digest(token.toByteArray())
         context.dataSource.connection.use { c ->
-            c.prepareStatement("INSERT INTO users(id,email,password_hash,full_name) VALUES (?,?,?,?)").use { s -> s.setObject(1,user);s.setString(2,"$prefix-$user@example.test");s.setString(3,"integration-fixture-password-hash-000000");s.setString(4,"Commerce Integration $prefix");s.executeUpdate() }
+            c.prepareStatement("INSERT INTO users(id,email,password_hash,full_name,affiliation) VALUES (?,?,?,?,?)").use { s -> s.setObject(1,user);s.setString(2,"$prefix-$user@example.test");s.setString(3,"integration-fixture-password-hash-000000");s.setString(4,"Commerce Integration $prefix");s.setString(5,if(prefix=="seller") null else "STUDENT");s.executeUpdate() }
             c.prepareStatement("INSERT INTO sessions(id,user_id,token_hash,expires_at) VALUES (?,?,?,?)").use { s -> s.setObject(1,session);s.setObject(2,user);s.setBytes(3,hash);s.setTimestamp(4,Timestamp.from(Instant.now().plusSeconds(7200)));s.executeUpdate() }
         }
         return Actor(user,token,session)
@@ -206,6 +206,53 @@ class CommerceIntegrationTest {
         } } finally { cleanup(f) }
     }
 
+    @Test fun bulkDraftIsAccountScopedVersionedAndSingleSeller() {
+        val f=fixture()
+        try { app(f) {
+            val path="/api/v1/me/draft/bulk"
+            assertEquals(HttpStatusCode.Unauthorized,client.get(path).status)
+            val empty=client.get(path) { header(HttpHeaders.Authorization,"Bearer ${f.customer.token}") }
+            assertEquals(HttpStatusCode.OK,empty.status)
+            assertTrue(empty.bodyAsText().contains("\"version\":0"))
+            val saved=client.put(path) {
+                header(HttpHeaders.Authorization,"Bearer ${f.customer.token}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"expectedVersion":0,"sellerId":"north-counter","lines":[{"itemId":"north-lunch","quantity":3},{"itemId":"north-snack","quantity":5}]}""")
+            }
+            assertEquals(HttpStatusCode.OK,saved.status)
+            assertTrue(saved.bodyAsText().contains("\"version\":1"))
+            assertTrue(saved.bodyAsText().contains("north-lunch"))
+            val other=client.get(path) { header(HttpHeaders.Authorization,"Bearer ${f.stranger.token}") }
+            assertEquals(HttpStatusCode.OK,other.status)
+            assertTrue(other.bodyAsText().contains("\"lines\":[]"))
+            assertEquals(HttpStatusCode.Forbidden,client.get(path) {
+                header(HttpHeaders.Authorization,"Bearer ${f.seller.token}") }.status)
+            val stale=client.put(path) {
+                header(HttpHeaders.Authorization,"Bearer ${f.customer.token}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"expectedVersion":0,"sellerId":"north-counter","lines":[]}""")
+            }
+            assertEquals(HttpStatusCode.Conflict,stale.status)
+            val foreign=client.put(path) {
+                header(HttpHeaders.Authorization,"Bearer ${f.customer.token}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"expectedVersion":1,"sellerId":"north-counter","lines":[{"itemId":"masala-dosa","quantity":8}]}""")
+            }
+            assertEquals(HttpStatusCode.UnprocessableEntity,foreign.status)
+            val read=client.get(path) { header(HttpHeaders.Authorization,"Bearer ${f.customer.token}") }
+            assertEquals(HttpStatusCode.OK,read.status)
+            assertTrue(read.bodyAsText().contains("\"version\":1"))
+            f.context.dataSource.connection.use { db ->
+                db.prepareStatement("SELECT seller_id,version FROM bulk_customer_drafts WHERE customer_user_id=?").use { query ->
+                    query.setObject(1,f.customer.user)
+                    query.executeQuery().use { rows ->
+                        assertTrue(rows.next());assertEquals("north-counter",rows.getString(1));assertEquals(1L,rows.getLong(2))
+                    }
+                }
+            }
+        } } finally { cleanup(f) }
+    }
+
     @Test fun individualCartCheckoutIsAtomicIdempotentAndNeverClaimsPayment() {
         val f=fixture()
         try { app(f) {
@@ -325,11 +372,31 @@ class CommerceIntegrationTest {
         val f=fixture()
         try { app(f) {
             val pickup=Instant.now().plusSeconds(48*3600).toString()
-            val body="""{"sellerId":"north-counter","lines":[{"itemId":"north-lunch","quantity":8}],"pickupAt":"$pickup"}"""
+            val body="""{"sellerId":"north-counter","lines":[{"itemId":"north-lunch","quantity":8}],"pickupAt":"$pickup","instructions":"Collect at the north gate"}"""
             fun io.ktor.client.request.HttpRequestBuilder.customer() { header(HttpHeaders.Authorization,"Bearer ${f.customer.token}");header("Idempotency-Key","commerce-replay-1");contentType(ContentType.Application.Json);setBody(body) }
             val created=client.post("/api/v1/bulk/requests") { customer() };assertEquals(HttpStatusCode.Created,created.status)
             val json=created.bodyAsText();val id=Regex("""\"id\":\"([^\"]+)\"""").find(json)!!.groupValues[1]
             assertTrue(json.contains("\"subtotalPaise\":72000"));assertTrue(json.contains("\"status\":\"SUBMITTED\""))
+            assertTrue(json.contains("\"instructions\":\"Collect at the north gate\""))
+            val legacyBody = """{"sellerId":"north-counter","lines":[{"itemId":"north-lunch","quantity":8}],"pickupAt":"$pickup"}"""
+            val legacyCreated = client.post("/api/v1/bulk/requests") {
+                header(HttpHeaders.Authorization,"Bearer ${f.customer.token}"); header("Idempotency-Key","pre-v046-replay")
+                contentType(ContentType.Application.Json); setBody(legacyBody)
+            }
+            assertEquals(HttpStatusCode.Created, legacyCreated.status)
+            val preV046Digest = MessageDigest.getInstance("SHA-256")
+                .digest("north-counter|$pickup||north-lunch:8".toByteArray())
+            f.context.dataSource.connection.use { db ->
+                db.prepareStatement("SELECT idempotency_hash FROM bulk_requests WHERE idempotency_key=?").use { query ->
+                    query.setString(1, "pre-v046-replay")
+                    query.executeQuery().use { rows -> assertTrue(rows.next()); assertTrue(preV046Digest.contentEquals(rows.getBytes(1))) }
+                }
+            }
+            val legacyReplay = client.post("/api/v1/bulk/requests") {
+                header(HttpHeaders.Authorization,"Bearer ${f.customer.token}"); header("Idempotency-Key","pre-v046-replay")
+                contentType(ContentType.Application.Json); setBody(legacyBody)
+            }
+            assertEquals(legacyCreated.bodyAsText(), legacyReplay.bodyAsText())
             val privateRead=client.get("/api/v1/me/bulk/requests/$id") { header(HttpHeaders.Authorization,"Bearer ${f.stranger.token}") }
             assertEquals(HttpStatusCode.NotFound,privateRead.status)
             val unavailable=client.patch("/api/v1/sellers/north-counter/menu/items/north-lunch/availability") { header(HttpHeaders.Authorization,"Bearer ${f.seller.token}");contentType(ContentType.Application.Json);setBody("""{"availability":"UNAVAILABLE"}""") }

@@ -20,10 +20,12 @@ internal object DebugCustomerEngagementApi {
         row.getBoolean("personalizationConsent"))
 
     fun notifications(): Result<List<CustomerNotification>> = request("GET", "/api/v1/me/notifications?limit=100") { row ->
-        row.getJSONArray("items").objects().map {
-            CustomerNotification(it.getString("id"), it.getString("title"), it.getString("body"), sample = false)
-        }
+        row.getJSONArray("items").objects().map(::notification)
     }
+    fun markNotificationRead(id: String): Result<CustomerNotification> =
+        request("PATCH", "/api/v1/me/notifications/$id/read", parse = ::notification)
+    private fun notification(row: JSONObject) = CustomerNotification(row.getString("id"), row.getString("title"),
+        row.getString("body"), sample = false, read = row.getBoolean("read"))
     fun templates(): Result<List<NamedBulkTemplate>> = request("GET", "/api/v1/me/bulk-templates") { row ->
         row.getJSONArray("items").objects().map(::template)
     }

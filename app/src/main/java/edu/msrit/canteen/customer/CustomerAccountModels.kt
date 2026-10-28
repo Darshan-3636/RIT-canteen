@@ -43,7 +43,8 @@ data class CustomerSupportTicket(
     val attachmentUri: String? = null,
 )
 
-data class CustomerNotification(val id: String, val title: String, val detail: String, val sample: Boolean = true)
+data class CustomerNotification(val id: String, val title: String, val detail: String,
+                                val sample: Boolean = true, val read: Boolean = false)
 
 data class NamedBulkTemplate(val id: String, val name: String, val sellerId: String, val lines: List<BulkLine>)
 

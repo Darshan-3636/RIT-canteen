@@ -200,7 +200,8 @@ fun Route.registerCommerceRoutes(context: BackendContext) {
             val principal=call.requireAuthenticatedUser(context) ?: return@commerce
             val body=call.receive<BulkCreateRequest>()
             val key=call.request.headers["Idempotency-Key"] ?: throw CommerceFault(400,"IDEMPOTENCY_KEY_REQUIRED","Idempotency-Key header is required")
-            call.respond(HttpStatusCode.Created,createBulk(context,principal,body.sellerId,body.lines,body.pickupAt,body.specialPickupReason,key))
+            call.respond(HttpStatusCode.Created,createBulk(context,principal,body.sellerId,body.lines,body.pickupAt,
+                body.specialPickupReason,body.instructions,key))
         }
     }
     get("/me/bulk/requests") {
@@ -264,6 +265,14 @@ fun Route.registerCommerceRoutes(context: BackendContext) {
     }
     get("/me/cart/individual") {
         call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce;call.respond(readIndividualCart(context,p)) }
+    }
+    get("/me/draft/bulk") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            call.respond(readBulkDraft(context,p)) }
+    }
+    put("/me/draft/bulk") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            call.respond(replaceBulkDraft(context,p,call.receive<BulkDraftReplaceRequest>())) }
     }
     put("/me/cart/individual") {
         call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce

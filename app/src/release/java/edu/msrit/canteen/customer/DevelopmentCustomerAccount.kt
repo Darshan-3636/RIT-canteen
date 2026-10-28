@@ -25,6 +25,7 @@ object DevelopmentCustomerAccount : CustomerAccountRepository {
     fun deactivate() = Unit
     suspend fun refreshCloud(page: String, id: String, userId: String?) = Unit
     suspend fun saveCloudPreferences(value: CustomerPreferences, userId: String?): String? = "Unavailable."
+    suspend fun markCloudNotificationRead(id: String, userId: String?): String? = "Unavailable."
     suspend fun saveCloudTemplate(name: String, draft: BulkDraft, id: String?, userId: String?): String? = "Unavailable."
     suspend fun removeCloudTemplate(id: String, userId: String?): String? = "Unavailable."
     suspend fun createCloudTicket(category: CustomerIssueCategory, subject: String, description: String,

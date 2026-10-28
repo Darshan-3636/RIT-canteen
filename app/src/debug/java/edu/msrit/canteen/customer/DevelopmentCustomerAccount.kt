@@ -172,6 +172,17 @@ object DevelopmentCustomerAccount : CustomerAccountRepository {
         return result.error
     }
 
+    suspend fun markCloudNotificationRead(id: String, userId: String?): String? {
+        if (!BuildConfig.RIT_CLOUD_DEMO || !allowed(userId)) return "Sign in again."
+        val result = withContext(Dispatchers.IO) { DebugCustomerEngagementApi.markNotificationRead(id) }
+        if (!allowed(userId)) return "Account changed; reload this screen."
+        result.value?.let { confirmed ->
+            notifications = notifications.map { if (it.id == id) confirmed else it }
+        }
+        cloudError = result.error
+        return result.error
+    }
+
     suspend fun saveCloudTemplate(name: String, draft: BulkDraft, id: String?, userId: String?): String? {
         if (!allowed(userId)) return "Sign in again."
         val result = withContext(Dispatchers.IO) { DebugCustomerEngagementApi.saveTemplate(name, draft, id) }
@@ -232,7 +243,8 @@ object DevelopmentCustomerAccount : CustomerAccountRepository {
             .put("status", ticket.status.name).put("escalated", ticket.escalated)
             .put("attachment", ticket.attachmentUri).put("replies", JSONArray(ticket.replies))) } })
         put("notifications", JSONArray().apply { state.notifications.forEach { note -> put(JSONObject()
-            .put("id", note.id).put("title", note.title).put("detail", note.detail).put("sample", note.sample)) } })
+            .put("id", note.id).put("title", note.title).put("detail", note.detail)
+            .put("sample", note.sample).put("read", note.read)) } })
         put("templates", JSONArray().apply { state.templates.forEach { template -> put(JSONObject()
             .put("id", template.id).put("name", template.name).put("seller", template.sellerId)
             .put("lines", JSONArray().apply { template.lines.forEach { line -> put(JSONObject()
@@ -261,7 +273,7 @@ object DevelopmentCustomerAccount : CustomerAccountRepository {
                 attachmentUri = entry.optString("attachment").takeIf { it.isNotBlank() && it != "null" }) }
         val notes = (obj.optJSONArray("notifications") ?: JSONArray()).objects().map { entry ->
             CustomerNotification(entry.getString("id"), entry.getString("title"), entry.getString("detail"),
-                entry.optBoolean("sample", true)) }
+                entry.optBoolean("sample", true), entry.optBoolean("read", false)) }
         val templates = (obj.optJSONArray("templates") ?: JSONArray()).objects().map { entry ->
             NamedBulkTemplate(entry.getString("id"), entry.getString("name"), entry.getString("seller"),
                 entry.getJSONArray("lines").objects().map { line -> BulkLine(line.getString("item"), line.getInt("quantity")) }) }

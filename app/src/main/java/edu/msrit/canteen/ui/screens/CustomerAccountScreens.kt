@@ -302,10 +302,24 @@ fun CustomerAccountManagementScreen(profile: CustomerProfile?, onBack: () -> Uni
 }
 
 @Composable
-fun CustomerNotificationsScreen(repo: CustomerAccountRepository, onBack: () -> Unit) {
+fun CustomerNotificationsScreen(repo: CustomerAccountRepository, userId: String?, onBack: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var pendingId by remember { mutableStateOf<String?>(null) }
     CustomerShell("Notifications", "customer_notifications", onBack) {
         if (repo.notifications.isEmpty()) RitEmptyState("No notifications", "Real account alerts will appear here after the notification service is connected.")
-        else repo.notifications.forEach { note -> AccountRow(note.title, note.detail + if (note.sample) " · sample only" else " · in-app") }
+        else repo.notifications.forEach { note ->
+            AccountRow(note.title, note.detail + when {
+                note.sample -> " · sample only"
+                note.read -> " · read"
+                else -> " · unread · tap to mark read"
+            }, if (BuildConfig.RIT_CLOUD_DEMO && !note.read && pendingId == null) ({
+                pendingId = note.id
+                scope.launch {
+                    DevelopmentCustomerAccount.markCloudNotificationRead(note.id, userId)
+                    pendingId = null
+                }
+            }) else null, "notification_${note.id}")
+        }
         RitMessageCard("Delivery boundary", if (BuildConfig.RIT_CLOUD_DEMO)
             "This is a server-backed in-app inbox. Android push and email are not connected."
             else "No Android push, email or durable server inbox is active in this preview.")

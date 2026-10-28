@@ -96,6 +96,6 @@ object DebugServerCatalog {
             kind = FoodKind.valueOf(row.getString("kind")),
             dietary = Dietary.valueOf(row.getString("dietary")),
             availability = ItemAvailability.valueOf(row.getString("availability")),
-            published = row.getBoolean("published"), photo = CatalogArtwork.itemPhoto(id))
+            published = row.getBoolean("published"), photo = CatalogArtwork.itemPhoto(row.getString("imageKey")))
     }
 }

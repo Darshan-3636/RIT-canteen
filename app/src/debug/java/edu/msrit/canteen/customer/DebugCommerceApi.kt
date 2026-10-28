@@ -12,6 +12,38 @@ import org.json.JSONObject
 object DebugCommerceApi {
     data class Result<T>(val value: T? = null, val error: String? = null)
 
+    fun bulkDraft(): Result<BulkServerDraft> = withToken { token ->
+        val response = DebugBackendApi.request("GET", "/api/v1/me/draft/bulk", token = token)
+        if (response.status != 200) Result(error = response.error ?: "Could not load your bulk draft.")
+        else Result(value = parseBulkDraft(response.body!!))
+    }
+
+    fun replaceBulkDraft(expectedVersion: Long, draft: BulkDraft): Result<BulkServerDraft> = withToken { token ->
+        val rows = JSONArray().apply { draft.lines.forEach { line ->
+            put(JSONObject().put("itemId", line.itemId).put("quantity", line.quantity))
+        } }
+        val body = JSONObject().put("expectedVersion", expectedVersion)
+            .put("sellerId", draft.sellerId ?: JSONObject.NULL).put("lines", rows)
+            .put("pickupAt", draft.pickup?.atZone(RIT_TIME_ZONE)?.toInstant()?.toString() ?: JSONObject.NULL)
+            .put("specialPickup", draft.specialPickup).put("specialPickupReason", draft.specialReason)
+            .put("instructions", draft.instructions)
+        val response = DebugBackendApi.request("PUT", "/api/v1/me/draft/bulk", body, token)
+        if (response.status != 200) Result(error = response.error ?: "Bulk draft changed. Reload before editing.")
+        else Result(value = parseBulkDraft(response.body!!))
+    }
+
+    private fun parseBulkDraft(row: JSONObject): BulkServerDraft {
+        val lines = row.getJSONArray("lines")
+        val sellerId = row.optString("sellerId").takeUnless { it.isBlank() || it == "null" }
+        val pickup = row.optString("pickupAt").takeUnless { it.isBlank() || it == "null" }?.let(::local)
+        val parsed = (0 until lines.length()).map { lines.getJSONObject(it) }
+        return BulkServerDraft(row.getLong("version"), BulkDraft(sellerId,
+            parsed.map { BulkLine(it.getString("itemId"), it.getInt("quantity")) }, pickup,
+            row.getBoolean("specialPickup"), row.getString("specialPickupReason"), row.getString("instructions")),
+            row.getLong("subtotalPaise"), parsed.filterNot { it.getBoolean("available") }
+                .mapTo(mutableSetOf()) { it.getString("itemId") })
+    }
+
     fun individualCart(): Result<IndividualServerCart> = withToken { token ->
         val response = DebugBackendApi.request("GET", "/api/v1/me/cart/individual", token = token)
         if (response.status != 200) Result(error = response.error ?: "Could not load your cart.")
@@ -99,6 +131,7 @@ object DebugCommerceApi {
         draft.lines.forEach { lines.put(JSONObject().put("itemId", it.itemId).put("quantity", it.quantity)) }
         val body = JSONObject().put("sellerId", sellerId).put("lines", lines)
             .put("pickupAt", pickup.atZone(RIT_TIME_ZONE).toInstant().toString())
+            .put("instructions", draft.instructions)
         if (draft.specialPickup) body.put("specialPickupReason", draft.specialReason)
         val response = DebugBackendApi.request("POST", "/api/v1/bulk/requests", body, token,
             idempotencyKey = idempotencyKey)
@@ -177,7 +210,7 @@ object DebugCommerceApi {
             local(row.getString("expiresAt")), if (specialApproved == true) version else null)
         return BulkRequestRecord(thread, DevelopmentDemoAccounts.serverIdentity?.userId.orEmpty(),
             "Customer", BulkDraft(sellerId, lines.map { BulkLine(it.itemId, it.quantity) }, pickup,
-                reason.isNotBlank(), reason), row.getInt("minimumUnits"), LocalDateTime.now(RIT_TIME_ZONE))
+                reason.isNotBlank(), reason, row.optString("instructions")), row.getInt("minimumUnits"), LocalDateTime.now(RIT_TIME_ZONE))
     }
 
     private fun local(instant: String): LocalDateTime =

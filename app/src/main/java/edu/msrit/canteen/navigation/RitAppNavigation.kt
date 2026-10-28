@@ -44,6 +44,8 @@ import edu.msrit.canteen.customer.DevelopmentSampleHistory
 import edu.msrit.canteen.customer.BulkDraftSession
 import edu.msrit.canteen.customer.BulkDraft
 import edu.msrit.canteen.customer.BulkLine
+import edu.msrit.canteen.customer.BulkServerDraft
+import edu.msrit.canteen.customer.bulkSubmissionKeyForVersion
 import edu.msrit.canteen.customer.CartMode
 import edu.msrit.canteen.customer.IndividualCartSession
 import edu.msrit.canteen.customer.IndividualLine
@@ -291,6 +293,69 @@ fun RitAppNavigation(appearance: AppearancePreference) {
         true
     }
     val bulkDraft = remember { BulkDraftSession() }
+    val bulkDraftMutex = remember { Mutex() }
+    var bulkDraftReady by remember { mutableStateOf(false) }
+    var bulkDraftSaving by remember { mutableStateOf(false) }
+    var bulkDraftError by remember { mutableStateOf<String?>(null) }
+    var bulkDraftVersion by remember { mutableStateOf(0L) }
+    var bulkDraftSyncedRevision by remember { mutableStateOf(bulkDraft.revision) }
+    var bulkDraftAccountEpoch by remember { mutableStateOf(0L) }
+    suspend fun refreshBulkDraft(): Boolean = bulkDraftMutex.withLock {
+        val epoch = bulkDraftAccountEpoch
+        bulkDraftReady = false
+        val response = withContext(Dispatchers.IO) { DebugCommerceApi.bulkDraft() }
+        if (epoch != bulkDraftAccountEpoch) return@withLock false
+        val saved = response.value
+        if (saved == null) {
+            bulkDraftError = response.error ?: "Could not load your saved bulk draft."
+            false
+        } else {
+            bulkDraft.applyServer(saved)
+            bulkDraftVersion = saved.version
+            bulkDraftSyncedRevision = bulkDraft.revision
+            bulkDraftError = null
+            bulkDraftReady = true
+            true
+        }
+    }
+    suspend fun saveBulkDraft(): Boolean = bulkDraftMutex.withLock {
+        if (!BuildConfig.RIT_CLOUD_DEMO) return@withLock true
+        if (!bulkDraftReady) {
+            bulkDraftError = "Saved draft unavailable. Reload it before editing."
+            return@withLock false
+        }
+        bulkDraftSaving = true
+        val epoch = bulkDraftAccountEpoch
+        try {
+            while (bulkDraft.revision != bulkDraftSyncedRevision) {
+                if (epoch != bulkDraftAccountEpoch || !bulkDraftReady) return@withLock false
+                val revision = bulkDraft.revision
+                val snapshot = bulkDraft.draft
+                val response = withContext(Dispatchers.IO) {
+                    DebugCommerceApi.replaceBulkDraft(bulkDraftVersion, snapshot)
+                }
+                if (epoch != bulkDraftAccountEpoch) return@withLock false
+                val saved = response.value
+                if (saved == null) {
+                    bulkDraftError = response.error ?: "Draft not saved. Reload before continuing."
+                    return@withLock false
+                }
+                bulkDraftVersion = saved.version
+                bulkDraftSyncedRevision = revision
+                bulkDraftError = null
+            }
+            true
+        } finally { bulkDraftSaving = false }
+    }
+    bulkDraft.onChanged = {
+        if (BuildConfig.RIT_CLOUD_DEMO && bulkDraftReady) scope.launch { saveBulkDraft() }
+    }
+    val bulkDraftStatus = if (!BuildConfig.RIT_CLOUD_DEMO) null else when {
+        bulkDraftError != null -> "Not saved to server: $bulkDraftError"
+        bulkDraftSaving || bulkDraft.revision != bulkDraftSyncedRevision -> "Saving draft to your account…"
+        bulkDraftReady -> "Saved to your account · not sent to seller"
+        else -> "Loading saved bulk draft…"
+    }
     val individualCart = remember { IndividualCartSession() }
     val individualCartMutex = remember { Mutex() }
     var individualCartBusy by remember { mutableStateOf(false) }
@@ -355,6 +420,12 @@ fun RitAppNavigation(appearance: AppearancePreference) {
     }
     fun finishDemoSignIn(account: DemoAccount) {
         DevelopmentPreviewAccess.clearPreviewSelection()
+        bulkDraftAccountEpoch++
+        bulkDraftReady = false
+        bulkDraft.applyServer(BulkServerDraft(0, BulkDraft(), 0, emptySet()))
+        bulkDraftVersion = 0
+        bulkDraftSyncedRevision = bulkDraft.revision
+        bulkDraftError = null
         if (account.role == DevelopmentRole.Customer) {
             DevelopmentCustomerAccount.activate(account.id, CustomerProfile(account.name, account.email,
                 requireNotNull(account.affiliation), account.department))
@@ -372,6 +443,7 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                 val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
                 orders.value?.let(DevelopmentIndividualOrders::applyServer)
                 refreshIndividualCart()
+                if (BuildConfig.RIT_CLOUD_DEMO) refreshBulkDraft()
             }
             loadBulk(account.sellerId)
             if (account.sellerId != null) refreshSellerIndividual(account.sellerId)
@@ -384,6 +456,12 @@ fun RitAppNavigation(appearance: AppearancePreference) {
         }
     }
     fun signOutDemo() {
+        bulkDraftAccountEpoch++
+        bulkDraftReady = false
+        bulkDraft.applyServer(BulkServerDraft(0, BulkDraft(), 0, emptySet()))
+        bulkDraftVersion = 0
+        bulkDraftSyncedRevision = bulkDraft.revision
+        bulkDraftError = null
         DevelopmentDemoAccounts.signOut(); DevelopmentPreviewAccess.clearPreviewSelection()
         DebugServerCatalog.clear()
         demoFavorites.clearCloud()
@@ -468,6 +546,7 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                                         val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
                                         orders.value?.let(DevelopmentIndividualOrders::applyServer)
                                         refreshIndividualCart()
+                                        if (BuildConfig.RIT_CLOUD_DEMO) refreshBulkDraft()
                                     }
                                     loadBulk(account.sellerId)
                                 }
@@ -578,7 +657,7 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                         "preferences" -> CustomerPreferenceScreen(customerAccount, userId, false, back)
                         "privacy" -> CustomerPreferenceScreen(customerAccount, userId, true, back)
                         "account" -> CustomerAccountManagementScreen(customerAccount.profile, back, ::signOutDemo)
-                        "notifications" -> CustomerNotificationsScreen(customerAccount, back)
+                        "notifications" -> CustomerNotificationsScreen(customerAccount, userId, back)
                         "support" -> CustomerSupportScreen(customerAccount, back, { go("ticket-new") },
                             { navController.navigate(Route.customerAccount("ticket", it)) })
                         "ticket-new" -> CustomerTicketFormScreen(customerAccount, userId, back,
@@ -777,7 +856,8 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                             } }
                         },
                         onClearIndividual = { scope.launch { changeIndividualCart { emptyList() } } },
-                        individualBusy = individualCartBusy, individualError = individualCartError)
+                        individualBusy = individualCartBusy, individualError = individualCartError,
+                        bulkSyncStatus = bulkDraftStatus)
                 } }
             }
             composable(Route.IndividualReview) {
@@ -889,7 +969,10 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                     BulkCartScreen(bulkDraft, DevelopmentBulkPreview, onBack = { navController.popBackStack() },
                         onChooseSeller = { navController.navigate(Route.BulkSellers) },
                         onPickup = { navController.navigate(Route.BulkPickup) },
-                        onViewCart = { navController.navigate(Route.cart(CartMode.BULK)) })
+                        onViewCart = { navController.navigate(Route.cart(CartMode.BULK)) },
+                        syncMessage = bulkDraftStatus,
+                        onReloadSaved = if (BuildConfig.RIT_CLOUD_DEMO && bulkDraftError != null)
+                            ({ scope.launch { refreshBulkDraft() } }) else null)
                 } }
             }
             composable(Route.BulkPickup) {
@@ -912,12 +995,21 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                                 submitting = true
                                 submitError = null
                                 scope.launch {
+                                    if (!saveBulkDraft()) {
+                                        submitError = bulkDraftError ?: "Bulk draft was not saved. Reload and try again."
+                                        submitting = false
+                                        return@launch
+                                    }
+                                    val submittedDraft = bulkDraft.draft
+                                    val submissionKey = if (BuildConfig.RIT_CLOUD_DEMO)
+                                        bulkSubmissionKeyForVersion(bulkDraftVersion) else bulkDraft.idempotencyKey()
                                     val result = withContext(Dispatchers.IO) {
-                                        DebugCommerceApi.submitBulk(bulkDraft.draft, bulkDraft.idempotencyKey())
+                                        DebugCommerceApi.submitBulk(submittedDraft, submissionKey)
                                     }
                                     submitting = false
                                     if (result.value != null) {
                                         bulkDraft.clear()
+                                        saveBulkDraft()
                                         loadBulk()
                                         withContext(Dispatchers.Main.immediate) {
                                             navController.navigate(Route.customerDemoDetail(result.value.reference))
@@ -925,7 +1017,7 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                                     } else submitError = result.error ?: "Could not submit request."
                                 }
                             }
-                        }, errorMessage = submitError)
+                        }, errorMessage = submitError, syncMessage = bulkDraftStatus)
                 } }
             }
             composable(Route.BulkOrders) {

@@ -29,6 +29,7 @@ seedCommerceFixtures(context) // Only after bootstrap, LOCAL, and DEMO_SEED_ENAB
 
 - Currency is integer paise. No floating point values or client-supplied prices are accepted.
 - Catalog image values are stable local asset keys (`imageKey`, matching item ID), not vendor image URLs.
+- The Android cloud client uses the server's `imageKey` to select bundled art; an unknown key has no bundled image.
 - Catalog results are scoped to one seller. Published unavailable items remain visible only when `unavailableVisibility=SHOW`.
 - The default bulk minimum is eight combined units and can be changed per seller by an authorized `hours.edit` member.
 - Seller hours use ISO weekday numbers (Monday 1 through Sunday 7) and local `HH:mm` in `Asia/Kolkata`; an empty schedule means unknown. Closures are local calendar dates.
@@ -85,6 +86,25 @@ Guest menu GETs are intentionally read-only. Mutating routes call the frozen aut
 The operating-policy response uses `minimumUnits`, `specialPickupEnabled`, `timezone`, `hours: [{dayOfWeek,opensAt,closesAt}]` and `closures: [{localDate,reason}]`. Hours use ISO weekday 1–7; absent hours mean unverified rather than open. The Android cloud client treats a missing route as unverified and still submits only to the backend for authoritative scheduling validation.
 
 ## Bulk request lifecycle
+
+### Customer-owned bulk draft (V045)
+
+`GET /me/draft/bulk` reads only the current customer's saved draft. `PUT /me/draft/bulk`
+replaces it with `{expectedVersion,sellerId,lines,pickupAt,specialPickup,specialPickupReason,instructions}`.
+An absent draft reads as version 0. `lines:[]` and `sellerId:null` clear it. The draft may be
+incomplete, but every saved line must belong to its single seller and have quantity 1–999.
+The response includes current server prices and `available` flags; it is not a seller quote.
+Each successful replacement increments the version. A stale version returns 409, and a
+foreign-seller item returns 422. Only a live customer session may access the draft.
+The Android cloud client reloads on session restoration and never labels a failed save as saved.
+
+V046 preserves optional pickup instructions with a submitted bulk request. The initial
+request body may include `instructions` (at most 500 characters); it is included in the
+idempotency fingerprint and returned on customer/seller reads. Existing requests retain
+an empty instruction string. Empty-instruction retries retain the pre-V046 fingerprint,
+so requests submitted before this migration remain replayable. The Android cloud client
+derives its account-scoped retry key from the saved draft version to survive process restarts.
+No instruction implies seller acceptance or a pickup promise.
 
 | Method | Path | Auth | Behavior |
 |---|---|---|---|

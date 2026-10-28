@@ -3,6 +3,8 @@ package edu.msrit.canteen.customer
 /** Release cannot use the debug local-backend transport. */
 object DebugCommerceApi {
     data class Result<T>(val value: T? = null, val error: String? = "Local demo unavailable in release")
+    fun bulkDraft(): Result<BulkServerDraft> = Result()
+    fun replaceBulkDraft(expectedVersion: Long, draft: BulkDraft): Result<BulkServerDraft> = Result()
     fun individualCart(): Result<IndividualServerCart> = Result()
     fun replaceIndividualCart(expectedVersion: Long, lines: List<IndividualLine>): Result<IndividualServerCart> = Result()
     fun checkoutIndividualCart(expectedVersion: Long, idempotencyKey: String): Result<IndividualOrderPreview> = Result()

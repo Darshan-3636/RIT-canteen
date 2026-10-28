@@ -105,7 +105,8 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
                        onIndividualQuantity: ((edu.msrit.canteen.customer.MenuItem, Int) -> Unit)? = null,
                        onClearIndividual: (() -> Unit)? = null,
                        individualBusy: Boolean = false,
-                       individualError: String? = null) {
+                       individualError: String? = null,
+                       bulkSyncStatus: String? = null) {
     val colors = RitThemeTokens.colors
     var mode by remember(initialMode) { mutableStateOf(initialMode) }
     var clearMode by remember { mutableStateOf<CartMode?>(null) }
@@ -160,6 +161,9 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
                 item {
                     RitText(bulkSeller?.name ?: "Choose a seller", RitType.title)
                     RitText("One seller per bulk request · demo estimate only", RitType.small, colors.muted)
+                    if (bulkSyncStatus != null) RitText(bulkSyncStatus, RitType.small,
+                        if (bulkSyncStatus.startsWith("Not saved")) colors.accent else colors.muted,
+                        Modifier.testTag("bulk_cart_sync_status"))
                     Spacer(Modifier.height(12.dp))
                 }
                 if (bulk.draft.lines.isEmpty()) item {

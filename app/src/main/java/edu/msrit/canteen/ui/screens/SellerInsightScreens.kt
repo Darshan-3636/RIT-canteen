@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -36,6 +37,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import edu.msrit.canteen.customer.DevelopmentInsights
+import edu.msrit.canteen.customer.DebugSellerAnalyticsApi
+import edu.msrit.canteen.customer.SellerCloudAnalytics
 import edu.msrit.canteen.customer.DevelopmentPromotions
 import edu.msrit.canteen.customer.InsightPeriod
 import edu.msrit.canteen.customer.InsightRange
@@ -91,6 +94,8 @@ import edu.msrit.canteen.ui.theme.RitType
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 enum class SellerInsightPage { OVERVIEW, TRENDS, PRODUCTS, CUSTOMERS, PROMOTIONS, FORECAST,
     REPORT_BUILDER, REPORT_HISTORY, SUPPORT, NEW_TICKET, TICKET_DETAIL, NOTIFICATIONS, PAYMENT_STATUS }
@@ -104,7 +109,8 @@ private fun InsightPage(title: String, tag: String, onBack: () -> Unit,
     Column(Modifier.fillMaxSize().background(colors.background).testTag(tag)) {
         CatalogHeader(title, onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
-            RitText(if (hasSample) "DEMO DATA · not live sales"
+            RitText(if (BuildConfig.RIT_CLOUD_DEMO) "SERVER DEMO REQUESTS · NOT VERIFIED SALES"
+                else if (hasSample) "DEMO DATA · not live sales"
                 else "NO VERIFIED APP SALES · preview state only", RitType.small, colors.accent)
             Spacer(Modifier.height(14.dp))
             content()
@@ -192,6 +198,20 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
     var range by remember(page) { mutableStateOf(if (page == SellerInsightPage.OVERVIEW || page == SellerInsightPage.FORECAST)
         InsightRange(today.minusDays(29), today) else InsightPeriod.MONTH.range(today)) }
     var overviewDays by remember(page) { mutableIntStateOf(30) }
+    var cloudSummary by remember(sellerId, page) { mutableStateOf<SellerCloudAnalytics?>(null) }
+    var cloudError by remember(sellerId, page) { mutableStateOf<String?>(null) }
+    var cloudLoading by remember(sellerId, page) { mutableStateOf(false) }
+    var cloudRetry by remember(sellerId, page) { mutableIntStateOf(0) }
+    LaunchedEffect(sellerId, page, range, cloudRetry) {
+        if (BuildConfig.RIT_CLOUD_DEMO && page in setOf(SellerInsightPage.OVERVIEW, SellerInsightPage.TRENDS)) {
+            cloudLoading = true
+            cloudError = null
+            val result = withContext(Dispatchers.IO) { DebugSellerAnalyticsApi.summary(sellerId, range.start, range.end) }
+            cloudSummary = result.value
+            cloudError = result.error
+            cloudLoading = false
+        }
+    }
     val summary = DevelopmentInsights.sales(identity, sellerId, range, sample)
     val sellerName = PreviewCatalog.sellers.find { it.id == sellerId }?.name ?: "Seller"
     val title = when (page) {
@@ -206,7 +226,45 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
     InsightPage(title, "seller_insight_${page.name.lowercase()}", onBack,
         hasSample = sample) {
         if (BuildConfig.RIT_CLOUD_DEMO) {
-            RitEmptyState("Insights unavailable", "This page is not connected to seller analytics, reports or support yet. No sample sales are shown as verified activity.")
+            if (page in setOf(SellerInsightPage.OVERVIEW, SellerInsightPage.TRENDS)) {
+                AnalyticsRangeSelector(overviewDays, { days -> overviewDays = days; range = lastDays(days, today) })
+                Spacer(Modifier.height(14.dp))
+                when {
+                    cloudLoading -> RitText("Loading saved request counts…", RitType.body,
+                        modifier = Modifier.testTag("seller_cloud_analytics_loading"))
+                    cloudError != null -> {
+                        RitEmptyState("Could not load analytics", cloudError!!)
+                        RitSecondaryButton("Retry", { cloudRetry++ }, Modifier.fillMaxWidth()
+                            .testTag("seller_cloud_analytics_retry"))
+                    }
+                    cloudSummary == null -> RitEmptyState("Analytics unavailable", "No server response was confirmed.")
+                    else -> {
+                        val current = cloudSummary!!
+                        RitText("${current.totalRequests} saved bulk requests", RitType.heading,
+                            modifier = Modifier.testTag("seller_cloud_request_total"))
+                        RitText("${range.start} to ${range.end} · ${current.status.replace('_', ' ').lowercase()}",
+                            RitType.small, RitThemeTokens.colors.muted)
+                        Spacer(Modifier.height(12.dp))
+                        if (current.byStatus.isEmpty()) RitEmptyState("No requests in this period",
+                            "Counts will appear after customers submit requests to this seller.")
+                        else current.byStatus.toSortedMap().forEach { (status, count) ->
+                            InsightCard(status.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase),
+                                "$count saved requests", tag = "seller_cloud_status_${status.lowercase()}")
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        RitText("Verified revenue, product sales and forecasts are unavailable: demo requests are unpaid and no payment provider is connected.",
+                            RitType.small, RitThemeTokens.colors.muted)
+                    }
+                }
+            } else RitEmptyState("Feature unavailable", when (page) {
+                SellerInsightPage.PRODUCTS, SellerInsightPage.CUSTOMERS, SellerInsightPage.PROMOTIONS,
+                SellerInsightPage.FORECAST -> "No verified payment or product-sales source exists for this report."
+                SellerInsightPage.REPORT_BUILDER, SellerInsightPage.REPORT_HISTORY ->
+                    "Report selections can be stored by the backend, but file generation and download are not implemented."
+                SellerInsightPage.SUPPORT, SellerInsightPage.NEW_TICKET, SellerInsightPage.TICKET_DETAIL ->
+                    "Seller support is not connected to this Android screen yet."
+                else -> "This seller workflow is not connected to the cloud backend yet."
+            })
             return@InsightPage
         }
         when (page) {
