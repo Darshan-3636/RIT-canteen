@@ -361,6 +361,17 @@ class CloudDemoDataSeedTest {
                     }
                     assertEquals("PENDING", Json.parseToJsonElement(reconcile(paymentId).bodyAsText()).jsonObject
                         .getValue("status").jsonPrimitive.content)
+                    val cancelled = client.post("/api/v1/me/sandbox-payments/$paymentId/cancel") {
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                    }
+                    assertEquals(HttpStatusCode.OK, cancelled.status)
+                    assertEquals("CANCELLED", Json.parseToJsonElement(cancelled.bodyAsText()).jsonObject
+                        .getValue("status").jsonPrimitive.content)
+                    assertEquals(HttpStatusCode.Conflict, begin("uat-after-cancel").status,
+                        "A provisional cancellation must not open a duplicate attempt")
+                    assertEquals("PENDING", Json.parseToJsonElement(reconcile(paymentId).bodyAsText()).jsonObject
+                        .getValue("status").jsonPrimitive.content,
+                        "Only PhonePe can resolve a cancelled attempt")
                     fake.providerState = "FAILED"
                     assertEquals("SANDBOX_FAILED", Json.parseToJsonElement(reconcile(paymentId).bodyAsText()).jsonObject
                         .getValue("status").jsonPrimitive.content)
