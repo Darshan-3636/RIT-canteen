@@ -292,6 +292,7 @@ fun RitAppNavigation(appearance: AppearancePreference) {
     val demoCustomerId = DevelopmentPreviewAccess.activeIdentity?.authorization?.takeIf {
         AppMode.Customer in it.modes }?.userId.orEmpty()
     suspend fun loadBulk(sellerId: String? = null) {
+        if (BuildConfig.RIT_CLOUD_DEMO) DevelopmentSellerOperations.applyServer(emptyList())
         val response = withContext(Dispatchers.IO) { DebugCommerceApi.bulkRequests(sellerId) }
         response.value?.let(DevelopmentSellerOperations::applyServer)
     }
@@ -312,6 +313,7 @@ fun RitAppNavigation(appearance: AppearancePreference) {
             val snapshot = runCatching { withContext(Dispatchers.IO) { DebugServerCatalog.fetch() } }.getOrNull()
             if (snapshot == null) DebugServerCatalog.clear() else DebugServerCatalog.apply(snapshot)
             if (account.role == DevelopmentRole.Customer) {
+                if (BuildConfig.RIT_CLOUD_DEMO) demoFavorites.activateCloud(account.id)
                 val profile = withContext(Dispatchers.IO) { DebugCustomerAccountApi.fetchProfile() }
                 profile.profile?.let { DevelopmentCustomerAccount.updateProfile(it, account.id) }
                 val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
@@ -329,6 +331,7 @@ fun RitAppNavigation(appearance: AppearancePreference) {
     fun signOutDemo() {
         DevelopmentDemoAccounts.signOut(); DevelopmentPreviewAccess.clearPreviewSelection()
         DebugServerCatalog.clear()
+        demoFavorites.clearCloud()
         DevelopmentSellerOperations.applyServer(emptyList())
         DevelopmentCustomerAccount.deactivate(); DevelopmentIndividualOrders.deactivate()
         individualCart.clear(); bulkDraft.clear(); selectedCustomerSellerId = null
@@ -403,6 +406,7 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                                         DebugServerCatalog.fetch() } }.getOrNull()
                                     if (snapshot != null) DebugServerCatalog.apply(snapshot)
                                     if (account.role == DevelopmentRole.Customer) {
+                                        if (BuildConfig.RIT_CLOUD_DEMO) demoFavorites.activateCloud(account.id)
                                         val profile = withContext(Dispatchers.IO) { DebugCustomerAccountApi.fetchProfile() }
                                         profile.profile?.let { DevelopmentCustomerAccount.updateProfile(it, account.id) }
                                         val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
@@ -498,6 +502,9 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                     val page = entry.arguments?.getString("page").orEmpty()
                     val id = entry.arguments?.getString("id").orEmpty()
                     val userId = DevelopmentPreviewAccess.activeIdentity?.authorization?.userId
+                    androidx.compose.runtime.LaunchedEffect(page, id, userId) {
+                        if (BuildConfig.RIT_CLOUD_DEMO) customerAccount.refreshCloud(page, id, userId)
+                    }
                     val back: () -> Unit = { navController.popBackStack() }
                     val go: (String) -> Unit = { navController.navigate(Route.customerAccount(it)) }
                     when (page) {
@@ -683,7 +690,8 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                     CustomerQuickReorderScreen(onBack = { navController.popBackStack() },
                         onFood = { navController.navigate(Route.foodDetails(it)) },
                         onSeller = { navController.navigate(Route.sellerProfile(it)) },
-                        history = DevelopmentSampleHistory)
+                        history = if (BuildConfig.RIT_CLOUD_DEMO)
+                            edu.msrit.canteen.customer.EmptyOrderHistory else DevelopmentSampleHistory)
                 } }
             }
             composable(Route.Cart, arguments = listOf(navArgument("mode") { type = NavType.StringType })) { entry ->
@@ -759,6 +767,9 @@ fun RitAppNavigation(appearance: AppearancePreference) {
             composable(Route.DemoCheckout, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
                 val reference = entry.arguments?.getString("reference").orEmpty()
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
+                    if (BuildConfig.RIT_CLOUD_DEMO) {
+                        CustomerUnavailableScreen("payment", { navController.popBackStack() })
+                    } else {
                     val actor = DevelopmentPreviewAccess.activeIdentity?.authorization
                     val order = DevelopmentDemoCheckout.orders.find {
                         it.reference == reference && it.customerId == demoCustomerId }
@@ -769,6 +780,7 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                         { navController.navigate(Route.demoOrderDetail(reference)) {
                             popUpTo(Route.DemoCheckout) { inclusive = true }
                         } })
+                    }
                 } }
             }
             composable(Route.BulkSellers) {

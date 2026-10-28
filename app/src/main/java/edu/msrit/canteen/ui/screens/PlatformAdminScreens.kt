@@ -1,5 +1,6 @@
 package edu.msrit.canteen.ui.screens
 
+import edu.msrit.canteen.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -297,6 +298,10 @@ fun PlatformAdminScreen(page: AdminPage, identity: AuthorizedIdentity?, sample: 
     }
     AdminPageShell(title, "admin_${page.name.lowercase()}", onBack) {
         if (!PresentationAccess.allows(identity, ProtectedArea.Administrator)) { AdminDeniedState(onBack); return@AdminPageShell }
+        if (BuildConfig.RIT_CLOUD_DEMO) {
+            RitEmptyState("Platform console unavailable", "This Android view is not yet connected to the server admin APIs. No sample users, tickets or actions are shown as live data.")
+            return@AdminPageShell
+        }
         when (page) {
             AdminPage.DASHBOARD -> {
                 if (onAccount != null) RitSecondaryButton("My account", onAccount,

@@ -45,6 +45,7 @@ seedCommerceFixtures(context) // Only after bootstrap, LOCAL, and DEMO_SEED_ENAB
 | GET | `/sellers/{sellerId}` | Guest | One active seller. |
 | GET | `/sellers/{sellerId}/menu?query=&categoryId=` | Guest | Search/filter within only that seller. |
 | GET | `/sellers/{sellerId}/menu/{itemId}` | Guest | One published visible item in that seller. |
+| GET | `/sellers/{sellerId}/operating-policy` | Guest | Current seller minimum, special-pickup setting, timezone, weekly hours and future closures from PostgreSQL. Added on `feat/rit-verify-complete-backend-integration`; not present in the original deployed baseline. |
 | PATCH | `/sellers/{sellerId}/menu/items/{itemId}/availability` | `availability.edit` | Set `AVAILABLE` or `UNAVAILABLE`; visibility remains unchanged. |
 | PATCH | `/sellers/{sellerId}/menu/items/{itemId}` | `catalog.edit` | Update name, description, integer `pricePaise`, published, dietary or unavailable visibility. |
 | PATCH | `/sellers/{sellerId}/bulk-policy` | `hours.edit` | Change `minimumUnits` (1–999), `specialPickupEnabled`, or both. |
@@ -81,6 +82,8 @@ Example client-facing menu response from `GET /sellers/main-canteen/menu?categor
 ```
 
 Guest menu GETs are intentionally read-only. Mutating routes call the frozen auth helpers and recheck seller capability inside the same transaction as the write. Owner/manager/staff delegation remains enforced by the foundation authorization service.
+
+The operating-policy response uses `minimumUnits`, `specialPickupEnabled`, `timezone`, `hours: [{dayOfWeek,opensAt,closesAt}]` and `closures: [{localDate,reason}]`. Hours use ISO weekday 1–7; absent hours mean unverified rather than open. The Android cloud client treats a missing route as unverified and still submits only to the backend for authoritative scheduling validation.
 
 ## Bulk request lifecycle
 

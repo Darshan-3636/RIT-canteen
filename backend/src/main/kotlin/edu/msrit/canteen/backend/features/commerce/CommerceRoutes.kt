@@ -52,6 +52,41 @@ fun Route.registerCommerceRoutes(context: BackendContext) {
             call.respond(result)
         }
     }
+    get("/sellers/{sellerId}/operating-policy") {
+        call.commerce {
+            val seller = call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")
+            val policy = context.dataSource.connection.use { db ->
+                val row = db.prepareStatement(
+                    """SELECT p.bulk_minimum_units,p.special_pickup_enabled,p.timezone
+                       FROM seller_ordering_policies p JOIN sellers s ON s.id=p.seller_id
+                       WHERE p.seller_id=? AND s.active""").use { stmt ->
+                    stmt.setString(1,seller)
+                    stmt.executeQuery().use { result ->
+                        if (result.next()) Triple(result.getInt(1), result.getBoolean(2), result.getString(3)) else null
+                    }
+                } ?: throw CommerceFault(404,"SELLER_NOT_FOUND","Seller not found")
+                val hours = db.prepareStatement(
+                    "SELECT day_of_week,opens_at,closes_at FROM seller_hours WHERE seller_id=? ORDER BY day_of_week").use { stmt ->
+                    stmt.setString(1,seller)
+                    stmt.executeQuery().use { result -> buildList {
+                        while (result.next()) add(SellerHourEntry(result.getInt(1),
+                            result.getObject(2, java.time.LocalTime::class.java).toString(),
+                            result.getObject(3, java.time.LocalTime::class.java).toString()))
+                    } }
+                }
+                val closures = db.prepareStatement(
+                    "SELECT local_date,reason FROM seller_closures WHERE seller_id=? AND local_date>=CURRENT_DATE ORDER BY local_date").use { stmt ->
+                    stmt.setString(1,seller)
+                    stmt.executeQuery().use { result -> buildList {
+                        while (result.next()) add(SellerClosureDto(
+                            result.getObject(1, java.time.LocalDate::class.java).toString(), result.getString(2)))
+                    } }
+                }
+                SellerOperatingPolicyDto(seller,row.first,row.second,row.third,hours,closures)
+            }
+            call.respond(policy)
+        }
+    }
     patch("/sellers/{sellerId}/menu/items/{itemId}/availability") {
         call.commerce {
             val seller=call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")

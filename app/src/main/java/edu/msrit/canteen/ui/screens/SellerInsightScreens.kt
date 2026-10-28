@@ -1,5 +1,6 @@
 package edu.msrit.canteen.ui.screens
 
+import edu.msrit.canteen.BuildConfig
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -204,6 +205,10 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
     }
     InsightPage(title, "seller_insight_${page.name.lowercase()}", onBack,
         hasSample = sample) {
+        if (BuildConfig.RIT_CLOUD_DEMO) {
+            RitEmptyState("Insights unavailable", "This page is not connected to seller analytics, reports or support yet. No sample sales are shown as verified activity.")
+            return@InsightPage
+        }
         when (page) {
             SellerInsightPage.OVERVIEW -> {
                 val period = when (overviewDays) { 1 -> "Today so far"; 7 -> "Last 7 days"; else -> "Last 30 days" }

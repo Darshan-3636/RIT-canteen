@@ -1,5 +1,7 @@
 package edu.msrit.canteen.customer
 
+import edu.msrit.canteen.BuildConfig
+import org.junit.Assume.assumeFalse
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -10,8 +12,11 @@ import org.junit.Test
 
 class DevelopmentCustomerAccountTest {
     private val repo = DevelopmentCustomerAccount
-    @Before fun before() = repo.reset()
-    @After fun after() = repo.reset()
+    @Before fun before() {
+        assumeFalse("Local fixture store is disabled in cloud mode", BuildConfig.RIT_CLOUD_DEMO)
+        repo.reset()
+    }
+    @After fun after() { if (!BuildConfig.RIT_CLOUD_DEMO) repo.reset() }
 
     @Test fun profileAndPreferencesAreCustomerScoped() {
         val updated = CustomerProfile("Asha Rao", "demo@example.invalid", CustomerAffiliation.FACULTY, "ECE")

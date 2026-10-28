@@ -66,6 +66,7 @@ data class SellerBulkPolicy(
     val weeklyHours: Map<DayOfWeek, List<BulkTimeWindow>> = emptyMap(),
     val holidays: Set<LocalDate> = emptySet(),
     val temporaryClosures: Set<LocalDate> = emptySet(),
+    val specialPickupEnabled: Boolean = true,
 ) {
     init { require(minimumOverride == null || minimumOverride > 0) }
     val minimum: Int get() = minimumOverride ?: DEFAULT_BULK_MINIMUM

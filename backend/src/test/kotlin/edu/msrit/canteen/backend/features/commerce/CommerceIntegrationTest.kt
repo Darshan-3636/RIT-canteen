@@ -124,6 +124,24 @@ class CommerceIntegrationTest {
         } } finally { cleanup(f) }
     }
 
+    @Test fun guestOperatingPolicyReadsPersistedSellerMinimumHoursAndClosures() {
+        val f=fixture()
+        try { app(f) {
+            f.context.dataSource.connection.use { c ->
+                c.prepareStatement("UPDATE seller_ordering_policies SET bulk_minimum_units=11,special_pickup_enabled=TRUE WHERE seller_id='north-counter'").use { it.executeUpdate() }
+                c.prepareStatement("INSERT INTO seller_closures(seller_id,local_date,reason) VALUES ('north-counter',CURRENT_DATE+7,'Campus holiday') ON CONFLICT(seller_id,local_date) DO UPDATE SET reason=EXCLUDED.reason").use { it.executeUpdate() }
+            }
+            val response=client.get("/api/v1/sellers/north-counter/operating-policy")
+            assertEquals(HttpStatusCode.OK,response.status)
+            val body=response.bodyAsText()
+            assertTrue(body.contains("\"minimumUnits\":11"))
+            assertTrue(body.contains("\"specialPickupEnabled\":true"))
+            assertTrue(body.contains("Campus holiday"))
+            assertTrue(body.contains("\"dayOfWeek\":1"))
+            assertEquals(HttpStatusCode.NotFound,client.get("/api/v1/sellers/missing/operating-policy").status)
+        } } finally { cleanup(f) }
+    }
+
     @Test fun individualDemoOrderAllowsMultiplePreparedItemsWithoutBulkMinimumAndNeverMarksPaid() {
         val f=fixture()
         try { app(f) {

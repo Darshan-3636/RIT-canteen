@@ -1,5 +1,7 @@
 package edu.msrit.canteen.customer
 
+import edu.msrit.canteen.BuildConfig
+import org.junit.Assume.assumeFalse
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -21,8 +23,11 @@ class SellerBusinessTest {
     private val staff = "debug-staff"
     private val ops = "debug-staff-ops"
 
-    @Before fun setUp() = repo.reset()
-    @After fun tearDown() = repo.reset()
+    @Before fun setUp() {
+        assumeFalse("Local seller fixtures are disabled in cloud mode", BuildConfig.RIT_CLOUD_DEMO)
+        repo.reset()
+    }
+    @After fun tearDown() { if (!BuildConfig.RIT_CLOUD_DEMO) repo.reset() }
 
     private fun item(id: String = "test-item") = MenuItem(id, seller, "combos", "Test lunch", "Sample",
         Price(50), FoodKind.PREPARED, Dietary.VEGETARIAN)

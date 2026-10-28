@@ -1,5 +1,7 @@
 package edu.msrit.canteen.customer
 
+import edu.msrit.canteen.BuildConfig
+import org.junit.Assume.assumeFalse
 import edu.msrit.canteen.navigation.DevelopmentPreviewAccess
 import edu.msrit.canteen.navigation.DevelopmentRole
 import edu.msrit.canteen.navigation.ProtectedArea
@@ -22,8 +24,15 @@ class DevelopmentInsightsTest {
                 grants + DevelopmentSellerBusiness.capabilities(fixture.userId, seller).map { it.wire }
             })
         }
-    @Before fun before() { DevelopmentSellerBusiness.reset(); DevelopmentInsights.reset(); DevelopmentPreviewAccess.reset() }
-    @After fun after() { DevelopmentSellerBusiness.reset(); DevelopmentInsights.reset(); DevelopmentPreviewAccess.reset() }
+    @Before fun before() {
+        assumeFalse("Synthetic insights are disabled in cloud mode", BuildConfig.RIT_CLOUD_DEMO)
+        DevelopmentSellerBusiness.reset(); DevelopmentInsights.reset(); DevelopmentPreviewAccess.reset()
+    }
+    @After fun after() {
+        if (!BuildConfig.RIT_CLOUD_DEMO) {
+            DevelopmentSellerBusiness.reset(); DevelopmentInsights.reset(); DevelopmentPreviewAccess.reset()
+        }
+    }
 
     @Test fun ownerSeesOwnSyntheticSalesButNotAnotherSeller() {
         val owner = role(DevelopmentRole.SellerOwner)

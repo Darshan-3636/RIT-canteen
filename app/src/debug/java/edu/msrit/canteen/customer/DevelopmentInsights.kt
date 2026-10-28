@@ -3,6 +3,7 @@ package edu.msrit.canteen.customer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import edu.msrit.canteen.BuildConfig
 import edu.msrit.canteen.navigation.AuthorizedIdentity
 import edu.msrit.canteen.navigation.PresentationAccess
 import edu.msrit.canteen.navigation.ProtectedArea
@@ -70,21 +71,21 @@ object DevelopmentInsights {
     fun sales(identity: AuthorizedIdentity?, sellerId: String?, range: InsightRange, sample: Boolean): SalesSummary {
         val authorized = if (sellerId == null) admin(identity) else
             admin(identity) || seller(identity, sellerId, SellerCapability.ANALYTICS)
-        if (!authorized || !sample) return SalesSummary.EMPTY
+        if (BuildConfig.RIT_CLOUD_DEMO || !authorized || !sample) return SalesSummary.EMPTY
         return calculateSales(fixtureSales, sellerId, range,
             PreviewCatalog.items.associate { it.id to it.name }, PreviewCatalog.categories.associate { it.id to it.name })
     }
 
     fun tickets(identity: AuthorizedIdentity?, sellerId: String? = null,
                 status: TicketStatus? = null): List<SupportTicket> {
-        if (!admin(identity) && (sellerId == null || !seller(identity, sellerId, SellerCapability.VIEW_REQUESTS))) return emptyList()
+        if (BuildConfig.RIT_CLOUD_DEMO || !admin(identity) && (sellerId == null || !seller(identity, sellerId, SellerCapability.VIEW_REQUESTS))) return emptyList()
         return visibleTickets(ticketsState, sellerId, admin(identity), status)
     }
     fun ticket(identity: AuthorizedIdentity?, id: String, sellerId: String? = null): SupportTicket? =
         tickets(identity, sellerId).find { it.id == id }
     fun createSellerTicket(identity: AuthorizedIdentity?, sellerId: String, category: TicketCategory,
                            subject: String, detail: String): Boolean {
-        if (!seller(identity, sellerId, SellerCapability.VIEW_REQUESTS) || subject.isBlank() ||
+        if (BuildConfig.RIT_CLOUD_DEMO || !seller(identity, sellerId, SellerCapability.VIEW_REQUESTS) || subject.isBlank() ||
             detail.isBlank() || subject.length > 100 || detail.length > 1000) return false
         val id = "SAMPLE-T-${200 + ticketsState.size}"
         ticketsState = listOf(SupportTicket(id, sellerId, "Seller demo", category, subject.trim(),
@@ -93,54 +94,54 @@ object DevelopmentInsights {
     }
 
     fun setTicketStatus(identity: AuthorizedIdentity?, id: String, status: TicketStatus): Boolean {
-        if (!admin(identity) || ticketsState.none { it.id == id }) return false
+        if (BuildConfig.RIT_CLOUD_DEMO || !admin(identity) || ticketsState.none { it.id == id }) return false
         val old = ticketsState.first { it.id == id }
         ticketsState = ticketsState.map { if (it.id == id) it.copy(status = status, updatedAt = LocalDateTime.now(RIT_TIME_ZONE)) else it }
         log(identity, "Ticket status", id, old.status.label, status.label)
         return true
     }
     fun saveInternalNote(identity: AuthorizedIdentity?, id: String, note: String): Boolean {
-        if (!admin(identity) || ticketsState.none { it.id == id } || note.length > 500) return false
+        if (BuildConfig.RIT_CLOUD_DEMO || !admin(identity) || ticketsState.none { it.id == id } || note.length > 500) return false
         ticketsState = ticketsState.map { if (it.id == id) it.copy(internalNote = note.trim()) else it }
         log(identity, "Internal note", id, "Previous local note", "Local note updated")
         return true
     }
 
-    fun sellers(identity: AuthorizedIdentity?): List<AdminSellerRecord> = if (!admin(identity)) emptyList() else
+    fun sellers(identity: AuthorizedIdentity?): List<AdminSellerRecord> = if (BuildConfig.RIT_CLOUD_DEMO || !admin(identity)) emptyList() else
         PreviewCatalog.sellers.map { AdminSellerRecord(it.id, it.name, AdminSellerStatus.ACTIVE,
             if (it.id == "north-counter") "Sample owner membership" else "No verified invitation") } + sellerDrafts
     fun sellerRecord(identity: AuthorizedIdentity?, id: String) = sellers(identity).find { it.id == id }
     fun createSellerDraft(identity: AuthorizedIdentity?, name: String): Boolean {
-        if (!admin(identity) || name.isBlank() || name.length > 80 || sellers(identity).any { it.name.equals(name.trim(), true) }) return false
+        if (BuildConfig.RIT_CLOUD_DEMO || !admin(identity) || name.isBlank() || name.length > 80 || sellers(identity).any { it.name.equals(name.trim(), true) }) return false
         val id = "sample-seller-${sellerDrafts.size + 1}"
         sellerDrafts = sellerDrafts + AdminSellerRecord(id, name.trim(), AdminSellerStatus.DRAFT,
             "No account or invitation created")
         log(identity, "Seller setup draft", id, "Absent", "Local draft")
         return true
     }
-    fun users(identity: AuthorizedIdentity?): List<AdminUserRecord> = if (!admin(identity)) emptyList() else listOf(
+    fun users(identity: AuthorizedIdentity?): List<AdminUserRecord> = if (BuildConfig.RIT_CLOUD_DEMO || !admin(identity)) emptyList() else listOf(
         AdminUserRecord("sample-customer", "Sample customer", "Customer", "Demo active", "Student · self-declared"),
         AdminUserRecord("debug-owner", "North Counter Owner", "Seller owner", "Demo active"),
         AdminUserRecord("debug-manager", "North Counter Manager", "Seller manager", "Demo active"),
         AdminUserRecord("debug-staff", "North Counter Staff", "Operational staff", "Demo active"),
         AdminUserRecord("debug-admin", "Demo Administrator", "Platform administrator", "Demo active"))
-    fun moderation(identity: AuthorizedIdentity?): List<ModerationRecord> = if (admin(identity)) moderationState else emptyList()
+    fun moderation(identity: AuthorizedIdentity?): List<ModerationRecord> = if (!BuildConfig.RIT_CLOUD_DEMO && admin(identity)) moderationState else emptyList()
     fun markModerationReviewed(identity: AuthorizedIdentity?, id: String): Boolean {
-        if (!admin(identity) || moderationState.none { it.id == id }) return false
+        if (BuildConfig.RIT_CLOUD_DEMO || !admin(identity) || moderationState.none { it.id == id }) return false
         moderationState = moderationState.map { if (it.id == id) it.copy(state = "Reviewed locally") else it }
         log(identity, "Content review", id, "Needs review", "Reviewed locally")
         return true
     }
-    fun audit(identity: AuthorizedIdentity?): List<AdminAuditEvent> = if (admin(identity)) auditState else emptyList()
+    fun audit(identity: AuthorizedIdentity?): List<AdminAuditEvent> = if (!BuildConfig.RIT_CLOUD_DEMO && admin(identity)) auditState else emptyList()
     private fun log(identity: AuthorizedIdentity?, action: String, entity: String, before: String, after: String) {
         auditState = listOf(AdminAuditEvent("sample-audit-${auditState.size + 1}", identity?.userId ?: "unknown",
             action, entity, before, after, LocalDateTime.now(RIT_TIME_ZONE))) + auditState
     }
 
     fun reports(identity: AuthorizedIdentity?, sellerId: String): List<ReportHistoryRow> =
-        if (seller(identity, sellerId, SellerCapability.REPORTS)) reportRows.filter { it.id.startsWith("$sellerId:") } else emptyList()
+        if (!BuildConfig.RIT_CLOUD_DEMO && seller(identity, sellerId, SellerCapability.REPORTS)) reportRows.filter { it.id.startsWith("$sellerId:") } else emptyList()
     fun saveReportPreview(identity: AuthorizedIdentity?, selection: ReportSelection): Boolean {
-        if (!seller(identity, selection.sellerId, SellerCapability.REPORTS) ||
+        if (BuildConfig.RIT_CLOUD_DEMO || !seller(identity, selection.sellerId, SellerCapability.REPORTS) ||
             validateReport(selection, PreviewCatalog.items.filter { it.sellerId == selection.sellerId }.map { it.id }.toSet()) != null) return false
         reportRows = listOf(ReportHistoryRow("${selection.sellerId}:sample-${reportRows.size + 1}",
             "${selection.type.label} · sample configuration", selection.range, LocalDateTime.now(RIT_TIME_ZONE),
@@ -148,10 +149,10 @@ object DevelopmentInsights {
         return true
     }
     fun notificationChoices(identity: AuthorizedIdentity?, sellerId: String): Set<String> =
-        if (seller(identity, sellerId, SellerCapability.VIEW_REQUESTS)) notificationPrefs[sellerId]
+        if (!BuildConfig.RIT_CLOUD_DEMO && seller(identity, sellerId, SellerCapability.VIEW_REQUESTS)) notificationPrefs[sellerId]
             ?: setOf("Requests", "Schedule", "Support") else emptySet()
     fun setNotificationChoice(identity: AuthorizedIdentity?, sellerId: String, key: String, enabled: Boolean): Boolean {
-        if (!seller(identity, sellerId, SellerCapability.PROFILE) || key !in setOf("Requests", "Schedule", "Support", "Promotions")) return false
+        if (BuildConfig.RIT_CLOUD_DEMO || !seller(identity, sellerId, SellerCapability.PROFILE) || key !in setOf("Requests", "Schedule", "Support", "Promotions")) return false
         val current = notificationChoices(identity, sellerId)
         notificationPrefs = notificationPrefs + (sellerId to if (enabled) current + key else current - key)
         return true

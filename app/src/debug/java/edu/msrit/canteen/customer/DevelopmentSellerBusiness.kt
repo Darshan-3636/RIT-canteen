@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import edu.msrit.canteen.auth.DevelopmentDemoAccounts
+import edu.msrit.canteen.BuildConfig
 
 /** Resettable, in-memory seller administration. No invitation, upload, or merchant request leaves the device. */
 object DevelopmentSellerBusiness : SellerBusinessRepository {
@@ -29,7 +30,7 @@ object DevelopmentSellerBusiness : SellerBusinessRepository {
                 SellerCapability.AVAILABILITY)),
         SellerEmployee("demo-owner-north", SELLER, "North Counter Owner · demo", SellerEmployeeRole.OWNER),
     )
-    override var employees by mutableStateOf(fixtures)
+    override var employees by mutableStateOf(if (BuildConfig.RIT_CLOUD_DEMO) emptyList() else fixtures)
         private set
     override var policyOverrides by mutableStateOf<Map<String, SellerBulkPolicy>>(emptyMap())
         private set
@@ -44,16 +45,22 @@ object DevelopmentSellerBusiness : SellerBusinessRepository {
         closureReasons = closureReasons + (policy.sellerId to reasons)
     }
 
+    fun clearServerPolicies() {
+        policyOverrides = emptyMap()
+        closureReasons = emptyMap()
+    }
+
     override fun capabilities(userId: String, sellerId: String): Set<SellerCapability> {
         if (DevelopmentDemoAccounts.activeAccount?.id == userId)
             return DevelopmentDemoAccounts.serverIdentity?.capabilitiesBySeller?.get(sellerId)
                 .orEmpty().mapNotNull(SellerCapability::fromWire).toSet()
+        if (BuildConfig.RIT_CLOUD_DEMO) return emptySet()
         return employees.find { it.id == userId && it.sellerId == sellerId }
             ?.let { effectiveCapabilities(it, employees) }.orEmpty()
     }
 
     private fun allowed(userId: String, sellerId: String, capability: SellerCapability) =
-        DevelopmentDemoAccounts.activeAccount?.id != userId && capability in capabilities(userId, sellerId)
+        !BuildConfig.RIT_CLOUD_DEMO && DevelopmentDemoAccounts.activeAccount?.id != userId && capability in capabilities(userId, sellerId)
 
     override fun saveItem(userId: String, item: MenuItem): Boolean {
         if (!allowed(userId, item.sellerId, SellerCapability.CATALOG)) return false
@@ -212,7 +219,7 @@ object DevelopmentSellerBusiness : SellerBusinessRepository {
     }
 
     override fun reset() {
-        employees = fixtures
+        employees = if (BuildConfig.RIT_CLOUD_DEMO) emptyList() else fixtures
         policyOverrides = emptyMap()
         closureReasons = emptyMap()
         hiddenCategories = emptyMap()

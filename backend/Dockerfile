@@ -1,4 +1,4 @@
-FROM gradle:9.3.1-jdk17 AS build
+FROM docker.io/library/gradle:9.3.1-jdk17 AS build
 WORKDIR /workspace
 COPY --chown=gradle:gradle gradlew settings.gradle.kts build.gradle.kts ./
 COPY --chown=gradle:gradle gradle/ ./gradle/
@@ -6,7 +6,7 @@ RUN gradle --no-daemon --max-workers=1 resolveRuntimeDependencies
 COPY --chown=gradle:gradle src/ ./src/
 RUN gradle --no-daemon --max-workers=1 installDist
 
-FROM eclipse-temurin:17-jre
+FROM docker.io/library/eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=build --chown=10001:10001 /workspace/build/install/rit-canteen-backend/ ./
 USER 10001:10001

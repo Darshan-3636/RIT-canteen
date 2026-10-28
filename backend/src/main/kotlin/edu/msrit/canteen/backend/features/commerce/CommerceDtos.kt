@@ -32,6 +32,11 @@ import kotlinx.serialization.Serializable
 @Serializable data class SellerHourEntry(val dayOfWeek: Int, val opensAt: String, val closesAt: String)
 @Serializable data class SellerHoursRequest(val hours: List<SellerHourEntry>)
 @Serializable data class SellerClosureRequest(val reason: String = "")
+@Serializable data class SellerClosureDto(val localDate: String, val reason: String)
+@Serializable data class SellerOperatingPolicyDto(
+    val sellerId: String, val minimumUnits: Int, val specialPickupEnabled: Boolean,
+    val timezone: String, val hours: List<SellerHourEntry>, val closures: List<SellerClosureDto>,
+)
 @Serializable data class BulkQuoteLineDto(
     val itemId: String, val itemName: String, val quantity: Int, val unitPricePaise: Long,
 )

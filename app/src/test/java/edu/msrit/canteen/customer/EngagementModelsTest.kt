@@ -1,5 +1,7 @@
 package edu.msrit.canteen.customer
 
+import edu.msrit.canteen.BuildConfig
+import org.junit.Assume.assumeFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -10,6 +12,7 @@ class EngagementModelsTest {
     private val now = Instant.parse("2026-10-21T00:00:00Z")
 
     @Test fun promotionsRespectPublicationScheduleAndBehavioralConsent() {
+        assumeFalse("Promotional fixtures are hidden in cloud mode", BuildConfig.RIT_CLOUD_DEMO)
         val visible = DevelopmentPromotions.presentable(now = now)
         assertFalse(visible.any { it.id == "unpublished-demo" })
         assertEquals(PromotionStatus.ACTIVE, visible.first { it.id == "dosa-spotlight" }.statusAt(now))
