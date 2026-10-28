@@ -50,6 +50,7 @@ import edu.msrit.canteen.customer.CartMode
 import edu.msrit.canteen.customer.IndividualCartSession
 import edu.msrit.canteen.customer.IndividualLine
 import edu.msrit.canteen.customer.IndividualOrderPreview
+import edu.msrit.canteen.customer.SandboxPayment
 import edu.msrit.canteen.customer.DevelopmentIndividualOrders
 import edu.msrit.canteen.customer.DevelopmentDemoCheckout
 import edu.msrit.canteen.customer.DemoActionResult
@@ -270,7 +271,9 @@ internal object Route {
 }
 
 @Composable
-fun RitAppNavigation(appearance: AppearancePreference) {
+fun RitAppNavigation(appearance: AppearancePreference,
+                     onSandboxCheckout: (SandboxPayment) -> Boolean = { false },
+                     sandboxCallbackId: String? = null) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -911,9 +914,28 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     var paymentFeedback by remember { mutableStateOf<String?>(null) }
                     var paymentBusy by remember { mutableStateOf(false) }
-                    androidx.compose.runtime.LaunchedEffect(entry.arguments?.getString("id")) {
+                    var sandboxPayment by remember { mutableStateOf<SandboxPayment?>(null) }
+                    val orderId = entry.arguments?.getString("id").orEmpty()
+                    var paymentKey by androidx.compose.runtime.saveable.rememberSaveable(orderId) {
+                        mutableStateOf(java.util.UUID.randomUUID().toString())
+                    }
+                    androidx.compose.runtime.LaunchedEffect(orderId) {
                         val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
                         orders.value?.let(DevelopmentIndividualOrders::applyServer)
+                        val attempts = withContext(Dispatchers.IO) { DebugCommerceApi.sandboxPayments() }
+                        sandboxPayment = attempts.value?.firstOrNull { it.sourceType == "INDIVIDUAL" && it.sourceId == orderId }
+                    }
+                    androidx.compose.runtime.LaunchedEffect(sandboxCallbackId, orderId, sandboxPayment?.id) {
+                        val callback = sandboxCallbackId ?: return@LaunchedEffect
+                        if (sandboxPayment?.id != callback) return@LaunchedEffect
+                        paymentBusy = true
+                        val result = withContext(Dispatchers.IO) { DebugCommerceApi.reconcileSandboxPayment(callback) }
+                        sandboxPayment = result.value ?: sandboxPayment
+                        paymentFeedback = result.value?.let { "PhonePe UAT status: ${it.status}. No real money was charged." }
+                            ?: result.error ?: "UAT status could not be confirmed. Check again."
+                        val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
+                        orders.value?.let(DevelopmentIndividualOrders::applyServer)
+                        paymentBusy = false
                     }
                     IndividualOrderDetailScreen(DevelopmentIndividualOrders.records.find { it.id == entry.arguments?.getString("id") },
                         { navController.popBackStack() }, onDemoPayment = { outcome ->
@@ -934,7 +956,59 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                                     } else paymentFeedback = result.error ?: "Demo simulation failed."
                                 } finally { paymentBusy = false }
                             }
-                        }, feedback = paymentFeedback, paymentBusy = paymentBusy)
+                        }, feedback = paymentFeedback, paymentBusy = paymentBusy,
+                        sandboxPayment = sandboxPayment,
+                        onSandboxStart = if (BuildConfig.DEBUG && BuildConfig.RIT_CLOUD_DEMO) ({
+                            if (!paymentBusy) {
+                                paymentBusy = true
+                                paymentFeedback = null
+                                scope.launch {
+                                    try {
+                                        val existing = sandboxPayment
+                                        if (existing?.status in setOf("SANDBOX_FAILED", "EXPIRED"))
+                                            paymentKey = java.util.UUID.randomUUID().toString()
+                                        val key = paymentKey
+                                        val result = withContext(Dispatchers.IO) {
+                                            if (existing == null || existing.status in setOf("SANDBOX_FAILED", "EXPIRED")) {
+                                                DebugCommerceApi.beginSandboxPayment("INDIVIDUAL", orderId, key)
+                                            } else if (existing.status == "INITIATED") {
+                                                val detail = DebugCommerceApi.sandboxPayment(existing.id)
+                                                val priorKey = detail.value?.idempotencyKey
+                                                if (priorKey != null) DebugCommerceApi.beginSandboxPayment("INDIVIDUAL", orderId, priorKey)
+                                                else detail
+                                            }
+                                            else DebugCommerceApi.sandboxPayment(existing.id)
+                                        }
+                                        val attempt = result.value
+                                        if (attempt == null) paymentFeedback = result.error ?: "PhonePe UAT is unavailable."
+                                        else {
+                                            sandboxPayment = attempt
+                                            paymentFeedback = if (attempt.status == "PENDING" &&
+                                                !attempt.sdkToken.isNullOrBlank() && !attempt.providerOrderId.isNullOrBlank() &&
+                                                !attempt.merchantId.isNullOrBlank() && onSandboxCheckout(attempt))
+                                                "PhonePe UAT opened. Return here to check the server-confirmed status."
+                                            else "UAT checkout could not open. Check its status before retrying."
+                                        }
+                                    } finally { paymentBusy = false }
+                                }
+                            }
+                        }) else null,
+                        onSandboxCheck = if (BuildConfig.DEBUG && BuildConfig.RIT_CLOUD_DEMO) ({
+                            val id = sandboxPayment?.id
+                            if (id != null && !paymentBusy) {
+                                paymentBusy = true
+                                scope.launch {
+                                    try {
+                                        val result = withContext(Dispatchers.IO) { DebugCommerceApi.reconcileSandboxPayment(id) }
+                                        sandboxPayment = result.value ?: sandboxPayment
+                                        paymentFeedback = result.value?.let { "PhonePe UAT status: ${it.status}. No real money was charged." }
+                                            ?: result.error ?: "UAT status could not be confirmed."
+                                        val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
+                                        orders.value?.let(DevelopmentIndividualOrders::applyServer)
+                                    } finally { paymentBusy = false }
+                                }
+                            }
+                        }) else null)
                 } }
             }
             composable(Route.DemoOrderDetail, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
@@ -1468,6 +1542,27 @@ fun RitAppNavigation(appearance: AppearancePreference) {
             composable(Route.CustomerDemoDetail, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
                 val reference = entry.arguments?.getString("reference").orEmpty()
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
+                    var sandboxPayment by remember { mutableStateOf<SandboxPayment?>(null) }
+                    var sandboxBusy by remember { mutableStateOf(false) }
+                    var sandboxFeedback by remember { mutableStateOf<String?>(null) }
+                    var paymentKey by androidx.compose.runtime.saveable.rememberSaveable(reference) {
+                        mutableStateOf(java.util.UUID.randomUUID().toString())
+                    }
+                    androidx.compose.runtime.LaunchedEffect(reference) {
+                        val attempts = withContext(Dispatchers.IO) { DebugCommerceApi.sandboxPayments() }
+                        sandboxPayment = attempts.value?.firstOrNull { it.sourceType == "BULK" && it.sourceId == reference }
+                    }
+                    androidx.compose.runtime.LaunchedEffect(sandboxCallbackId, reference, sandboxPayment?.id) {
+                        val callback = sandboxCallbackId ?: return@LaunchedEffect
+                        if (sandboxPayment?.id != callback) return@LaunchedEffect
+                        sandboxBusy = true
+                        val result = withContext(Dispatchers.IO) { DebugCommerceApi.reconcileSandboxPayment(callback) }
+                        sandboxPayment = result.value ?: sandboxPayment
+                        sandboxFeedback = result.value?.let { "PhonePe UAT status: ${it.status}. No real money was charged." }
+                            ?: result.error ?: "UAT status could not be confirmed. Check again."
+                        loadBulk()
+                        sandboxBusy = false
+                    }
                     val record = DevelopmentSellerOperations.records.find {
                         it.reference == reference && it.customerUserId == demoCustomerId }
                     if (record == null) CustomerUnavailableScreen("request", { navController.popBackStack() })
@@ -1493,7 +1588,58 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                                 finished(result.error ?: "Request withdrawn on local backend.")
                             }
                         },
-                        onCheckout = null, demoOrder = null, onTrack = null)
+                        onCheckout = null, demoOrder = null, onTrack = null,
+                        sandboxPayment = sandboxPayment, sandboxFeedback = sandboxFeedback, sandboxBusy = sandboxBusy,
+                        onSandboxStart = if (BuildConfig.DEBUG && BuildConfig.RIT_CLOUD_DEMO) ({
+                            if (!sandboxBusy) {
+                                sandboxBusy = true
+                                sandboxFeedback = null
+                                scope.launch {
+                                    try {
+                                        val existing = sandboxPayment
+                                        if (existing?.status in setOf("SANDBOX_FAILED", "EXPIRED"))
+                                            paymentKey = java.util.UUID.randomUUID().toString()
+                                        val key = paymentKey
+                                        val result = withContext(Dispatchers.IO) {
+                                            if (existing == null || existing.status in setOf("SANDBOX_FAILED", "EXPIRED"))
+                                                DebugCommerceApi.beginSandboxPayment("BULK", reference, key)
+                                            else if (existing.status == "INITIATED") {
+                                                val detail = DebugCommerceApi.sandboxPayment(existing.id)
+                                                val priorKey = detail.value?.idempotencyKey
+                                                if (priorKey != null) DebugCommerceApi.beginSandboxPayment("BULK", reference, priorKey)
+                                                else detail
+                                            }
+                                            else DebugCommerceApi.sandboxPayment(existing.id)
+                                        }
+                                        val attempt = result.value
+                                        if (attempt == null) sandboxFeedback = result.error ?: "PhonePe UAT is unavailable."
+                                        else {
+                                            sandboxPayment = attempt
+                                            sandboxFeedback = if (attempt.status == "PENDING" &&
+                                                !attempt.sdkToken.isNullOrBlank() && !attempt.providerOrderId.isNullOrBlank() &&
+                                                !attempt.merchantId.isNullOrBlank() && onSandboxCheckout(attempt))
+                                                "PhonePe UAT opened. Return here to check the server-confirmed status."
+                                            else "UAT checkout could not open. Check its status before retrying."
+                                        }
+                                    } finally { sandboxBusy = false }
+                                }
+                            }
+                        }) else null,
+                        onSandboxCheck = if (BuildConfig.DEBUG && BuildConfig.RIT_CLOUD_DEMO) ({
+                            val id = sandboxPayment?.id
+                            if (id != null && !sandboxBusy) {
+                                sandboxBusy = true
+                                scope.launch {
+                                    try {
+                                        val result = withContext(Dispatchers.IO) { DebugCommerceApi.reconcileSandboxPayment(id) }
+                                        sandboxPayment = result.value ?: sandboxPayment
+                                        sandboxFeedback = result.value?.let { "PhonePe UAT status: ${it.status}. No real money was charged." }
+                                            ?: result.error ?: "UAT status could not be confirmed."
+                                        loadBulk()
+                                    } finally { sandboxBusy = false }
+                                }
+                            }
+                        }) else null)
                 } }
             }
             composable(Route.CustomerDemoCounter, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->

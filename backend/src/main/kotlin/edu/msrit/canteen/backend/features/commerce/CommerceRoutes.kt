@@ -20,7 +20,8 @@ import java.util.UUID
 import java.sql.Connection
 
 /** Commerce feature seam. The application owner mounts this below `/api/v1` after branch integration. */
-fun Route.registerCommerceRoutes(context: BackendContext) {
+fun Route.registerCommerceRoutes(context: BackendContext,
+                                 sandboxGateway: SandboxPaymentGateway = UnavailableSandboxPaymentGateway) {
     get("/sellers") { call.commerce { call.respond(context.dataSource.connection.use { SellerListDto(sellers(it)) }) } }
     get("/sellers/{sellerId}") {
         call.commerce {
@@ -293,6 +294,34 @@ fun Route.registerCommerceRoutes(context: BackendContext) {
         call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
             val body=call.receive<DemoPaymentRequest>()
             call.respond(simulateIndividualPayment(context,p,call.uuidParameter("orderId"),body.outcome)) }
+    }
+    post("/me/sandbox-payments/{type}/{sourceId}") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            val key=call.request.headers["Idempotency-Key"]
+                ?: throw CommerceFault(400,"IDEMPOTENCY_KEY_REQUIRED","Idempotency-Key header is required")
+            call.respond(HttpStatusCode.Created,beginSandboxPayment(context,sandboxGateway,p,
+                call.parameters["type"].orEmpty(),call.uuidParameter("sourceId"),key)) }
+    }
+    get("/me/sandbox-payments") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            call.respond(customerSandboxPayments(context,p)) }
+    }
+    get("/me/sandbox-payments/{paymentId}") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            call.respond(customerSandboxPayment(context,p,call.uuidParameter("paymentId"),sandboxGateway.merchantId)) }
+    }
+    post("/me/sandbox-payments/{paymentId}/reconcile") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            call.respond(reconcileSandboxPayment(context,sandboxGateway,p,call.uuidParameter("paymentId"))) }
+    }
+    post("/me/sandbox-payments/{paymentId}/cancel") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            call.respond(cancelSandboxPayment(context,p,call.uuidParameter("paymentId"))) }
+    }
+    get("/sellers/{sellerId}/sandbox-payments") {
+        call.commerce { val seller=call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")
+            if(call.requireSellerCapability(context,seller,"bulk.view")==null) return@commerce
+            call.respond(sellerSandboxPayments(context,seller)) }
     }
     get("/sellers/{sellerId}/individual-demo-orders") {
         call.commerce { val seller=call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")

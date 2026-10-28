@@ -2,10 +2,14 @@ package edu.msrit.canteen.backend
 
 import edu.msrit.canteen.backend.core.BackendConfig
 import edu.msrit.canteen.backend.core.RuntimeEnvironment
+import edu.msrit.canteen.backend.features.commerce.PhonePeUatGateway
+import edu.msrit.canteen.backend.features.commerce.UnavailableSandboxPaymentGateway
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
+import kotlin.test.assertNotSame
 
 class BackendConfigTest {
     private val base = mapOf(
@@ -116,5 +120,17 @@ class BackendConfigTest {
         assertFailsWith<IllegalArgumentException> {
             BackendConfig.fromEnvironment(cloud + ("RIT_CLOUD_DEMO_OWNER_PASSWORD" to "RitDemo!NotARealCredential0001!"))
         }
+    }
+
+    @Test fun phonePeUatRequiresAllFourPrivateCredentialsAndCloudDemo() {
+        val values = mapOf("PHONEPE_UAT_MERCHANT_ID" to "test-merchant",
+            "PHONEPE_UAT_CLIENT_ID" to "test-client", "PHONEPE_UAT_CLIENT_VERSION" to "1",
+            "PHONEPE_UAT_CLIENT_SECRET" to "test-secret")
+        assertSame(UnavailableSandboxPaymentGateway,
+            PhonePeUatGateway.fromEnvironment(RuntimeEnvironment.LOCAL, values))
+        assertSame(UnavailableSandboxPaymentGateway,
+            PhonePeUatGateway.fromEnvironment(RuntimeEnvironment.CLOUD_DEMO, values - "PHONEPE_UAT_CLIENT_VERSION"))
+        assertNotSame(UnavailableSandboxPaymentGateway,
+            PhonePeUatGateway.fromEnvironment(RuntimeEnvironment.CLOUD_DEMO, values))
     }
 }

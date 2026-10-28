@@ -22,9 +22,14 @@ internal fun loadDemoIndividual(db: Connection, id: UUID): IndividualDemoOrderDt
                         entries.getInt(3), entries.getLong(4)))
                 } }
             }
+            val sandboxStatus = db.prepareStatement("""SELECT state FROM sandbox_payment_attempts
+                WHERE source_type='INDIVIDUAL' AND source_id=? ORDER BY created_at DESC LIMIT 1""").use { payment ->
+                payment.setObject(1, id)
+                payment.executeQuery().use { result -> if (result.next()) result.getString(1) else null }
+            }
             IndividualDemoOrderDto(id.toString(), row.getString(1), row.getString(2), row.getBoolean(3),
                 row.getBoolean(4), row.getLong(5), row.getTimestamp(6).toInstant().toString(), lines,
-                row.getString(7))
+                row.getString(7), sandboxStatus)
         }
     }
 
@@ -54,6 +59,13 @@ internal fun simulateIndividualPayment(context: BackendContext, principal: Authe
         query.executeQuery().use { rows -> if (rows.next()) rows.getString(1) to rows.getString(2) else null }
     } ?: throw CommerceFault(404, "ORDER_NOT_FOUND", "Demo order not found")
     val (status, recordedOutcome) = state
+    val sandboxAttempt = db.prepareStatement("""SELECT 1 FROM sandbox_payment_attempts
+        WHERE source_type='INDIVIDUAL' AND source_id=?
+        AND state IN ('INITIATED','PENDING','CANCELLED','SANDBOX_SUCCESS') LIMIT 1""").use { query ->
+        query.setObject(1, id)
+        query.executeQuery().use { it.next() }
+    }
+    if (sandboxAttempt) throw CommerceFault(409, "SANDBOX_PAYMENT_EXISTS", "Reconcile the PhonePe UAT attempt instead")
     // A lost response or rapid repeat must return the same persisted result, not a false failure.
     if (recordedOutcome == outcome && status == when (outcome) {
             "SUCCESS" -> "DEMO_PAYMENT_SIMULATED"

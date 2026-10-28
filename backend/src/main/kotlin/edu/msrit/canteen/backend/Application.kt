@@ -21,6 +21,9 @@ import edu.msrit.canteen.backend.core.close
 import edu.msrit.canteen.backend.features.commerce.seedCommerceFixtures
 import edu.msrit.canteen.backend.features.commerce.CloudDemoDataSeed
 import edu.msrit.canteen.backend.features.commerce.registerCommerceRoutes
+import edu.msrit.canteen.backend.features.commerce.PhonePeUatGateway
+import edu.msrit.canteen.backend.features.commerce.SandboxPaymentGateway
+import edu.msrit.canteen.backend.features.commerce.UnavailableSandboxPaymentGateway
 import edu.msrit.canteen.backend.features.engagement.registerEngagementRoutes
 import edu.msrit.canteen.backend.features.integration.PostgresCommerceReadPort
 import io.ktor.http.HttpStatusCode
@@ -60,12 +63,13 @@ fun main() {
     }
     Runtime.getRuntime().addShutdownHook(Thread { context.close() })
     embeddedServer(Netty, host = config.httpHost, port = config.httpPort) {
-        backendModule(context)
+        backendModule(context, sandboxGateway = PhonePeUatGateway.fromEnvironment(config.environment))
     }.start(wait = true)
 }
 
 /** Owner integration mounts both contributor modules beneath the shared V1 prefix. */
-fun Application.backendModule(context: BackendContext, mountContributorRoutes: Boolean = true) {
+fun Application.backendModule(context: BackendContext, mountContributorRoutes: Boolean = true,
+                              sandboxGateway: SandboxPaymentGateway = UnavailableSandboxPaymentGateway) {
     val accounts = AccountService(context)
     install(ContentNegotiation) {
         json(Json { encodeDefaults = true; explicitNulls = true; ignoreUnknownKeys = false })
@@ -93,7 +97,7 @@ fun Application.backendModule(context: BackendContext, mountContributorRoutes: B
         }
         route("/api/v1") {
             if (mountContributorRoutes) {
-                registerCommerceRoutes(context)
+                registerCommerceRoutes(context, sandboxGateway)
                 registerEngagementRoutes(context, PostgresCommerceReadPort(context))
             }
             post("/auth/register") {

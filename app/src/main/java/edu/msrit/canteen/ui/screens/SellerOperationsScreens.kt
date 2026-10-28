@@ -563,7 +563,10 @@ fun CustomerDemoRequestScreen(record: BulkRequestRecord, onBack: () -> Unit,
                               onApprove: ((String) -> Unit) -> Unit,
                               onWithdraw: ((String) -> Unit) -> Unit,
                               onCheckout: (() -> Unit)? = null,
-                              demoOrder: DemoOrder? = null, onTrack: (() -> Unit)? = null) {
+                              demoOrder: DemoOrder? = null, onTrack: (() -> Unit)? = null,
+                              sandboxPayment: edu.msrit.canteen.customer.SandboxPayment? = null,
+                              onSandboxStart: (() -> Unit)? = null, onSandboxCheck: (() -> Unit)? = null,
+                              sandboxFeedback: String? = null, sandboxBusy: Boolean = false) {
     val colors = RitThemeTokens.colors
     var feedback by remember { mutableStateOf("") }
     val latest = record.latest
@@ -626,6 +629,23 @@ fun CustomerDemoRequestScreen(record: BulkRequestRecord, onBack: () -> Unit,
                 } else if (!quoteCurrent && record.thread.stage == QuoteStage.AGREED_AWAITING_PAYMENT) {
                     Spacer(Modifier.height(9.dp))
                     BulkInfoCard("Quote expired", "This version can no longer enter simulated checkout. Request a new quote.")
+                }
+                if (onSandboxStart != null && record.thread.stage == QuoteStage.AGREED_AWAITING_PAYMENT && quoteCurrent) {
+                    Spacer(Modifier.height(10.dp))
+                    BulkInfoCard("PhonePe UAT sandbox", "DEMO / TEST ONLY. No real money, verified sales or seller settlement.")
+                    sandboxPayment?.let { BulkInfoCard("UAT attempt", "${it.status.replace('_', ' ')} · ${it.merchantOrderId}") }
+                    if (sandboxPayment?.status !in setOf("SANDBOX_SUCCESS", "CANCELLED")) {
+                        RitPrimaryButton(if (sandboxBusy) "Contacting UAT…" else if (sandboxPayment == null)
+                            "Pay with PhonePe UAT" else "Continue PhonePe UAT", onSandboxStart,
+                            Modifier.fillMaxWidth().testTag("bulk_phonepe_uat_start"), enabled = !sandboxBusy)
+                    }
+                    if (sandboxPayment != null && sandboxPayment.status in setOf("INITIATED", "PENDING", "CANCELLED") &&
+                        onSandboxCheck != null) {
+                        Spacer(Modifier.height(8.dp))
+                        RitSecondaryButton("Check PhonePe UAT status", onSandboxCheck,
+                            Modifier.fillMaxWidth().testTag("bulk_phonepe_uat_check"), enabled = !sandboxBusy)
+                    }
+                    if (!sandboxFeedback.isNullOrBlank()) RitText(sandboxFeedback, RitType.small, colors.accent)
                 }
                 if (canWithdraw) {
                     Spacer(Modifier.height(9.dp))

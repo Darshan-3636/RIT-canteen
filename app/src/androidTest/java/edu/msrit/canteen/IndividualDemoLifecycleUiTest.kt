@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import edu.msrit.canteen.customer.IndividualOrderPreview
 import edu.msrit.canteen.customer.QuoteLineSnapshot
+import edu.msrit.canteen.customer.SandboxPayment
 import edu.msrit.canteen.ui.screens.IndividualOrderDetailScreen
 import edu.msrit.canteen.ui.screens.SellerIndividualBackendScreen
 import edu.msrit.canteen.ui.theme.RitTheme
@@ -61,5 +62,21 @@ class IndividualDemoLifecycleUiTest {
         assertEquals("DEMO_ACCEPTED", changed)
         rule.runOnIdle { canRespond = false }
         rule.onNodeWithTag("seller_demo_next_${order.id}").assertDoesNotExist()
+    }
+
+    @Test fun uatActionIsSeparateAndAnActiveAttemptDisablesClickThroughSimulation() {
+        var starts = 0
+        var checks = 0
+        val attempt = SandboxPayment("uat-id", "INDIVIDUAL", order.id, 10_000, "PENDING",
+            "RIT_UAT_test", "provider-id", null, null)
+        rule.setContent { RitTheme { IndividualOrderDetailScreen(order.copy(sandboxPaymentStatus = "PENDING"), {},
+            onDemoPayment = {}, sandboxPayment = attempt, onSandboxStart = { starts++ },
+            onSandboxCheck = { checks++ }) } }
+        rule.onNodeWithTag("individual_demo_pay_success").assertDoesNotExist()
+        rule.onNodeWithTag("individual_phonepe_uat_start").performScrollTo().performClick()
+        rule.onNodeWithTag("individual_phonepe_uat_check").performScrollTo().performClick()
+        assertEquals(1, starts)
+        assertEquals(1, checks)
+        rule.onNodeWithTag("individual_sandbox_payment_status").assertExists()
     }
 }

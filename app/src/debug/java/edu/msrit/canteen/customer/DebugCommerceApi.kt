@@ -97,6 +97,44 @@ object DebugCommerceApi {
         else Result(value = parseIndividualOrder(response.body!!))
     }
 
+    fun beginSandboxPayment(type: String, sourceId: String, key: String): Result<SandboxPayment> = withToken { token ->
+        val response = DebugBackendApi.request("POST", "/api/v1/me/sandbox-payments/$type/$sourceId",
+            token = token, idempotencyKey = key)
+        if (response.status !in 200..201) Result(error = response.error ?: "PhonePe UAT is unavailable.")
+        else Result(value = parseSandboxPayment(response.body!!))
+    }
+
+    fun sandboxPayments(): Result<List<SandboxPayment>> = withToken { token ->
+        val response = DebugBackendApi.request("GET", "/api/v1/me/sandbox-payments", token = token)
+        if (response.status != 200) Result(error = response.error ?: "Could not load UAT attempts.")
+        else {
+            val rows = response.body!!.getJSONArray("payments")
+            Result(value = (0 until rows.length()).map { parseSandboxPayment(rows.getJSONObject(it)) })
+        }
+    }
+
+    fun sandboxPayment(id: String): Result<SandboxPayment> = withToken { token ->
+        val response = DebugBackendApi.request("GET", "/api/v1/me/sandbox-payments/$id", token = token)
+        if (response.status != 200) Result(error = response.error ?: "Could not load UAT attempt.")
+        else Result(value = parseSandboxPayment(response.body!!))
+    }
+
+    fun reconcileSandboxPayment(id: String): Result<SandboxPayment> = withToken { token ->
+        val response = DebugBackendApi.request("POST", "/api/v1/me/sandbox-payments/$id/reconcile", token = token)
+        if (response.status != 200) Result(error = response.error ?: "Could not verify PhonePe UAT status.")
+        else Result(value = parseSandboxPayment(response.body!!))
+    }
+
+    private fun parseSandboxPayment(row: JSONObject): SandboxPayment {
+        check(!row.optBoolean("paymentVerified"))
+        return SandboxPayment(row.getString("id"), row.getString("sourceType"), row.getString("sourceId"),
+            row.getLong("amountPaise"), row.getString("status"), row.getString("merchantOrderId"),
+            row.optString("providerOrderId").takeUnless { it.isBlank() || it == "null" },
+            row.optString("sdkToken").takeUnless { it.isBlank() || it == "null" },
+            row.optString("merchantId").takeUnless { it.isBlank() || it == "null" },
+            row.optString("idempotencyKey").takeUnless { it.isBlank() || it == "null" })
+    }
+
     fun transitionIndividual(sellerId: String, id: String, status: String): Result<IndividualOrderPreview> = withToken { token ->
         val response = DebugBackendApi.request("POST", "/api/v1/sellers/$sellerId/individual-demo-orders/$id/demo-status",
             JSONObject().put("status", status), token)
@@ -184,7 +222,8 @@ object DebugCommerceApi {
                 QuoteLineSnapshot(line.getString("itemId"), line.getString("itemName"),
                     line.getInt("quantity"), line.getLong("unitPricePaise"))
             }, row.getLong("subtotalPaise"), locallySaved = true, status = row.getString("status"),
-            demoPaymentOutcome = row.optString("demoPaymentOutcome", "NOT_ATTEMPTED"))
+            demoPaymentOutcome = row.optString("demoPaymentOutcome", "NOT_ATTEMPTED"),
+            sandboxPaymentStatus = row.optString("sandboxPaymentStatus").takeUnless { it.isBlank() || it == "null" })
     }
 
     private fun parseBulk(row: JSONObject): BulkRequestRecord {

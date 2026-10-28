@@ -23,11 +23,13 @@ object DebugSellerAnalyticsApi {
         val counts = row.optJSONObject("demoRequestCounts")
         val statuses = counts?.optJSONObject("byStatus")
         val simulated = row.optJSONObject("simulatedSales")
+        val sandbox = row.optJSONObject("sandboxSales")
         val byStatus = if (statuses == null) emptyMap() else statuses.keys().asSequence().associateWith(statuses::getInt)
         return SellerCloudAnalytics(counts?.getInt("total") ?: 0, byStatus,
             row.getString("demoRequestCountsStatus"),
             row.optString("from").takeUnless { it.isBlank() || it == "null" },
             row.optString("to").takeUnless { it.isBlank() || it == "null" },
-            simulated?.optInt("orderCount") ?: 0, simulated?.optLong("totalPaise") ?: 0L)
+            simulated?.optInt("orderCount") ?: 0, simulated?.optLong("totalPaise") ?: 0L,
+            sandbox?.optInt("orderCount") ?: 0, sandbox?.optLong("totalPaise") ?: 0L)
     }
 }

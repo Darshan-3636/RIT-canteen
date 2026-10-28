@@ -244,6 +244,11 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                             RitType.heading, modifier = Modifier.testTag("seller_cloud_simulated_sales"))
                         RitText("Synthetic/demo transactions only. Payment verified: false. Not real sales or revenue.",
                             RitType.small, RitThemeTokens.colors.muted)
+                        Spacer(Modifier.height(10.dp))
+                        RitText("${current.sandboxOrderCount} PhonePe UAT sandbox orders · ${displayPaise(current.sandboxTotalPaise)} test total",
+                            RitType.body, modifier = Modifier.testTag("seller_cloud_uat_sales"))
+                        RitText("Separate sandbox metric · payment verified: false · no real money or settlement.",
+                            RitType.small, RitThemeTokens.colors.muted)
                         Spacer(Modifier.height(12.dp))
                         RitText("${current.totalRequests} saved bulk requests", RitType.heading,
                             modifier = Modifier.testTag("seller_cloud_request_total"))

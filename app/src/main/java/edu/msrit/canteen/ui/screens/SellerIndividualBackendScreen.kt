@@ -44,6 +44,10 @@ fun SellerIndividualBackendScreen(orders: List<IndividualOrderPreview>, canRespo
                     RitText(order.lines.joinToString { "${it.quantity} × ${it.title}" }, RitType.body)
                     RitText("Demo total ${displayPaise(order.totalPaise)} · ${order.demoPaymentOutcome.lowercase()} simulation",
                         RitType.small, colors.muted)
+                    order.sandboxPaymentStatus?.let { status ->
+                        RitText("PhonePe UAT: ${status.replace('_', ' ')} · SANDBOX ONLY · paymentVerified=false",
+                            RitType.small, colors.muted, Modifier.testTag("seller_individual_uat_${order.id}"))
+                    }
                     val next = when (order.status) {
                         "DEMO_PAYMENT_SIMULATED" -> "DEMO_ACCEPTED"
                         "DEMO_ACCEPTED" -> "DEMO_READY"

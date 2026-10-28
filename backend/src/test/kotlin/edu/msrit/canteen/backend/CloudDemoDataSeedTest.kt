@@ -8,6 +8,10 @@ import edu.msrit.canteen.backend.core.RuntimeEnvironment
 import edu.msrit.canteen.backend.core.close
 import edu.msrit.canteen.backend.features.commerce.CloudDemoDataSeed
 import edu.msrit.canteen.backend.features.commerce.seedCommerceFixtures
+import edu.msrit.canteen.backend.features.commerce.SandboxPaymentGateway
+import edu.msrit.canteen.backend.features.commerce.SandboxCreatedOrder
+import edu.msrit.canteen.backend.features.commerce.SandboxProviderStatus
+import edu.msrit.canteen.backend.features.commerce.SandboxGatewayUnavailable
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -25,6 +29,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import java.sql.DriverManager
 import java.time.LocalDate
+import java.time.Instant
 import java.time.ZoneId
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -32,6 +37,20 @@ import kotlin.test.assertTrue
 
 /** Real PostgreSQL and HTTP readback, isolated in a unique schema of a disposable test database. */
 class CloudDemoDataSeedTest {
+    private class FakeUat : SandboxPaymentGateway {
+        override val merchantId: String = "TEST_MERCHANT"
+        var providerState = "PENDING"
+        var createdCount = 0
+        var failNextCreate = false
+        override fun create(merchantOrderId: String, amountPaise: Long): SandboxCreatedOrder {
+            if (failNextCreate) { failNextCreate = false; throw SandboxGatewayUnavailable() }
+            createdCount++
+            return SandboxCreatedOrder("UAT_ORDER_$createdCount", "test-sdk-token-$createdCount", "PENDING",
+                Instant.now().plusSeconds(1200))
+        }
+        override fun status(merchantOrderId: String): SandboxProviderStatus =
+            SandboxProviderStatus(providerState, 10_000, if (providerState == "COMPLETED") "TEST_TXN_01" else null)
+    }
     private val customerEmail = "cloud-seed-customer@example.test"
     private val ownerEmail = "cloud-seed-owner@example.test"
     private val customerPassword = "Unique-Customer-Password-2048!"
@@ -263,6 +282,130 @@ class CloudDemoDataSeedTest {
                                 assertEquals(1, rows.getInt(1), "Retries must not create duplicate orders")
                                 assertTrue(rows.getBoolean(2), "No gateway verification occurred")
                             }
+                        }
+                    }
+                }
+            } finally { opened.close() }
+        }
+    }
+
+    @Test fun uatBoundaryUsesServerPriceAndReconcilesFakeProviderWithoutVerifiedRevenue() {
+        val config = localConfig()
+        BackendBootstrap.open(config).also { opened ->
+            val context = cloud(opened).copy(config = cloud(opened).config.copy(cloudDemoSelfSignupEnabled = true))
+            try {
+                seed(context)
+                val fake = FakeUat()
+                testApplication {
+                    application { backendModule(context, sandboxGateway = fake) }
+                    val email = "uat-${UUID.randomUUID()}@example.test"
+                    assertEquals(HttpStatusCode.Created, client.post("/api/v1/auth/register") {
+                        header(HttpHeaders.ContentType, "application/json")
+                        setBody("""{"fullName":"UAT Test Student","email":"$email","password":"SamplePassword123!","affiliation":"STUDENT"}""")
+                    }.status)
+                    val login = client.post("/api/v1/auth/login") {
+                        header(HttpHeaders.ContentType, "application/json")
+                        setBody("""{"email":"$email","password":"SamplePassword123!"}""")
+                    }
+                    assertEquals(HttpStatusCode.OK, login.status)
+                    val token = Json.parseToJsonElement(login.bodyAsText()).jsonObject.getValue("accessToken").jsonPrimitive.content
+                    val ownerLogin = client.post("/api/v1/auth/login") {
+                        header(HttpHeaders.ContentType, "application/json")
+                        setBody("""{"email":"$ownerEmail","password":"$ownerPassword"}""")
+                    }
+                    val ownerToken = Json.parseToJsonElement(ownerLogin.bodyAsText()).jsonObject.getValue("accessToken").jsonPrimitive.content
+                    val cart = client.get("/api/v1/me/cart/individual") { header(HttpHeaders.Authorization, "Bearer $token") }
+                    val cartVersion = Json.parseToJsonElement(cart.bodyAsText()).jsonObject.getValue("version").jsonPrimitive.content
+                    val updated = client.put("/api/v1/me/cart/individual") {
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                        header(HttpHeaders.ContentType, "application/json")
+                        setBody("""{"expectedVersion":$cartVersion,"lines":[{"itemId":"masala-dosa","quantity":2}]}""")
+                    }
+                    assertEquals(HttpStatusCode.OK, updated.status)
+                    val nextVersion = Json.parseToJsonElement(updated.bodyAsText()).jsonObject.getValue("version").jsonPrimitive.content
+                    val order = client.post("/api/v1/me/cart/individual/checkout") {
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                        header("Idempotency-Key", UUID.randomUUID().toString())
+                        header(HttpHeaders.ContentType, "application/json")
+                        setBody("""{"expectedVersion":$nextVersion}""")
+                    }
+                    assertEquals(HttpStatusCode.Created, order.status)
+                    val orderId = Json.parseToJsonElement(order.bodyAsText()).jsonObject.getValue("id").jsonPrimitive.content
+                    val path = "/api/v1/me/sandbox-payments/INDIVIDUAL/$orderId"
+                    suspend fun begin(key: String) = client.post(path) {
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                        header("Idempotency-Key", key)
+                    }
+                    fake.failNextCreate = true
+                    assertEquals(HttpStatusCode.ServiceUnavailable, begin("uat-first").status)
+                    val first = begin("uat-first")
+                    assertEquals(HttpStatusCode.Created, first.status, first.bodyAsText())
+                    val firstBody = Json.parseToJsonElement(first.bodyAsText()).jsonObject
+                    val paymentId = firstBody.getValue("id").jsonPrimitive.content
+                    assertEquals("10000", firstBody.getValue("amountPaise").jsonPrimitive.content)
+                    assertEquals("PENDING", firstBody.getValue("status").jsonPrimitive.content)
+                    assertTrue(firstBody.getValue("sdkToken").jsonPrimitive.content.startsWith("test-sdk-token"))
+                    assertEquals(paymentId, Json.parseToJsonElement(begin("uat-first").bodyAsText()).jsonObject
+                        .getValue("id").jsonPrimitive.content)
+                    assertEquals(1, fake.createdCount, "The same key must not create a second provider order")
+                    context.dataSource.connection.use { db ->
+                        db.prepareStatement("SELECT count(*) FROM sandbox_payment_attempts WHERE source_id=?").use { sql ->
+                            sql.setObject(1, UUID.fromString(orderId))
+                            sql.executeQuery().use { rows -> assertTrue(rows.next()); assertEquals(1, rows.getInt(1)) }
+                        }
+                    }
+                    assertEquals(HttpStatusCode.Conflict, begin("uat-overlap").status)
+                    val reconcilePath = "/api/v1/me/sandbox-payments/$paymentId/reconcile"
+                    suspend fun reconcile(id: String) = client.post("/api/v1/me/sandbox-payments/$id/reconcile") {
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                    }
+                    assertEquals("PENDING", Json.parseToJsonElement(reconcile(paymentId).bodyAsText()).jsonObject
+                        .getValue("status").jsonPrimitive.content)
+                    fake.providerState = "FAILED"
+                    assertEquals("SANDBOX_FAILED", Json.parseToJsonElement(reconcile(paymentId).bodyAsText()).jsonObject
+                        .getValue("status").jsonPrimitive.content)
+                    val retry = begin("uat-retry")
+                    assertEquals(HttpStatusCode.Created, retry.status, retry.bodyAsText())
+                    val retryId = Json.parseToJsonElement(retry.bodyAsText()).jsonObject.getValue("id").jsonPrimitive.content
+                    assertEquals(2, fake.createdCount)
+                    fake.providerState = "COMPLETED"
+                    val success = reconcile(retryId)
+                    assertEquals(HttpStatusCode.OK, success.status, success.bodyAsText())
+                    val successBody = Json.parseToJsonElement(success.bodyAsText()).jsonObject
+                    assertEquals("SANDBOX_SUCCESS", successBody.getValue("status").jsonPrimitive.content)
+                    assertEquals("false", successBody.getValue("paymentVerified").jsonPrimitive.content)
+                    assertEquals("TEST_TXN_01", successBody.getValue("transactionReference").jsonPrimitive.content)
+                    assertEquals(HttpStatusCode.Conflict, begin("uat-after-success").status)
+                    val history = client.get("/api/v1/me/individual-demo-orders") {
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                    }.bodyAsText()
+                    assertTrue(history.contains(orderId))
+                    assertTrue(history.contains("SANDBOX_SUCCESS"))
+                    val sellerPayments = client.get("/api/v1/sellers/main-canteen/sandbox-payments") {
+                        header(HttpHeaders.Authorization, "Bearer $ownerToken")
+                    }
+                    assertEquals(HttpStatusCode.OK, sellerPayments.status)
+                    assertTrue(sellerPayments.bodyAsText().contains(retryId))
+                    assertTrue(!sellerPayments.bodyAsText().contains("test-sdk-token"), "Seller must not receive SDK tokens")
+                    assertEquals(HttpStatusCode.Forbidden, client.get("/api/v1/sellers/north-counter/sandbox-payments") {
+                        header(HttpHeaders.Authorization, "Bearer $ownerToken")
+                    }.status)
+                    val today = LocalDate.now(ZoneId.of("Asia/Kolkata"))
+                    val analytics = client.get("/api/v1/sellers/main-canteen/analytics/summary?from=$today&to=$today") {
+                        header(HttpHeaders.Authorization, "Bearer $ownerToken")
+                    }
+                    val summary = Json.parseToJsonElement(analytics.bodyAsText()).jsonObject
+                    assertEquals("1", summary.getValue("sandboxSales").jsonObject.getValue("orderCount").jsonPrimitive.content)
+                    assertEquals("10000", summary.getValue("sandboxSales").jsonObject.getValue("totalPaise").jsonPrimitive.content)
+                    assertEquals("null", summary.getValue("verifiedRevenuePaise").toString())
+                    context.dataSource.connection.use { db ->
+                        db.prepareStatement("SELECT count(*),bool_and(state='SANDBOX_SUCCESS') FROM sandbox_payment_attempts WHERE id=?").use { sql ->
+                            sql.setObject(1, UUID.fromString(retryId))
+                            sql.executeQuery().use { rows -> assertTrue(rows.next()); assertEquals(1, rows.getInt(1)); assertTrue(rows.getBoolean(2)) }
+                        }
+                        db.prepareStatement("SELECT payment_verified FROM individual_demo_orders WHERE id=?").use { sql ->
+                            sql.setObject(1, UUID.fromString(orderId))
+                            sql.executeQuery().use { rows -> assertTrue(rows.next()); assertEquals(false, rows.getBoolean(1)) }
                         }
                     }
                 }

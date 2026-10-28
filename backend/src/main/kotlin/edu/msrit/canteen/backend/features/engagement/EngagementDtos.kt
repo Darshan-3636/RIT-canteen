@@ -137,6 +137,7 @@ data class AnalyticsSummaryDto(
     val demoRequestCounts: DemoRequestCountsDto? = null,
     val demoRequestCountsStatus: String,
     val simulatedSales: SimulatedSalesDto? = null,
+    val sandboxSales: SimulatedSalesDto? = null,
     val forecast: String = "INSUFFICIENT_DATA",
 )
 
@@ -149,6 +150,7 @@ data class DashboardSummaryDto(
     val demoRequestCounts: DemoRequestCountsDto? = null,
     val demoRequestCountsStatus: String,
     val simulatedSales: SimulatedSalesDto? = null,
+    val sandboxSales: SimulatedSalesDto? = null,
     val supportTickets: SupportCountsDto,
 )
 

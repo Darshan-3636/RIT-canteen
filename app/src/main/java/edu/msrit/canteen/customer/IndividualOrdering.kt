@@ -82,4 +82,11 @@ fun checkIndividualCart(draft: IndividualDraft, catalog: CustomerCatalogSource):
 data class IndividualOrderPreview(val id: String, val placedAt: LocalDateTime,
                                   val lines: List<QuoteLineSnapshot>, val totalPaise: Long,
                                   val locallySaved: Boolean = false, val status: String = "SAMPLE",
-                                  val demoPaymentOutcome: String = "NOT_ATTEMPTED")
+                                  val demoPaymentOutcome: String = "NOT_ATTEMPTED",
+                                  val sandboxPaymentStatus: String? = null)
+
+/** UAT metadata only. The server remains authoritative for amount and status. */
+data class SandboxPayment(val id: String, val sourceType: String, val sourceId: String,
+                          val amountPaise: Long, val status: String, val merchantOrderId: String,
+                          val providerOrderId: String?, val sdkToken: String?, val merchantId: String?,
+                          val idempotencyKey: String? = null)

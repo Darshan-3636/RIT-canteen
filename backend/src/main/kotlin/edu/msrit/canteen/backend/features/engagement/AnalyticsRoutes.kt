@@ -35,6 +35,7 @@ internal fun Route.registerAnalyticsRoutes(context: BackendContext, commerce: Co
             demoRequestCounts = counts?.toDto(),
             demoRequestCountsStatus = countsStatus(counts),
             simulatedSales = commerce.simulatedSales(sellerId, null, null)?.toDto(),
+            sandboxSales = commerce.sandboxSales(sellerId, null, null)?.toSandboxDto(),
             supportTickets = context.read { it.supportCounts(sellerId) },
         ))
     }
@@ -113,6 +114,7 @@ internal fun analyticsSummary(call: ApplicationCall, commerce: CommerceReadPort,
         demoRequestCounts = counts?.toDto(),
         demoRequestCountsStatus = countsStatus(counts),
         simulatedSales = commerce.simulatedSales(sellerId, from, to)?.toDto(),
+        sandboxSales = commerce.sandboxSales(sellerId, from, to)?.toSandboxDto(),
     )
 }
 
@@ -121,6 +123,7 @@ private fun countsStatus(counts: DemoRequestCounts?) =
 
 private fun DemoRequestCounts.toDto() = DemoRequestCountsDto(total, byStatus)
 private fun SimulatedSales.toDto() = SimulatedSalesDto(orderCount, totalPaise)
+private fun SimulatedSales.toSandboxDto() = SimulatedSalesDto(orderCount, totalPaise, "PHONEPE_UAT_NO_REAL_MONEY")
 
 private fun parseDate(raw: String): LocalDate = runCatching { LocalDate.parse(raw) }.getOrNull()
     ?: throw badRequest("INVALID_DATE", "Dates must be ISO dates such as 2026-10-27")

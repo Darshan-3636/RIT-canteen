@@ -68,6 +68,16 @@ import kotlinx.serialization.Serializable
     val lines: List<BulkDraftLineDto>,
 )
 @Serializable data class DemoPaymentRequest(val outcome: String)
+@Serializable data class SandboxPaymentDto(
+    val id: String, val sourceType: String, val sourceId: String, val sellerId: String,
+    val amountPaise: Long, val status: String, val merchantOrderId: String,
+    val providerOrderId: String? = null, val transactionReference: String? = null,
+    val sdkToken: String? = null, val merchantId: String? = null,
+    val idempotencyKey: String? = null,
+    val paymentVerified: Boolean = false,
+    val label: String = "DEMO PAYMENT — NO REAL MONEY TRANSFERRED",
+)
+@Serializable data class SandboxPaymentListDto(val payments: List<SandboxPaymentDto>)
 @Serializable data class DemoSellerStatusRequest(val status: String)
 @Serializable data class IndividualDemoLineDto(val itemId: String, val itemName: String, val quantity: Int,
                                                 val unitPricePaise: Long)
@@ -75,6 +85,7 @@ import kotlinx.serialization.Serializable
     val id: String, val sellerId: String, val status: String, val demoOnly: Boolean,
     val paymentVerified: Boolean, val subtotalPaise: Long, val createdAt: String,
     val lines: List<IndividualDemoLineDto>, val demoPaymentOutcome: String = "NOT_ATTEMPTED",
+    val sandboxPaymentStatus: String? = null,
 )
 @Serializable data class IndividualDemoOrderListDto(val orders: List<IndividualDemoOrderDto>)
 @Serializable data class PickupScheduleDto(val confirmed: List<BulkRequestDto>, val note: String)

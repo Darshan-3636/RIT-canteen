@@ -14,6 +14,9 @@ interface CommerceReadPort {
 
     /** Fictional successful individual checkouts; never verified payments or revenue. */
     fun simulatedSales(sellerId: String?, from: LocalDate?, to: LocalDate?): SimulatedSales? = null
+
+    /** PhonePe UAT-only successes, separate from click-through simulations and verified revenue. */
+    fun sandboxSales(sellerId: String?, from: LocalDate?, to: LocalDate?): SimulatedSales? = null
 }
 
 sealed interface ItemLookup {

@@ -10,6 +10,20 @@ import java.time.LocalDate
 
 /** Live read-only Commerce adapter; never infers access from a client-supplied seller ID. */
 class PostgresCommerceReadPort(private val context: BackendContext) : CommerceReadPort {
+    override fun sandboxSales(sellerId: String?, from: LocalDate?, to: LocalDate?): SimulatedSales? =
+        if (context.config.environment != RuntimeEnvironment.CLOUD_DEMO) null else context.dataSource.connection.use { db ->
+            val clauses = mutableListOf("state='SANDBOX_SUCCESS'")
+            if (sellerId != null) clauses += "seller_id=?"
+            if (from != null) clauses += "(created_at AT TIME ZONE 'Asia/Kolkata')::date >= ?"
+            if (to != null) clauses += "(created_at AT TIME ZONE 'Asia/Kolkata')::date <= ?"
+            db.prepareStatement("SELECT count(*),coalesce(sum(amount_paise),0) FROM sandbox_payment_attempts WHERE ${clauses.joinToString(" AND ")}").use { sql ->
+                var n = 1
+                if (sellerId != null) sql.setString(n++, sellerId)
+                if (from != null) sql.setObject(n++, from)
+                if (to != null) sql.setObject(n, to)
+                sql.executeQuery().use { rows -> rows.next(); SimulatedSales(Math.toIntExact(rows.getLong(1)), rows.getLong(2)) }
+            }
+        }
     override fun simulatedSales(sellerId: String?, from: LocalDate?, to: LocalDate?): SimulatedSales? =
         if (context.config.environment != RuntimeEnvironment.CLOUD_DEMO) null else context.dataSource.connection.use { db ->
             val clauses = mutableListOf("demo_only=TRUE", "payment_verified=FALSE", "demo_payment_outcome='SUCCESS'")
