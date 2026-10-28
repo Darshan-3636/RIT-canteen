@@ -43,20 +43,28 @@ internal fun sellerIndividual(context: BackendContext, sellerId: String): Indivi
 /** Explicitly fictional payment; payment_verified remains false and no provider is contacted. */
 internal fun simulateIndividualPayment(context: BackendContext, principal: AuthenticatedPrincipal,
                                        id: UUID, outcome: String): IndividualDemoOrderDto = context.transaction { db ->
-    if (context.config.environment !in setOf(RuntimeEnvironment.LOCAL, RuntimeEnvironment.CLOUD_DEMO))
+    if (context.config.environment != RuntimeEnvironment.CLOUD_DEMO)
         throw CommerceFault(404, "DEMO_ONLY", "Demo payment simulation is unavailable")
     if (outcome !in setOf("SUCCESS", "FAILURE", "PENDING"))
         throw CommerceFault(400, "INVALID_DEMO_OUTCOME", "Choose SUCCESS, FAILURE or PENDING")
-    val status = db.prepareStatement("""SELECT status FROM individual_demo_orders
-        WHERE id=? AND customer_user_id=? FOR UPDATE""").use { query ->
+    val state = db.prepareStatement("""SELECT o.status,o.demo_payment_outcome FROM individual_demo_orders o
+        JOIN users u ON u.id=o.customer_user_id
+        WHERE o.id=? AND o.customer_user_id=? AND u.affiliation IN ('STUDENT','FACULTY') FOR UPDATE OF o""").use { query ->
         query.setObject(1, id); query.setObject(2, principal.userId)
-        query.executeQuery().use { rows -> if (rows.next()) rows.getString(1) else null }
+        query.executeQuery().use { rows -> if (rows.next()) rows.getString(1) to rows.getString(2) else null }
     } ?: throw CommerceFault(404, "ORDER_NOT_FOUND", "Demo order not found")
+    val (status, recordedOutcome) = state
+    // A lost response or rapid repeat must return the same persisted result, not a false failure.
+    if (recordedOutcome == outcome && status == when (outcome) {
+            "SUCCESS" -> "DEMO_PAYMENT_SIMULATED"
+            "FAILURE" -> "DEMO_PAYMENT_FAILED"
+            else -> "DEMO_PAYMENT_PENDING"
+        }) return@transaction loadDemoIndividual(db, id)!!
+    if (outcome == "SUCCESS" && recordedOutcome == "SUCCESS" &&
+        status in setOf("DEMO_ACCEPTED", "DEMO_REJECTED", "DEMO_READY", "DEMO_COMPLETED"))
+        return@transaction loadDemoIndividual(db, id)!!
     if (status !in setOf("DEMO_SAVED", "DEMO_PAYMENT_PENDING", "DEMO_PAYMENT_FAILED"))
         throw CommerceFault(409, "INVALID_DEMO_TRANSITION", "Demo payment cannot be changed in this state")
-    if ((status == "DEMO_PAYMENT_PENDING" && outcome == "PENDING") ||
-        (status == "DEMO_PAYMENT_FAILED" && outcome == "FAILURE"))
-        throw CommerceFault(409, "INVALID_DEMO_TRANSITION", "This demo outcome is already recorded")
     val next = when (outcome) {
         "SUCCESS" -> "DEMO_PAYMENT_SIMULATED"
         "FAILURE" -> "DEMO_PAYMENT_FAILED"

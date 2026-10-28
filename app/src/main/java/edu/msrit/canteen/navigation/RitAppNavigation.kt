@@ -876,6 +876,7 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                             }
                             val order = result.value
                             if (order != null) {
+                                DevelopmentIndividualOrders.upsertServer(order)
                                 individualCart.clear()
                                 refreshIndividualCart()
                                 val history = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
@@ -909,22 +910,31 @@ fun RitAppNavigation(appearance: AppearancePreference) {
             composable(Route.IndividualOrderDetail, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     var paymentFeedback by remember { mutableStateOf<String?>(null) }
+                    var paymentBusy by remember { mutableStateOf(false) }
                     androidx.compose.runtime.LaunchedEffect(entry.arguments?.getString("id")) {
                         val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
                         orders.value?.let(DevelopmentIndividualOrders::applyServer)
                     }
                     IndividualOrderDetailScreen(DevelopmentIndividualOrders.records.find { it.id == entry.arguments?.getString("id") },
                         { navController.popBackStack() }, onDemoPayment = { outcome ->
+                            if (paymentBusy) return@IndividualOrderDetailScreen
+                            paymentBusy = true
+                            paymentFeedback = null
                             scope.launch {
-                                val id = entry.arguments?.getString("id").orEmpty()
-                                val result = withContext(Dispatchers.IO) { DebugCommerceApi.simulateIndividualPayment(id, outcome) }
-                                if (result.value != null) {
-                                    val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
-                                    orders.value?.let(DevelopmentIndividualOrders::applyServer)
-                                    paymentFeedback = "Demo outcome saved. No money was charged."
-                                } else paymentFeedback = result.error ?: "Demo simulation failed."
+                                try {
+                                    val id = entry.arguments?.getString("id").orEmpty()
+                                    val result = withContext(Dispatchers.IO) { DebugCommerceApi.simulateIndividualPayment(id, outcome) }
+                                    if (result.value != null) {
+                                        DevelopmentIndividualOrders.upsertServer(result.value)
+                                        paymentFeedback = if (outcome == "SUCCESS")
+                                            "DEMO payment simulated successfully. No money was charged or verified."
+                                        else "DEMO $outcome saved. No money was charged or verified."
+                                        val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
+                                        orders.value?.let(DevelopmentIndividualOrders::applyServer)
+                                    } else paymentFeedback = result.error ?: "Demo simulation failed."
+                                } finally { paymentBusy = false }
                             }
-                        }, feedback = paymentFeedback)
+                        }, feedback = paymentFeedback, paymentBusy = paymentBusy)
                 } }
             }
             composable(Route.DemoOrderDetail, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->

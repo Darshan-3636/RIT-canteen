@@ -11,6 +11,9 @@ interface CommerceReadPort {
 
     /** Demo bulk request counts in seller-local dates (inclusive), or null when no source is wired. */
     fun demoRequestCounts(sellerId: String?, from: LocalDate?, to: LocalDate?): DemoRequestCounts?
+
+    /** Fictional successful individual checkouts; never verified payments or revenue. */
+    fun simulatedSales(sellerId: String?, from: LocalDate?, to: LocalDate?): SimulatedSales? = null
 }
 
 sealed interface ItemLookup {
@@ -20,6 +23,7 @@ sealed interface ItemLookup {
 }
 
 data class DemoRequestCounts(val total: Int, val byStatus: Map<String, Int>)
+data class SimulatedSales(val orderCount: Int, val totalPaise: Long)
 
 object UnavailableCommerceReadPort : CommerceReadPort {
     override fun lookupItem(itemId: String): ItemLookup = ItemLookup.Unavailable

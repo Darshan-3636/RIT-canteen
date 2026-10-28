@@ -158,7 +158,8 @@ private fun OrderCard(title: String, status: String, detail: String, foot: Strin
 
 @Composable
 fun IndividualOrderDetailScreen(record: IndividualOrderPreview?, onBack: () -> Unit,
-                                onDemoPayment: ((String) -> Unit)? = null, feedback: String? = null) {
+                                onDemoPayment: ((String) -> Unit)? = null, feedback: String? = null,
+                                paymentBusy: Boolean = false) {
     val colors = RitThemeTokens.colors
     Column(Modifier.fillMaxSize().background(colors.background).testTag("individual_order_detail")) {
         CatalogHeader("Demo order", onBack)
@@ -185,14 +186,14 @@ fun IndividualOrderDetailScreen(record: IndividualOrderPreview?, onBack: () -> U
                 RitText("Simulate a payment outcome", RitType.label)
                 RitText("This is a test action, not PhonePe or a bank transaction.", RitType.small, colors.muted)
                 Spacer(Modifier.height(8.dp))
-                RitPrimaryButton("Simulate success", { onDemoPayment("SUCCESS") },
-                    Modifier.fillMaxWidth().testTag("individual_demo_pay_success"))
+                RitPrimaryButton(if (paymentBusy) "Saving DEMO outcome…" else "Simulate Payment", { onDemoPayment("SUCCESS") },
+                    Modifier.fillMaxWidth().testTag("individual_demo_pay_success"), enabled = !paymentBusy)
                 Spacer(Modifier.height(8.dp))
                 RitSecondaryButton("Simulate pending", { onDemoPayment("PENDING") },
-                    Modifier.fillMaxWidth().testTag("individual_demo_pay_pending"))
+                    Modifier.fillMaxWidth().testTag("individual_demo_pay_pending"), enabled = !paymentBusy)
                 Spacer(Modifier.height(8.dp))
                 RitSecondaryButton("Simulate failure", { onDemoPayment("FAILURE") },
-                    Modifier.fillMaxWidth().testTag("individual_demo_pay_failure"))
+                    Modifier.fillMaxWidth().testTag("individual_demo_pay_failure"), enabled = !paymentBusy)
             }
             if (!feedback.isNullOrBlank()) RitText(feedback, RitType.body, colors.accent,
                 Modifier.padding(top = 10.dp).testTag("individual_demo_payment_feedback"))

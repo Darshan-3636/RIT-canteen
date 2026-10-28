@@ -78,10 +78,11 @@ class CommerceIntegrationTest {
         return Actor(user,token,session)
     }
 
-    private fun app(f:Fixture, block:suspend ApplicationTestBuilder.()->Unit)=testApplication {
+    private fun app(f:Fixture, context:edu.msrit.canteen.backend.core.BackendContext=f.context,
+                    block:suspend ApplicationTestBuilder.()->Unit)=testApplication {
         application {
             install(ContentNegotiation) { json(Json { encodeDefaults=true;explicitNulls=true;ignoreUnknownKeys=false }) }
-            routing { route("/api/v1") { registerCommerceRoutes(f.context) } }
+            routing { route("/api/v1") { registerCommerceRoutes(context) } }
         }
         block()
     }
@@ -301,7 +302,12 @@ class CommerceIntegrationTest {
 
     @Test fun demoPaymentAndSellerProcessingArePersistentScopedAndNeverVerified() {
         val f=fixture()
-        try { app(f) {
+        val cloud=f.context.copy(config=f.context.config.copy(environment=RuntimeEnvironment.CLOUD_DEMO,
+            httpHost="0.0.0.0",databaseUrl="jdbc:postgresql://pool.example:5432/postgres?sslmode=require",
+            demoSeedEnabled=false,cloudDemoSeedEnabled=true,
+            cloudDemoCustomerEmail="customer@example.test",cloudDemoCustomerPassword="Unique-Customer-Password-2048!",
+            cloudDemoOwnerEmail="owner@example.test",cloudDemoOwnerPassword="Unique-Owner-Password-2048!"))
+        try { app(f,cloud) {
             f.context.dataSource.connection.use { db ->
                 db.prepareStatement("INSERT INTO seller_memberships(id,user_id,seller_id,role) VALUES (?,?,?,'OWNER')").use { q ->
                     q.setObject(1,UUID.randomUUID());q.setObject(2,f.seller.user);q.setString(3,"main-canteen");q.executeUpdate()
@@ -325,18 +331,30 @@ class CommerceIntegrationTest {
                 setBody("""{"status":"$status"}""")
             }
             assertEquals(HttpStatusCode.NotFound,pay(f.stranger.token,"SUCCESS").status)
+            val sellerCreated=client.post("/api/v1/me/individual-demo-orders") {
+                header(HttpHeaders.Authorization,"Bearer ${f.seller.token}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"lines":[{"itemId":"masala-dosa","quantity":1}]}""")
+            }
+            assertEquals(HttpStatusCode.Created,sellerCreated.status)
+            val sellerOrderId=Regex(""""id":"([^"]+)"""").find(sellerCreated.bodyAsText())!!.groupValues[1]
+            assertEquals(HttpStatusCode.NotFound,client.post("/api/v1/me/individual-demo-orders/$sellerOrderId/simulate-payment") {
+                header(HttpHeaders.Authorization,"Bearer ${f.seller.token}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"outcome":"SUCCESS"}""")
+            }.status)
             assertEquals(HttpStatusCode.Forbidden,client.get(sellerPath) {
                 header(HttpHeaders.Authorization,"Bearer ${f.stranger.token}")
             }.status)
             assertEquals(HttpStatusCode.Conflict,move(f.seller.token,"DEMO_READY").status)
             assertEquals(HttpStatusCode.OK,pay(f.customer.token,"PENDING").status)
-            assertEquals(HttpStatusCode.Conflict,pay(f.customer.token,"PENDING").status)
+            assertEquals(HttpStatusCode.OK,pay(f.customer.token,"PENDING").status)
             assertEquals(HttpStatusCode.OK,pay(f.customer.token,"FAILURE").status)
             val simulated=pay(f.customer.token,"SUCCESS")
             assertEquals(HttpStatusCode.OK,simulated.status)
             assertTrue(simulated.bodyAsText().contains("\"paymentVerified\":false"))
             assertTrue(simulated.bodyAsText().contains("\"demoPaymentOutcome\":\"SUCCESS\""))
-            assertEquals(HttpStatusCode.Conflict,pay(f.customer.token,"SUCCESS").status)
+            assertEquals(HttpStatusCode.OK,pay(f.customer.token,"SUCCESS").status)
             val sellerQueue=client.get(sellerPath) { header(HttpHeaders.Authorization,"Bearer ${f.seller.token}") }
             assertEquals(HttpStatusCode.OK,sellerQueue.status)
             assertTrue(sellerQueue.bodyAsText().contains(id))
@@ -351,6 +369,7 @@ class CommerceIntegrationTest {
             val complete=move(f.seller.token,"DEMO_COMPLETED")
             assertEquals(HttpStatusCode.OK,complete.status)
             assertTrue(complete.bodyAsText().contains("\"paymentVerified\":false"))
+            assertEquals(HttpStatusCode.OK,pay(f.customer.token,"SUCCESS").status)
             val history=client.get("/api/v1/me/individual-demo-orders") {
                 header(HttpHeaders.Authorization,"Bearer ${f.customer.token}")
             }
@@ -365,6 +384,24 @@ class CommerceIntegrationTest {
                     }
                 }
             }
+        } } finally { cleanup(f) }
+    }
+
+    @Test fun paymentSimulationIsUnavailableOutsideCloudDemo() {
+        val f=fixture()
+        try { app(f) {
+            val created=client.post("/api/v1/me/individual-demo-orders") {
+                header(HttpHeaders.Authorization,"Bearer ${f.customer.token}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"lines":[{"itemId":"masala-dosa","quantity":1}]}""")
+            }
+            assertEquals(HttpStatusCode.Created,created.status)
+            val id=Regex(""""id":"([^"]+)"""").find(created.bodyAsText())!!.groupValues[1]
+            assertEquals(HttpStatusCode.NotFound, client.post("/api/v1/me/individual-demo-orders/$id/simulate-payment") {
+                header(HttpHeaders.Authorization,"Bearer ${f.customer.token}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"outcome":"SUCCESS"}""")
+            }.status)
         } } finally { cleanup(f) }
     }
 

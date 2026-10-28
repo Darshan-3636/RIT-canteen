@@ -118,6 +118,9 @@ data class TicketDetailDto(val ticket: TicketSummaryDto, val messages: List<Tick
 data class DemoRequestCountsDto(val total: Int, val byStatus: Map<String, Int>)
 
 @Serializable
+data class SimulatedSalesDto(val orderCount: Int, val totalPaise: Long, val label: String = "DEMO_SIMULATED_NOT_VERIFIED")
+
+@Serializable
 data class SupportCountsDto(val open: Long, val escalated: Long, val resolved: Long, val closed: Long)
 
 @Serializable
@@ -133,6 +136,7 @@ data class AnalyticsSummaryDto(
     val source: String = "NO_VERIFIED_PAYMENTS",
     val demoRequestCounts: DemoRequestCountsDto? = null,
     val demoRequestCountsStatus: String,
+    val simulatedSales: SimulatedSalesDto? = null,
     val forecast: String = "INSUFFICIENT_DATA",
 )
 
@@ -144,6 +148,7 @@ data class DashboardSummaryDto(
     val verifiedRevenuePaise: Long? = null,
     val demoRequestCounts: DemoRequestCountsDto? = null,
     val demoRequestCountsStatus: String,
+    val simulatedSales: SimulatedSalesDto? = null,
     val supportTickets: SupportCountsDto,
 )
 

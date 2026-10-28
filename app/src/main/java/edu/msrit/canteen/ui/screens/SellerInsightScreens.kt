@@ -240,6 +240,11 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                     cloudSummary == null -> RitEmptyState("Analytics unavailable", "No server response was confirmed.")
                     else -> {
                         val current = cloudSummary!!
+                        RitText("${current.simulatedOrderCount} DEMO/SIMULATED orders · ${displayPaise(current.simulatedTotalPaise)} fictional total",
+                            RitType.heading, modifier = Modifier.testTag("seller_cloud_simulated_sales"))
+                        RitText("Synthetic/demo transactions only. Payment verified: false. Not real sales or revenue.",
+                            RitType.small, RitThemeTokens.colors.muted)
+                        Spacer(Modifier.height(12.dp))
                         RitText("${current.totalRequests} saved bulk requests", RitType.heading,
                             modifier = Modifier.testTag("seller_cloud_request_total"))
                         RitText("${range.start} to ${range.end} · ${current.status.replace('_', ' ').lowercase()}",
@@ -252,7 +257,7 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                                 "$count saved requests", tag = "seller_cloud_status_${status.lowercase()}")
                         }
                         Spacer(Modifier.height(10.dp))
-                        RitText("Verified revenue, product sales and forecasts are unavailable: demo requests are unpaid and no payment provider is connected.",
+                        RitText("Verified revenue and forecasts are unavailable: no payment provider is connected.",
                             RitType.small, RitThemeTokens.colors.muted)
                     }
                 }

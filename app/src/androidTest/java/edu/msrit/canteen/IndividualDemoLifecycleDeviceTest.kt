@@ -10,11 +10,13 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeFalse
 import org.junit.Test
 
-/** Runs against the real loopback Ktor/PostgreSQL demo through adb reverse. */
+/** Local loopback check. Payment simulation is intentionally cloud_demo-only. */
 class IndividualDemoLifecycleDeviceTest {
-    @Test fun sameServerOrderSurvivesCustomerSellerAndCustomerSessions() = runBlocking(Dispatchers.IO) {
+    @Test fun savedOrderIsSellerVisibleButLocalPaymentSimulationIsDenied() = runBlocking(Dispatchers.IO) {
+        assumeFalse("Never mutate the hosted backend from instrumentation", BuildConfig.RIT_CLOUD_DEMO)
         DevelopmentDemoAccounts.initialize(InstrumentationRegistry.getInstrumentation().targetContext)
         DevelopmentDemoAccounts.signOut()
         try {
@@ -29,8 +31,7 @@ class IndividualDemoLifecycleDeviceTest {
             assertTrue(placed.error ?: "Checkout failed", placed.value != null)
             val id = placed.value!!.id
             val simulated = DebugCommerceApi.simulateIndividualPayment(id, "SUCCESS")
-            assertEquals("DEMO_PAYMENT_SIMULATED", simulated.value?.status)
-            assertEquals("SUCCESS", simulated.value?.demoPaymentOutcome)
+            assertEquals(null, simulated.value)
             DevelopmentDemoAccounts.signOut()
 
             val otherSeller = DevelopmentDemoAccounts.signIn("owner.secondary@demo.ritcanteen.test", "RitDemo!OwnerOther01")
@@ -43,19 +44,14 @@ class IndividualDemoLifecycleDeviceTest {
             assertTrue(owner.error ?: "Main owner sign-in failed", owner.account != null)
             val queue = DebugCommerceApi.sellerIndividualOrders("main-canteen")
             assertTrue(queue.error ?: "Seller queue failed", queue.value.orEmpty().any { it.id == id })
-            for (next in listOf("DEMO_ACCEPTED", "DEMO_READY", "DEMO_COMPLETED")) {
-                val moved = DebugCommerceApi.transitionIndividual("main-canteen", id, next)
-                assertEquals(moved.error ?: "Status did not update", next, moved.value?.status)
-            }
-            assertTrue(DebugCommerceApi.transitionIndividual("main-canteen", id, "DEMO_COMPLETED").value == null)
             DevelopmentDemoAccounts.signOut()
 
             val returning = DevelopmentDemoAccounts.signIn("student.arya@demo.ritcanteen.test", "RitDemo!Student01")
             assertTrue(returning.error ?: "Customer return sign-in failed", returning.account != null)
             val history = DebugCommerceApi.individualOrders()
             assertTrue(history.error ?: "Order history failed",
-                history.value.orEmpty().any { it.id == id && it.status == "DEMO_COMPLETED" &&
-                    it.demoPaymentOutcome == "SUCCESS" })
+                history.value.orEmpty().any { it.id == id && it.status == "DEMO_SAVED" &&
+                    it.demoPaymentOutcome == "NOT_ATTEMPTED" })
         } finally { DevelopmentDemoAccounts.signOut() }
     }
 }

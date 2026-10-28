@@ -36,6 +36,12 @@ object DevelopmentIndividualOrders {
         byUser[activeUser] = recordsFromServer
     }
 
+    /** Reflect a confirmed server write immediately, even if the subsequent history read fails. */
+    fun upsertServer(record: IndividualOrderPreview) {
+        records = listOf(record) + records.filterNot { it.id == record.id }
+        byUser[activeUser] = records
+    }
+
     fun saveLocal(draft: IndividualDraft, catalog: CustomerCatalogSource = PreviewCatalog): Boolean {
         val check = checkIndividualCart(draft, catalog)
         if (!check.readyForReview) return false

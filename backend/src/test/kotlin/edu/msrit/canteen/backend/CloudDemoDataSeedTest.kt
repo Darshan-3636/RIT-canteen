@@ -11,6 +11,7 @@ import edu.msrit.canteen.backend.features.commerce.seedCommerceFixtures
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
@@ -194,6 +195,76 @@ class CloudDemoDataSeedTest {
                         }.status)
                     assertEquals(HttpStatusCode.Unauthorized,
                         client.get("/api/v1/me/individual-demo-orders").status)
+
+                    // A newly registered student completes checkout against the same disposable PostgreSQL schema.
+                    val cartPath = "/api/v1/me/cart/individual"
+                    val initialCart = client.get(cartPath) { header(HttpHeaders.Authorization, "Bearer $registeredToken") }
+                    assertEquals(HttpStatusCode.OK, initialCart.status)
+                    val version = Json.parseToJsonElement(initialCart.bodyAsText()).jsonObject
+                        .getValue("version").jsonPrimitive.content
+                    val updatedCart = client.put(cartPath) {
+                        header(HttpHeaders.Authorization, "Bearer $registeredToken")
+                        header(HttpHeaders.ContentType, "application/json")
+                        setBody("""{"expectedVersion":$version,"lines":[{"itemId":"masala-dosa","quantity":2}]}""")
+                    }
+                    assertEquals(HttpStatusCode.OK, updatedCart.status, updatedCart.bodyAsText())
+                    val checkoutVersion = Json.parseToJsonElement(updatedCart.bodyAsText()).jsonObject
+                        .getValue("version").jsonPrimitive.content
+                    val checkoutKey = UUID.randomUUID().toString()
+                    suspend fun checkout() = client.post("$cartPath/checkout") {
+                        header(HttpHeaders.Authorization, "Bearer $registeredToken")
+                        header("Idempotency-Key", checkoutKey)
+                        header(HttpHeaders.ContentType, "application/json")
+                        setBody("""{"expectedVersion":$checkoutVersion}""")
+                    }
+                    val firstCheckout = checkout()
+                    assertEquals(HttpStatusCode.Created, firstCheckout.status, firstCheckout.bodyAsText())
+                    val orderId = Json.parseToJsonElement(firstCheckout.bodyAsText()).jsonObject
+                        .getValue("id").jsonPrimitive.content
+                    val retriedCheckout = checkout()
+                    assertEquals(HttpStatusCode.Created, retriedCheckout.status)
+                    assertEquals(orderId, Json.parseToJsonElement(retriedCheckout.bodyAsText()).jsonObject
+                        .getValue("id").jsonPrimitive.content)
+                    suspend fun simulate() = client.post("/api/v1/me/individual-demo-orders/$orderId/simulate-payment") {
+                        header(HttpHeaders.Authorization, "Bearer $registeredToken")
+                        header(HttpHeaders.ContentType, "application/json")
+                        setBody("""{"outcome":"SUCCESS"}""")
+                    }
+                    val payment = simulate()
+                    assertEquals(HttpStatusCode.OK, payment.status, payment.bodyAsText())
+                    val paid = Json.parseToJsonElement(payment.bodyAsText()).jsonObject
+                    assertEquals("DEMO_PAYMENT_SIMULATED", paid.getValue("status").jsonPrimitive.content)
+                    assertEquals("false", paid.getValue("paymentVerified").jsonPrimitive.content)
+                    assertEquals("SUCCESS", paid.getValue("demoPaymentOutcome").jsonPrimitive.content)
+                    assertEquals(HttpStatusCode.OK, simulate().status, "A retried demo payment must be idempotent")
+                    val studentHistory = client.get("/api/v1/me/individual-demo-orders") {
+                        header(HttpHeaders.Authorization, "Bearer $registeredToken")
+                    }
+                    assertTrue(studentHistory.bodyAsText().contains(orderId))
+                    val visibleToOwner = client.get("/api/v1/sellers/main-canteen/individual-demo-orders") {
+                        header(HttpHeaders.Authorization, "Bearer $owner")
+                    }
+                    assertTrue(visibleToOwner.bodyAsText().contains(orderId))
+                    val sellerAnalytics = client.get("/api/v1/sellers/main-canteen/analytics/summary?from=$today&to=$today") {
+                        header(HttpHeaders.Authorization, "Bearer $owner")
+                    }
+                    assertEquals(HttpStatusCode.OK, sellerAnalytics.status)
+                    val simulatedSales = Json.parseToJsonElement(sellerAnalytics.bodyAsText()).jsonObject
+                    assertEquals("1", simulatedSales.getValue("simulatedSales").jsonObject
+                        .getValue("orderCount").jsonPrimitive.content)
+                    assertEquals(paid.getValue("subtotalPaise").jsonPrimitive.content,
+                        simulatedSales.getValue("simulatedSales").jsonObject.getValue("totalPaise").jsonPrimitive.content)
+                    assertEquals("null", simulatedSales.getValue("verifiedRevenuePaise").toString())
+                    context.dataSource.connection.use { db ->
+                        db.prepareStatement("SELECT count(*),bool_and(NOT payment_verified AND demo_only) FROM individual_demo_orders WHERE idempotency_key=?").use { sql ->
+                            sql.setString(1, checkoutKey)
+                            sql.executeQuery().use { rows ->
+                                assertTrue(rows.next())
+                                assertEquals(1, rows.getInt(1), "Retries must not create duplicate orders")
+                                assertTrue(rows.getBoolean(2), "No gateway verification occurred")
+                            }
+                        }
+                    }
                 }
             } finally { opened.close() }
         }

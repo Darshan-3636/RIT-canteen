@@ -3,6 +3,7 @@ package edu.msrit.canteen
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.runtime.getValue
@@ -31,6 +32,22 @@ class IndividualDemoLifecycleUiTest {
         rule.onNodeWithText("Demo only · no money charged or verified payment.", substring = true).assertExists()
         rule.onNodeWithTag("individual_demo_pay_success").performScrollTo().performClick()
         assertEquals("SUCCESS", selected)
+    }
+
+    @Test fun paymentControlsDisableDuringRequestAndSuccessShowsPersistedStatus() {
+        var current by mutableStateOf(order)
+        var busy by mutableStateOf(true)
+        rule.setContent { RitTheme { IndividualOrderDetailScreen(current, {}, {},
+            "DEMO payment simulated successfully. No money was charged or verified.", paymentBusy = busy) } }
+        rule.onNodeWithTag("individual_demo_pay_success").performScrollTo().assertIsNotEnabled()
+        rule.onNodeWithTag("individual_demo_pay_pending").performScrollTo().assertIsNotEnabled()
+        rule.runOnIdle {
+            busy = false
+            current = order.copy(status = "DEMO_PAYMENT_SIMULATED", demoPaymentOutcome = "SUCCESS")
+        }
+        rule.onNodeWithTag("individual_demo_pay_success").assertDoesNotExist()
+        rule.onNodeWithTag("individual_order_status").assertExists()
+        rule.onNodeWithTag("individual_demo_payment_feedback").assertExists()
     }
 
     @Test fun sellerActionOnlyAppearsAfterSimulatedSuccessAndRequiresCapability() {

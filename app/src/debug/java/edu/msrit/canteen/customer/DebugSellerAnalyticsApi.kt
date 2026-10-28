@@ -22,10 +22,12 @@ object DebugSellerAnalyticsApi {
     private fun parse(row: JSONObject): SellerCloudAnalytics {
         val counts = row.optJSONObject("demoRequestCounts")
         val statuses = counts?.optJSONObject("byStatus")
+        val simulated = row.optJSONObject("simulatedSales")
         val byStatus = if (statuses == null) emptyMap() else statuses.keys().asSequence().associateWith(statuses::getInt)
         return SellerCloudAnalytics(counts?.getInt("total") ?: 0, byStatus,
             row.getString("demoRequestCountsStatus"),
             row.optString("from").takeUnless { it.isBlank() || it == "null" },
-            row.optString("to").takeUnless { it.isBlank() || it == "null" })
+            row.optString("to").takeUnless { it.isBlank() || it == "null" },
+            simulated?.optInt("orderCount") ?: 0, simulated?.optLong("totalPaise") ?: 0L)
     }
 }
