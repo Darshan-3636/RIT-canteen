@@ -186,7 +186,7 @@ fun SellerInboxScreen(records: List<BulkRequestRecord>, sellerId: String, onBack
         LazyColumn(modifier = Modifier.weight(1f).testTag("seller_inbox_list"),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
-                RitStatusIndicator("Seller-scoped local backend · payment unverified")
+                RitStatusIndicator("Seller-scoped demo backend · payment unverified")
                 Spacer(Modifier.height(12.dp))
                 if (onIndividual != null) {
                     RitSecondaryButton("Individual demo orders · $newIndividualCount new", onIndividual,
@@ -578,7 +578,7 @@ fun CustomerDemoRequestScreen(record: BulkRequestRecord, onBack: () -> Unit,
         CatalogHeader("Demo bulk request", onBack)
         LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
-                RitStatusIndicator("Stored on local backend · payment unverified")
+                RitStatusIndicator("Stored on demo backend · payment unverified")
                 Spacer(Modifier.height(12.dp))
                 RitText(record.reference, RitType.heading)
                 SellerStatus(record)

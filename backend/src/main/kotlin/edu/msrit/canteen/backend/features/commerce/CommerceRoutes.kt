@@ -262,11 +262,39 @@ fun Route.registerCommerceRoutes(context: BackendContext) {
             call.respond(PickupScheduleDto(emptyList(),"No paid or operationally confirmed pickups are available in this demo backend."))
         }
     }
+    get("/me/cart/individual") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce;call.respond(readIndividualCart(context,p)) }
+    }
+    put("/me/cart/individual") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            call.respond(replaceIndividualCart(context,p,call.receive<IndividualCartReplaceRequest>())) }
+    }
+    post("/me/cart/individual/checkout") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            val key=call.request.headers["Idempotency-Key"] ?: throw CommerceFault(400,"IDEMPOTENCY_KEY_REQUIRED","Idempotency-Key header is required")
+            call.respond(HttpStatusCode.Created,checkoutIndividualCart(context,p,call.receive<IndividualCartCheckoutRequest>(),key)) }
+    }
     post("/me/individual-demo-orders") {
         call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce;val b=call.receive<CustomerDemoOrderRequest>();call.respond(HttpStatusCode.Created,createIndividual(context,p,b.lines)) }
     }
     get("/me/individual-demo-orders") {
         call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce;call.respond(customerIndividual(context,p.userId)) }
+    }
+    post("/me/individual-demo-orders/{orderId}/simulate-payment") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            val body=call.receive<DemoPaymentRequest>()
+            call.respond(simulateIndividualPayment(context,p,call.uuidParameter("orderId"),body.outcome)) }
+    }
+    get("/sellers/{sellerId}/individual-demo-orders") {
+        call.commerce { val seller=call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")
+            if(call.requireSellerCapability(context,seller,"bulk.view")==null) return@commerce
+            call.respond(sellerIndividual(context,seller)) }
+    }
+    post("/sellers/{sellerId}/individual-demo-orders/{orderId}/demo-status") {
+        call.commerce { val seller=call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")
+            val p=call.requireSellerCapability(context,seller,"bulk.respond") ?: return@commerce
+            val body=call.receive<DemoSellerStatusRequest>()
+            call.respond(transitionIndividualDemo(context,p,seller,call.uuidParameter("orderId"),body.status)) }
     }
 }
 

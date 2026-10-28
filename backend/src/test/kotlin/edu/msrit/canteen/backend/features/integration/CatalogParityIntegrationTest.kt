@@ -58,7 +58,7 @@ class CatalogParityIntegrationTest {
                         }
                         sql.executeQuery("SELECT version,success FROM flyway_schema_history ORDER BY installed_rank").use { rows ->
                             val versions = buildList { while (rows.next()) { assertTrue(rows.getBoolean(2)); add(rows.getString(1)) } }
-                            assertEquals(listOf("001","002","003","004","005","020","021","022","040","041","042"), versions)
+                            assertEquals(listOf("001","002","003","004","005","020","021","022","040","041","042","043","044"), versions)
                         }
                     }
                 }

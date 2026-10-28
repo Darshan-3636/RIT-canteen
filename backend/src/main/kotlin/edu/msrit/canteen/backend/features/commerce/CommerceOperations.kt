@@ -268,8 +268,5 @@ internal fun createIndividual(context:BackendContext,principal:AuthenticatedPrin
 }
 internal fun customerIndividual(context:BackendContext,user:UUID):IndividualDemoOrderListDto = context.dataSource.connection.use { c ->
     val ids=c.prepareStatement("SELECT id FROM individual_demo_orders WHERE customer_user_id=? ORDER BY created_at DESC").use { s -> s.setObject(1,user);s.executeQuery().use { r -> buildList { while(r.next()) add(r.getObject(1,UUID::class.java)) } } }
-    IndividualDemoOrderListDto(ids.mapNotNull { id -> c.prepareStatement("SELECT seller_id,status,demo_only,payment_verified,subtotal_paise,created_at FROM individual_demo_orders WHERE id=? AND customer_user_id=?").use { s -> s.setObject(1,id);s.setObject(2,user);s.executeQuery().use { r -> if(!r.next()) null else {
-        val lines=c.prepareStatement("SELECT item_id,item_name_snapshot,quantity,unit_price_paise FROM individual_demo_order_lines WHERE order_id=? ORDER BY item_id").use { q -> q.setObject(1,id);q.executeQuery().use { rows -> buildList { while(rows.next()) add(IndividualDemoLineDto(rows.getString(1),rows.getString(2),rows.getInt(3),rows.getLong(4))) } } }
-        IndividualDemoOrderDto(id.toString(),r.getString(1),r.getString(2),r.getBoolean(3),r.getBoolean(4),r.getLong(5),r.getTimestamp(6).toInstant().toString(),lines)
-    } } } })
+    IndividualDemoOrderListDto(ids.mapNotNull { loadDemoIndividual(c,it) })
 }

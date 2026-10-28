@@ -48,12 +48,20 @@ import kotlinx.serialization.Serializable
 )
 @Serializable data class BulkRequestListDto(val requests: List<BulkRequestDto>)
 @Serializable data class CustomerDemoOrderRequest(val lines: List<DraftLine>)
+@Serializable data class IndividualCartReplaceRequest(val expectedVersion: Long, val lines: List<DraftLine>)
+@Serializable data class IndividualCartLineDto(val itemId: String, val itemName: String, val quantity: Int,
+                                               val unitPricePaise: Long, val available: Boolean)
+@Serializable data class IndividualCartDto(val version: Long, val sellerId: String?, val subtotalPaise: Long,
+                                           val readyForCheckout: Boolean, val lines: List<IndividualCartLineDto>)
+@Serializable data class IndividualCartCheckoutRequest(val expectedVersion: Long)
+@Serializable data class DemoPaymentRequest(val outcome: String)
+@Serializable data class DemoSellerStatusRequest(val status: String)
 @Serializable data class IndividualDemoLineDto(val itemId: String, val itemName: String, val quantity: Int,
                                                 val unitPricePaise: Long)
 @Serializable data class IndividualDemoOrderDto(
     val id: String, val sellerId: String, val status: String, val demoOnly: Boolean,
     val paymentVerified: Boolean, val subtotalPaise: Long, val createdAt: String,
-    val lines: List<IndividualDemoLineDto>,
+    val lines: List<IndividualDemoLineDto>, val demoPaymentOutcome: String = "NOT_ATTEMPTED",
 )
 @Serializable data class IndividualDemoOrderListDto(val orders: List<IndividualDemoOrderDto>)
 @Serializable data class PickupScheduleDto(val confirmed: List<BulkRequestDto>, val note: String)

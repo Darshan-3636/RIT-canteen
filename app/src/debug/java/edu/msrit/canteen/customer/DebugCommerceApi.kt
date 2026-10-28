@@ -2,6 +2,7 @@ package edu.msrit.canteen.customer
 
 import edu.msrit.canteen.auth.DebugBackendApi
 import edu.msrit.canteen.auth.DevelopmentDemoAccounts
+import edu.msrit.canteen.BuildConfig
 import java.time.Instant
 import java.time.LocalDateTime
 import org.json.JSONArray
@@ -11,10 +12,64 @@ import org.json.JSONObject
 object DebugCommerceApi {
     data class Result<T>(val value: T? = null, val error: String? = null)
 
+    fun individualCart(): Result<IndividualServerCart> = withToken { token ->
+        val response = DebugBackendApi.request("GET", "/api/v1/me/cart/individual", token = token)
+        if (response.status != 200) Result(error = response.error ?: "Could not load your cart.")
+        else Result(value = parseIndividualCart(response.body!!))
+    }
+
+    fun replaceIndividualCart(expectedVersion: Long, lines: List<IndividualLine>): Result<IndividualServerCart> =
+        withToken { token ->
+            val rows = JSONArray()
+            lines.forEach { rows.put(JSONObject().put("itemId", it.itemId).put("quantity", it.quantity)) }
+            val response = DebugBackendApi.request("PUT", "/api/v1/me/cart/individual",
+                JSONObject().put("expectedVersion", expectedVersion).put("lines", rows), token)
+            if (response.status != 200) Result(error = response.error ?: "Cart changed. Refresh and try again.")
+            else Result(value = parseIndividualCart(response.body!!))
+        }
+
+    fun checkoutIndividualCart(expectedVersion: Long, idempotencyKey: String): Result<IndividualOrderPreview> =
+        withToken { token ->
+            val response = DebugBackendApi.request("POST", "/api/v1/me/cart/individual/checkout",
+                JSONObject().put("expectedVersion", expectedVersion), token, idempotencyKey)
+            if (response.status !in 200..201) Result(error = response.error ?: "Could not save the demo order.")
+            else Result(value = parseIndividualOrder(response.body!!))
+        }
+
+    private fun parseIndividualCart(row: JSONObject): IndividualServerCart {
+        val items = row.getJSONArray("lines")
+        return IndividualServerCart(row.getLong("version"), row.getLong("subtotalPaise"),
+            row.getBoolean("readyForCheckout"), (0 until items.length()).map { index ->
+                val item = items.getJSONObject(index)
+                IndividualServerCartLine(item.getString("itemId"), item.getInt("quantity"),
+                    item.getLong("unitPricePaise"), item.getBoolean("available"))
+            })
+    }
+
     fun individualOrders(): Result<List<IndividualOrderPreview>> = withToken { token ->
         val response = DebugBackendApi.request("GET", "/api/v1/me/individual-demo-orders", token = token)
         if (response.status != 200) Result(error = response.error ?: "Could not load saved orders.")
         else Result(value = parseIndividualOrders(response.body!!.getJSONArray("orders")))
+    }
+
+    fun sellerIndividualOrders(sellerId: String): Result<List<IndividualOrderPreview>> = withToken { token ->
+        val response = DebugBackendApi.request("GET", "/api/v1/sellers/$sellerId/individual-demo-orders", token = token)
+        if (response.status != 200) Result(error = response.error ?: "Could not load seller demo orders.")
+        else Result(value = parseIndividualOrders(response.body!!.getJSONArray("orders")))
+    }
+
+    fun simulateIndividualPayment(id: String, outcome: String): Result<IndividualOrderPreview> = withToken { token ->
+        val response = DebugBackendApi.request("POST", "/api/v1/me/individual-demo-orders/$id/simulate-payment",
+            JSONObject().put("outcome", outcome), token)
+        if (response.status != 200) Result(error = response.error ?: "Demo payment simulation failed.")
+        else Result(value = parseIndividualOrder(response.body!!))
+    }
+
+    fun transitionIndividual(sellerId: String, id: String, status: String): Result<IndividualOrderPreview> = withToken { token ->
+        val response = DebugBackendApi.request("POST", "/api/v1/sellers/$sellerId/individual-demo-orders/$id/demo-status",
+            JSONObject().put("status", status), token)
+        if (response.status != 200) Result(error = response.error ?: "Demo order transition failed.")
+        else Result(value = parseIndividualOrder(response.body!!))
     }
 
     fun submitIndividual(draft: IndividualDraft): Result<IndividualOrderPreview> = withToken { token ->
@@ -95,7 +150,8 @@ object DebugCommerceApi {
                 val line = rows.getJSONObject(index)
                 QuoteLineSnapshot(line.getString("itemId"), line.getString("itemName"),
                     line.getInt("quantity"), line.getLong("unitPricePaise"))
-            }, row.getLong("subtotalPaise"), locallySaved = true)
+            }, row.getLong("subtotalPaise"), locallySaved = true, status = row.getString("status"),
+            demoPaymentOutcome = row.optString("demoPaymentOutcome", "NOT_ATTEMPTED"))
     }
 
     private fun parseBulk(row: JSONObject): BulkRequestRecord {
@@ -129,6 +185,9 @@ object DebugCommerceApi {
 
     private inline fun <T> withToken(action: (String) -> Result<T>): Result<T> {
         val token = DevelopmentDemoAccounts.token() ?: return Result(error = "Sign in again.")
-        return try { action(token) } catch (_: Exception) { Result(error = "Local backend unavailable.") }
+        return try { action(token) } catch (_: Exception) {
+            Result(error = if (BuildConfig.RIT_CLOUD_DEMO) "Cloud service unavailable. Retry shortly."
+                else "Local backend unavailable.")
+        }
     }
 }

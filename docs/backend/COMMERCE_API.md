@@ -1,9 +1,8 @@
 # Commerce API — Backend 2
 
-Feature branch: `feat/rit-backend-orders-catalog`
-Foundation base: `05e55583e38b942b58a208c78dedd0959a101e62`
+Originally implemented on `feat/rit-backend-orders-catalog` from foundation `05e55583e38b942b58a208c78dedd0959a101e62`; updated after integration on `feat/rit-verify-complete-backend-integration`.
 
-This module provides a local demonstration catalog and commerce request API. It does not implement Phase B login/session issuance, payments, seller acceptance outside the quote workflow, kitchen fulfillment, pickup handover, notifications, or Android HTTP integration. `AGREED_AWAITING_PAYMENT` means only that customer and seller approved the same current quote revision; it is not a paid or fulfilled order.
+This module provides the demonstration catalog, commerce request API and customer individual-cart API. Phase B authentication/session issuance is mounted separately; Android debug builds use these HTTP routes. Individual orders have a **demo-only simulated payment and seller status lifecycle**; neither is a verified payment, real kitchen fulfillment or pickup handover. `AGREED_AWAITING_PAYMENT` means only that customer and seller approved the same current bulk quote revision; it is not a paid or fulfilled order.
 
 ## Registration and startup
 
@@ -117,22 +116,52 @@ Initial status is `SUBMITTED`. Counteroffers append a new immutable revision and
 
 ## Individual prepared-food demo history
 
+### Customer-owned individual cart (V043)
+
+These routes require a valid customer bearer. They accept no client price or total. The server accepts only published, available, `PREPARED` items from the active Main Canteen, caps a draft at 100 distinct lines and each quantity at 1–999, and recalculates current prices on every read. A saved unavailable item remains visible with `available:false`, but checkout is disabled. A version mismatch returns HTTP 409 `STALE_CART`; clients must refresh before another edit. `PUT` is a complete replacement, so `lines:[]` clears the cart.
+
+| Method | Path | Body / response | Result |
+|---|---|---|---|
+| GET | `/me/cart/individual` | Response `IndividualCartDto` | Fetch the authenticated customer's current cart; absent cart is version 0 with empty lines. |
+| PUT | `/me/cart/individual` | `{"expectedVersion":0,"lines":[{"itemId":"masala-dosa","quantity":2}]}` → `IndividualCartDto` | Atomically replace lines and increment version after server validation. |
+| POST | `/me/cart/individual/checkout` | `Idempotency-Key: <opaque 1–128-character key>` and `{"expectedVersion":1}` → `IndividualDemoOrderDto` (201) | Under one DB transaction: lock cart, revalidate live items/prices, snapshot order lines, clear cart, increment version. Same key+version replays the same order ID; reused key/different version or stale cart returns 409. |
+
+`IndividualCartDto` has `version`, `sellerId` (null when empty), `subtotalPaise`, `readyForCheckout`, and `lines:[{itemId,itemName,quantity,unitPricePaise,available}]`. This is **not** a live paid order. Checkout returns `status:DEMO_SAVED`, `demoOnly:true`, `paymentVerified:false`; it never reports a charge, reservation, kitchen acceptance or pickup. The legacy line-based POST below remains for compatibility but the Android customer UI now uses cart checkout.
+
 | Method | Path | Auth | Behavior |
 |---|---|---|---|
 | POST | `/me/individual-demo-orders` | Bearer customer | Persist multiple Main Canteen `PREPARED` items at current server prices; quantities start at one, no bulk minimum. |
 | GET | `/me/individual-demo-orders` | Bearer owner | Customer-specific demo history. |
+| POST | `/me/individual-demo-orders/{orderId}/simulate-payment` | Bearer order owner | `{ "outcome":"SUCCESS" }`, `FAILURE` or `PENDING`; returns updated order. Only local/cloud-demo runtime, not production. Success means simulated only; `paymentVerified:false` always. Other-customer IDs return 404. |
+| GET | `/sellers/{sellerId}/individual-demo-orders` | Seller `bulk.view` | Seller-scoped demo queue. A different seller's orders never appear. |
+| POST | `/sellers/{sellerId}/individual-demo-orders/{orderId}/demo-status` | Seller `bulk.respond` | `{ "status":"DEMO_ACCEPTED" }`, `DEMO_REJECTED`, `DEMO_READY` or `DEMO_COMPLETED`. Only allowed in sequence after a simulated SUCCESS. Other-seller IDs return 404; invalid/duplicate transitions return 409. Local/cloud-demo runtime only. |
 
 Example body: `{ "lines": [{"itemId":"masala-dosa","quantity":1},{"itemId":"idli","quantity":2}] }`. The response includes `status: "DEMO_SAVED"`, `demoOnly: true`, and `paymentVerified: false`. Packaged products and secondary sellers cannot use this endpoint. It is not an operational order, kitchen acceptance, payment, delivery or pickup promise.
+
+The demo lifecycle is `DEMO_SAVED → DEMO_PAYMENT_PENDING/FAILED → DEMO_PAYMENT_SIMULATED → DEMO_ACCEPTED → DEMO_READY → DEMO_COMPLETED`; a seller may reject at the simulated-payment stage. Failed/pending payment can be retried, but a success or seller transition cannot be replayed as a new transition. The server enforces the account and seller scope in PostgreSQL transactions. The display is deliberately marked “demo”; these statuses must not be interpreted as a real payment, kitchen dispatch, pickup code or order-completion proof. The `demo_payment_outcome` field is independent of the permanently false `payment_verified` column.
 
 ## Owned schema and fixtures
 
 - `V020__commerce_catalog.sql`: categories, per-seller category eligibility, menu, seller policies, known weekly hours and local closures.
 - `V021__bulk_requests.sql`: requests, immutable quote revisions/lines, version-scoped approvals and special-pickup decisions, audit events, idempotency.
 - `V022__individual_demo_orders.sql`: customer-owned individual demo history and price-snapshotted lines.
+- `V043__individual_customer_cart.sql`: one versioned individual cart per user, seller-scoped line foreign keys, and unique customer/idempotency-key index on demo orders. `individual_customer_carts.customer_user_id` references `users(id)` with cascade deletion; lines reference both cart and `(seller_id,item_id)` menu identity. Existing demo orders remain intact; the new idempotency columns are nullable for legacy rows.
+- `V044__individual_demo_lifecycle.sql`: expands only the individual demo status check, records the simulated payment outcome and update timestamp, and indexes seller-scoped queue reads. `demo_only` remains true and `payment_verified` remains constrained false.
+
+Individual demo data relationships and guards:
+
+| Table | Ownership / relationship | Critical constraints |
+|---|---|---|
+| `individual_customer_carts` | One row per `users.id` (`customer_user_id` PK); cascades only with user deletion | Nonnegative `version`; PUT and checkout lock this row, compare `expectedVersion`, then increment. |
+| `individual_customer_cart_lines` | `(customer_user_id,item_id)` PK; cart cascade FK and `(seller_id,item_id)` menu FK | Quantity 1–999; server restricts eligible items to one active Main Canteen's available prepared food. |
+| `individual_demo_orders` | UUID PK, `customer_user_id → users.id`, `seller_id → sellers.id` | Nonnegative snapshotted subtotal; `demo_only=true`, `payment_verified=false` enforced by checks; status/outcome allowlists; unique `(customer_user_id,idempotency_key)` for non-null keys. |
+| `individual_demo_order_lines` | `(order_id,item_id)` PK; order FK and `(seller_id,item_id)` menu FK | Immutable name/price/quantity snapshots from checkout; quantity 1–999, nonnegative unit price. |
+
+The V044 seller index is `(seller_id,created_at DESC)`. A cart checkout transaction writes the order and its lines, clears the cart and increments its version; the retry key resolves to the existing order after restart. Only the owning customer can change a payment simulation, and only a seller with live `bulk.respond` capability on that order's seller can advance its demo status. Neither client-supplied prices nor client-supplied payment verification are accepted.
 - Demo seed categories: `dosa`, `rice`, `snacks`, `drinks`, `packs`.
 - Demo seller IDs: `main-canteen`, `north-counter`, `coffee-corner`, `campus-pantry`.
-- Demo item IDs and prices (paise): `masala-dosa` 5000, `veg-biryani` 8500, `filter-coffee` 3000, `idli` 3500, `lemon-rice` 4500 (seeded unavailable but visible), `water-bottle` 2000, `north-lunch` 9000, `north-snack` 6500, `corner-coffee` 3500, `corner-biscuits` 2500, `pantry-juice` 3000, `pantry-water` 2000.
-- No user, membership or bearer fixtures are included in runtime seed. Integration tests create random users and sessions in the separate test DB and store only SHA-256 token hashes.
+- The current local fixture is the 72-item manifest (`backend/src/main/resources/demo/catalog-items-v2.tsv`), 18 items per seller. Sample IDs/prices (paise): `masala-dosa` 5000, `veg-biryani` 8500, `filter-coffee` 3000, `idli` 3500, `lemon-rice` 4500 (seeded unavailable but visible), `water-bottle` 2000, `north-lunch` 9000, `north-snack` 6500, `corner-coffee` 3500, `corner-biscuits` 2500, `pantry-juice` 3000, `pantry-water` 2000. See `DEMO_CATALOG_PARITY.md` for full parity and mutation-preserving seed rules.
+- The Commerce catalog fixture does not create user or membership records; the separate local-auth bootstrap creates eight demo identities only when `RIT_ENV=local` and `DEMO_SEED_ENABLED=true`. Integration tests create random users/sessions in the separate test DB and store only SHA-256 bearer-token hashes.
 
 ## Local verification
 
@@ -143,4 +172,4 @@ From `backend/`, use the local `.env` instructions in `README.md`. For PostgreSQ
 .\gradlew.bat test --tests edu.msrit.canteen.backend.features.commerce.CommerceIntegrationTest --no-daemon --max-workers=1
 ```
 
-The frozen `DatabaseFoundationTest.migrationsAndSellerSeedsAreIdempotent` expects exactly `V001`–`V005`; it will conflict with the new commerce migrations when the entire foundation DB suite is enabled. Do not change that owner-owned test in this branch; the lead must update its assertion to check the core prefix. No credentials belong in this document or Git.
+The integrated test suite validates the immutable core migration prefix and the current migration list through V044 in disposable databases. No credentials belong in this document or Git.

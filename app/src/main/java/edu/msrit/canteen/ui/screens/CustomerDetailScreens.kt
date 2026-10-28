@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -112,7 +113,7 @@ fun SellerProfileScreen(
 
 @Composable
 fun FoodDetailsScreen(itemId: String, onBack: () -> Unit, onAddBulk: ((String) -> Unit)? = null,
-                      onAddIndividual: ((String) -> Unit)? = null, onViewCart: (() -> Unit)? = null,
+                      onAddIndividual: ((String, (Boolean) -> Unit) -> Unit)? = null, onViewCart: (() -> Unit)? = null,
                       favorites: FavoritesRepository? = null,
                       customerId: String? = null, catalog: CustomerCatalogSource = PreviewCatalog) {
     val item = catalog.items.find { it.id == itemId && it in catalog.visibleItems() }
@@ -122,6 +123,8 @@ fun FoodDetailsScreen(itemId: String, onBack: () -> Unit, onAddBulk: ((String) -
     val eligibility = itemEligibility(seller, item)
     var expanded by rememberSaveable(itemId) { mutableStateOf(false) }
     var added by rememberSaveable(itemId) { mutableStateOf(false) }
+    var adding by remember(itemId) { mutableStateOf(false) }
+    var addFailed by remember(itemId) { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(colors.background).testTag("food_details")) {
         CatalogHeader("Food Details", onBack)
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 18.dp)) {
@@ -162,8 +165,17 @@ fun FoodDetailsScreen(itemId: String, onBack: () -> Unit, onAddBulk: ((String) -
             Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
                 if (added) RitText("Added to individual cart", RitType.label, colors.accent,
                     Modifier.testTag("food_added_feedback"))
-                RitPrimaryButton("Add to Cart", { onAddIndividual(item.id); added = true },
-                    Modifier.fillMaxWidth().testTag("food_add_individual"))
+                if (addFailed) RitText("Could not update your cart. Please retry.", RitType.small, colors.accent,
+                    Modifier.testTag("food_add_error"))
+                RitPrimaryButton(if (adding) "Adding…" else "Add to Cart", {
+                    adding = true
+                    addFailed = false
+                    onAddIndividual(item.id) { success ->
+                        adding = false
+                        added = success
+                        addFailed = !success
+                    }
+                }, Modifier.fillMaxWidth().testTag("food_add_individual"), enabled = !adding)
                 if (added && onViewCart != null) RitSecondaryButton("View Cart", onViewCart,
                     Modifier.fillMaxWidth().testTag("food_view_cart"))
                 if (onAddBulk != null) RitSecondaryButton("Add to Bulk Cart", { onAddBulk(item.id) },

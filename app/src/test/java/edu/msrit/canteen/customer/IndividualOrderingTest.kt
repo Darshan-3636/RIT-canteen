@@ -45,4 +45,23 @@ class IndividualOrderingTest {
         assertEquals(1, individual.draft.totalUnits)
         assertTrue(bulk.draft.lines.isEmpty())
     }
+
+    @Test fun serverCartSnapshotReplacesLocalDraftAndRotatesCheckoutKeyOnVersionChange() {
+        val cart = IndividualCartSession()
+        cart.add(item("filter-coffee"))
+        val first = IndividualServerCart(4, 10_000L, true,
+            listOf(IndividualServerCartLine("masala-dosa", 2, 5_000L, true)))
+        cart.applyServer(first)
+        assertEquals(listOf(IndividualLine("masala-dosa", 2)), cart.draft.lines)
+        assertEquals(10_000L, cart.serverCart?.subtotalPaise)
+        val key = cart.checkoutIdempotencyKey()
+        cart.applyServer(first)
+        assertEquals(key, cart.checkoutIdempotencyKey())
+        cart.applyServer(first.copy(version = 5, readyForCheckout = false))
+        assertFalse(cart.serverCart!!.readyForCheckout)
+        assertFalse(key == cart.checkoutIdempotencyKey())
+        cart.clear()
+        assertTrue(cart.draft.lines.isEmpty())
+        assertEquals(null, cart.serverCart)
+    }
 }

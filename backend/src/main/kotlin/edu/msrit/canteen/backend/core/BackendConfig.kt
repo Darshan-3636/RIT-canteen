@@ -17,6 +17,7 @@ data class BackendConfig(
     val cloudDemoCustomerPassword: String? = null,
     val cloudDemoOwnerEmail: String? = null,
     val cloudDemoOwnerPassword: String? = null,
+    val cloudDemoSelfSignupEnabled: Boolean = false,
     val databasePoolSize: Int = 2,
 ) {
     val sellerZone: ZoneId = ZoneId.of("Asia/Kolkata")
@@ -25,7 +26,8 @@ data class BackendConfig(
         "databaseUrl=<redacted>, databaseUser=<redacted>, databasePassword=<redacted>, " +
         "demoSeedEnabled=$demoSeedEnabled, cloudDemoSeedEnabled=$cloudDemoSeedEnabled, " +
         "cloudDemoCustomerEmail=<redacted>, cloudDemoCustomerPassword=<redacted>, " +
-        "cloudDemoOwnerEmail=<redacted>, cloudDemoOwnerPassword=<redacted>, databasePoolSize=$databasePoolSize)"
+        "cloudDemoOwnerEmail=<redacted>, cloudDemoOwnerPassword=<redacted>, " +
+        "cloudDemoSelfSignupEnabled=$cloudDemoSelfSignupEnabled, databasePoolSize=$databasePoolSize)"
 
     init {
         require(httpHost.isNotBlank()) { "HTTP_HOST is required" }
@@ -41,6 +43,9 @@ data class BackendConfig(
         }
         require(!cloudDemoSeedEnabled || environment == RuntimeEnvironment.CLOUD_DEMO) {
             "RIT_CLOUD_DEMO_SEED_ENABLED is permitted only with RIT_ENV=cloud_demo"
+        }
+        require(!cloudDemoSelfSignupEnabled || environment == RuntimeEnvironment.CLOUD_DEMO) {
+            "RIT_CLOUD_DEMO_SELF_SIGNUP_ENABLED is permitted only with RIT_ENV=cloud_demo"
         }
         if (environment == RuntimeEnvironment.CLOUD_DEMO) {
             require(cloudDemoSeedEnabled) { "Cloud demo bootstrap must be explicitly enabled" }
@@ -98,6 +103,8 @@ data class BackendConfig(
                 cloudDemoCustomerPassword = env["RIT_CLOUD_DEMO_CUSTOMER_PASSWORD"],
                 cloudDemoOwnerEmail = env["RIT_CLOUD_DEMO_OWNER_EMAIL"],
                 cloudDemoOwnerPassword = env["RIT_CLOUD_DEMO_OWNER_PASSWORD"],
+                cloudDemoSelfSignupEnabled = parseBoolean(
+                    env["RIT_CLOUD_DEMO_SELF_SIGNUP_ENABLED"] ?: "false", "RIT_CLOUD_DEMO_SELF_SIGNUP_ENABLED"),
                 databasePoolSize = (env["DB_POOL_SIZE"] ?: "2").toIntOrNull()
                     ?: error("DB_POOL_SIZE must be an integer"),
             )

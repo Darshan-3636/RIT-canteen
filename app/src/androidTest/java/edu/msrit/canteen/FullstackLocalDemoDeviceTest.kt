@@ -52,8 +52,13 @@ class FullstackLocalDemoDeviceTest {
         rule.onNodeWithTag("demo_login_password").performTextInput("RitDemo!Student01")
         rule.onNodeWithTag("demo_login_submit").performScrollTo().performClick()
         rule.waitUntil(25_000) {
-            rule.onAllNodesWithTag("choose_seller").fetchSemanticsNodes().isNotEmpty()
+            rule.onAllNodesWithTag("choose_seller").fetchSemanticsNodes().isNotEmpty() ||
+                rule.onAllNodesWithTag("demo_login_error").fetchSemanticsNodes().isNotEmpty()
         }
+        assertTrue(if (rule.onAllNodesWithTag("demo_login_error").fetchSemanticsNodes().isNotEmpty())
+                rule.onNodeWithTag("demo_login_error").fetchSemanticsNode().config.toString()
+            else DevelopmentDemoAccounts.connectionMessage ?: "Login remained on the entry screen",
+            rule.onAllNodesWithTag("choose_seller").fetchSemanticsNodes().isNotEmpty())
         rule.runOnUiThread {
             assertEquals(72, PreviewCatalog.items.size)
             assertEquals(4, PreviewCatalog.sellers.size)
@@ -100,6 +105,32 @@ class FullstackLocalDemoDeviceTest {
             assertTrue(DevelopmentDemoAccounts.signIn("owner.secondary@demo.ritcanteen.test", "RitDemo!OwnerOther01").account != null)
             val agreed = DebugCommerceApi.sellerApprove("north-counter", id, 2)
             assertEquals(QuoteStage.AGREED_AWAITING_PAYMENT, agreed.value?.thread?.stage)
+            DevelopmentDemoAccounts.signOut()
+        }
+    }
+
+    @Test fun customerCartSurvivesReloginAndCheckoutReplayUsesOneServerOrder() {
+        runBlocking(Dispatchers.IO) {
+            val login = DevelopmentDemoAccounts.signIn("student.arya@demo.ritcanteen.test", "RitDemo!Student01")
+            assertTrue(login.error ?: "customer login", login.account != null)
+            var cart = DebugCommerceApi.individualCart().value!!
+            if (cart.lines.isNotEmpty()) cart = DebugCommerceApi.replaceIndividualCart(cart.version, emptyList()).value!!
+            cart = DebugCommerceApi.replaceIndividualCart(cart.version,
+                listOf(IndividualLine("masala-dosa", 3))).value!!
+            assertEquals(15_000L, cart.subtotalPaise)
+            val version = cart.version
+            DevelopmentDemoAccounts.signOut()
+            assertTrue(DevelopmentDemoAccounts.signIn("student.arya@demo.ritcanteen.test", "RitDemo!Student01").account != null)
+            val restored = DebugCommerceApi.individualCart().value!!
+            assertEquals(version, restored.version)
+            assertEquals(3, restored.lines.single().quantity)
+            val key = UUID.randomUUID().toString()
+            val created = DebugCommerceApi.checkoutIndividualCart(version, key)
+            assertTrue(created.error ?: "cart checkout", created.value != null)
+            val replay = DebugCommerceApi.checkoutIndividualCart(version, key)
+            assertEquals(created.value!!.id, replay.value?.id)
+            assertTrue(DebugCommerceApi.individualCart().value!!.lines.isEmpty())
+            assertTrue(DebugCommerceApi.individualOrders().value!!.any { it.id == created.value!!.id })
             DevelopmentDemoAccounts.signOut()
         }
     }

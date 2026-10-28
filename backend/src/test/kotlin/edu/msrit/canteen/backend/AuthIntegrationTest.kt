@@ -68,6 +68,49 @@ class AuthIntegrationTest {
     private fun errorCode(body: String): String = parse(body).getValue("error").jsonObject.getValue("code").jsonPrimitive.content
     private fun user(body: String): JsonObject = parse(body).getValue("user").jsonObject
 
+    @Test fun optInCloudDemoSignupCreatesOnlyUnprivilegedCustomer() {
+        val email = "demo-signup-${UUID.randomUUID()}@example.test"
+        val context = BackendBootstrap.open(config(seed = false))
+        val cloud = context.config.copy(
+            environment = RuntimeEnvironment.CLOUD_DEMO,
+            httpHost = "0.0.0.0",
+            databaseUrl = "jdbc:postgresql://pool.example:5432/postgres?sslmode=require",
+            cloudDemoSeedEnabled = true,
+            cloudDemoCustomerEmail = "demo.customer@example.test",
+            cloudDemoCustomerPassword = "Unique-Customer-Password-2048!",
+            cloudDemoOwnerEmail = "demo.owner@example.test",
+            cloudDemoOwnerPassword = "Unique-Owner-Password-2048!",
+            cloudDemoSelfSignupEnabled = true,
+        )
+        try {
+            testApplication {
+                application { backendModule(context.copy(config = cloud)) }
+                val body = """{"fullName":"Demo Customer","email":"$email","password":"ValidPassword123","affiliation":"FACULTY","department":"CSE"}"""
+                val created = client.register(body)
+                assertEquals(HttpStatusCode.Created, created.status)
+                assertTrue(user(created.bodyAsText()).getValue("memberships").jsonArray.isEmpty())
+                assertEquals("false", user(created.bodyAsText()).getValue("platformAdmin").jsonPrimitive.content)
+                assertEquals(HttpStatusCode.Conflict, client.register(body).status)
+                val loggedIn = client.login(email, "ValidPassword123")
+                assertEquals(HttpStatusCode.OK, loggedIn.status)
+                val bearer = token(loggedIn.bodyAsText())
+                assertEquals(HttpStatusCode.OK, client.me(bearer).status)
+                val denied = client.get("/api/v1/sellers/main-canteen/bulk/requests") {
+                    header(HttpHeaders.Authorization, "Bearer $bearer")
+                }
+                assertEquals(HttpStatusCode.Forbidden, denied.status)
+            }
+        } finally {
+            context.dataSource.connection.use { db ->
+                db.prepareStatement("DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE email=?)").use {
+                    it.setString(1, email); it.executeUpdate()
+                }
+                db.prepareStatement("DELETE FROM users WHERE email=?").use { it.setString(1, email); it.executeUpdate() }
+            }
+            context.close()
+        }
+    }
+
     @Test fun allEightPersonasHaveDistinctPersistentIdsAndLiveRoles() {
         val context = BackendBootstrap.open(config())
         try {

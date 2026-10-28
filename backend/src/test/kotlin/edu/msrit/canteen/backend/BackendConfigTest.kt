@@ -89,6 +89,15 @@ class BackendConfigTest {
         }
     }
 
+    @Test fun publicDemoSignupRequiresExplicitCloudOptIn() {
+        assertFailsWith<IllegalArgumentException> {
+            BackendConfig.fromEnvironment(base + ("RIT_CLOUD_DEMO_SELF_SIGNUP_ENABLED" to "true"))
+        }
+        assertFailsWith<IllegalStateException> {
+            BackendConfig.fromEnvironment(base + ("RIT_CLOUD_DEMO_SELF_SIGNUP_ENABLED" to "not-a-boolean"))
+        }
+    }
+
     @Test fun cloudDemoRejectsEveryPublishedLocalFixtureEmailAndPasswordFamily() {
         val cloud = base + mapOf(
             "RIT_ENV" to "cloud_demo", "HTTP_HOST" to "0.0.0.0",

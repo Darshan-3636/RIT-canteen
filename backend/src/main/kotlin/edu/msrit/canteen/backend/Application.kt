@@ -95,9 +95,10 @@ fun Application.backendModule(context: BackendContext, mountContributorRoutes: B
                 registerEngagementRoutes(context, PostgresCommerceReadPort(context))
             }
             post("/auth/register") {
-                if (context.config.environment == edu.msrit.canteen.backend.core.RuntimeEnvironment.CLOUD_DEMO) {
+                if (context.config.environment == edu.msrit.canteen.backend.core.RuntimeEnvironment.CLOUD_DEMO &&
+                    !context.config.cloudDemoSelfSignupEnabled) {
                     call.respondApiError(HttpStatusCode.Forbidden, "REGISTRATION_DISABLED",
-                        "Public account registration is disabled for this cloud demo")
+                        "Customer registration is disabled until the demo owner enables it")
                     return@post
                 }
                 val request = call.readJson<RegisterRequest>()
