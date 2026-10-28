@@ -19,6 +19,7 @@ import edu.msrit.canteen.backend.core.BackendConfig
 import edu.msrit.canteen.backend.core.BackendContext
 import edu.msrit.canteen.backend.core.close
 import edu.msrit.canteen.backend.features.commerce.seedCommerceFixtures
+import edu.msrit.canteen.backend.features.commerce.CloudDemoDataSeed
 import edu.msrit.canteen.backend.features.commerce.registerCommerceRoutes
 import edu.msrit.canteen.backend.features.engagement.registerEngagementRoutes
 import edu.msrit.canteen.backend.features.integration.PostgresCommerceReadPort
@@ -52,6 +53,7 @@ fun main() {
     try {
         if (config.demoSeedEnabled || config.cloudDemoSeedEnabled) seedCommerceFixtures(context)
         if (config.cloudDemoSeedEnabled) CloudDemoIdentitySeed.seed(context)
+        if (config.cloudDemoSeedEnabled) CloudDemoDataSeed.seed(context)
     } catch (failure: Throwable) {
         context.close()
         throw failure
