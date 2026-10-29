@@ -23,6 +23,7 @@ fun CustomerUnavailableScreen(section: String, onBack: () -> Unit) {
         "favourites" -> "Favourites"
         "profile" -> "Profile"
         "access" -> "Mock access required"
+        "payment" -> "Payment unavailable"
         else -> "Coming later"
     }
     Column(Modifier.fillMaxSize().background(RitThemeTokens.colors.background)) {
@@ -36,6 +37,7 @@ fun CustomerUnavailableScreen(section: String, onBack: () -> Unit) {
                 "favourites" -> "Saving favourites is planned for a later stage; nothing is stored by this preview."
                 "profile" -> "A verified customer account and profile require the email authentication service."
                 "access" -> "Sign in with an authorized customer account to continue. Demo accounts are available only in development builds."
+                "payment" -> "Payment is not integrated. An agreed bulk quote remains unpaid; no QR or pickup credential exists."
                 else -> "This feature is not connected yet."
             })
         }

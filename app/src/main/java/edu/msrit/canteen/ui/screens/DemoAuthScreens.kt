@@ -107,20 +107,15 @@ fun DemoLoginScreen(onBack: () -> Unit, onCreateAccount: () -> Unit,
             }, Modifier.fillMaxWidth().testTag("demo_login_submit"),
                 enabled = !busy && email.isNotBlank() && password.isNotBlank())
             Spacer(Modifier.height(12.dp))
-            if (BuildConfig.RIT_CLOUD_DEMO) {
-                RitText("Demo accounts are provided privately. New registrations are disabled.",
-                    RitType.small, colors.muted, Modifier.padding(vertical = 8.dp))
-            } else {
-                RitSecondaryButton("Create customer account", onCreateAccount,
-                    Modifier.fillMaxWidth().testTag("demo_login_create"))
-            }
+            RitSecondaryButton("Create customer account", onCreateAccount,
+                Modifier.fillMaxWidth().testTag("demo_login_create"))
             Spacer(Modifier.height(12.dp))
             RitSecondaryButton("Forgot password?", { forgot = !forgot },
                 Modifier.fillMaxWidth().testTag("demo_login_forgot"))
             if (forgot) RitMessageCard(
                 if (BuildConfig.RIT_CLOUD_DEMO) "Password reset unavailable"
                 else "Demo passwords",
-                if (BuildConfig.RIT_CLOUD_DEMO) "Ask the demo owner for access. No reset email is sent."
+                if (BuildConfig.RIT_CLOUD_DEMO) "Password reset is not available yet. No reset email is sent."
                 else "No reset email is sent. For a seeded demo account, use its supplied test password. For a locally created customer account, create another local demo account with a different email.")
         }
     }
@@ -130,17 +125,6 @@ fun DemoLoginScreen(onBack: () -> Unit, onCreateAccount: () -> Unit,
 fun DemoSignupScreen(onBack: () -> Unit, onRegistered: () -> Unit) {
     BackHandler(onBack = onBack)
     val colors = RitThemeTokens.colors
-    if (BuildConfig.RIT_CLOUD_DEMO) {
-        Column(Modifier.fillMaxSize().background(colors.background).imePadding()) {
-            CatalogHeader("Create account", onBack)
-            Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 20.dp)) {
-                RitText("Registration is disabled", RitType.heading)
-                RitText("Customer and seller accounts are provided privately by the demo owner.",
-                    RitType.body, colors.muted, Modifier.padding(top = 12.dp))
-            }
-        }
-        return
-    }
     var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -156,9 +140,11 @@ fun DemoSignupScreen(onBack: () -> Unit, onRegistered: () -> Unit) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 20.dp)) {
             RitText("Join RIT Canteen", RitType.heading)
-            RitText("Create a Student or Faculty account on the local demo server.", RitType.body, colors.muted)
+            RitText(if (BuildConfig.RIT_CLOUD_DEMO) "Create a Student or Faculty account for the cloud demo."
+                else "Create a Student or Faculty account on the local demo server.", RitType.body, colors.muted)
             Spacer(Modifier.height(8.dp))
-            RitText("No email is verified or sent. Seller accounts are invitation-only.", RitType.small, colors.accent)
+            RitText("Email and Student/Faculty status are self-declared, not verified. Seller accounts are invitation-only.",
+                RitType.small, colors.accent)
             Spacer(Modifier.height(22.dp))
             RitTextField(name, { name = it.take(100); error = null }, "Full name", "First and last name",
                 Modifier.fillMaxWidth(), inputTag = "demo_signup_name")

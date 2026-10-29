@@ -2,6 +2,7 @@ package edu.msrit.canteen.customer
 
 import edu.msrit.canteen.auth.DebugBackendApi
 import edu.msrit.canteen.auth.DevelopmentDemoAccounts
+import edu.msrit.canteen.BuildConfig
 import java.time.Instant
 import java.time.LocalDateTime
 import org.json.JSONArray
@@ -11,10 +12,134 @@ import org.json.JSONObject
 object DebugCommerceApi {
     data class Result<T>(val value: T? = null, val error: String? = null)
 
+    fun bulkDraft(): Result<BulkServerDraft> = withToken { token ->
+        val response = DebugBackendApi.request("GET", "/api/v1/me/draft/bulk", token = token)
+        if (response.status != 200) Result(error = response.error ?: "Could not load your bulk draft.")
+        else Result(value = parseBulkDraft(response.body!!))
+    }
+
+    fun replaceBulkDraft(expectedVersion: Long, draft: BulkDraft): Result<BulkServerDraft> = withToken { token ->
+        val rows = JSONArray().apply { draft.lines.forEach { line ->
+            put(JSONObject().put("itemId", line.itemId).put("quantity", line.quantity))
+        } }
+        val body = JSONObject().put("expectedVersion", expectedVersion)
+            .put("sellerId", draft.sellerId ?: JSONObject.NULL).put("lines", rows)
+            .put("pickupAt", draft.pickup?.atZone(RIT_TIME_ZONE)?.toInstant()?.toString() ?: JSONObject.NULL)
+            .put("specialPickup", draft.specialPickup).put("specialPickupReason", draft.specialReason)
+            .put("instructions", draft.instructions)
+        val response = DebugBackendApi.request("PUT", "/api/v1/me/draft/bulk", body, token)
+        if (response.status != 200) Result(error = response.error ?: "Bulk draft changed. Reload before editing.")
+        else Result(value = parseBulkDraft(response.body!!))
+    }
+
+    private fun parseBulkDraft(row: JSONObject): BulkServerDraft {
+        val lines = row.getJSONArray("lines")
+        val sellerId = row.optString("sellerId").takeUnless { it.isBlank() || it == "null" }
+        val pickup = row.optString("pickupAt").takeUnless { it.isBlank() || it == "null" }?.let(::local)
+        val parsed = (0 until lines.length()).map { lines.getJSONObject(it) }
+        return BulkServerDraft(row.getLong("version"), BulkDraft(sellerId,
+            parsed.map { BulkLine(it.getString("itemId"), it.getInt("quantity")) }, pickup,
+            row.getBoolean("specialPickup"), row.getString("specialPickupReason"), row.getString("instructions")),
+            row.getLong("subtotalPaise"), parsed.filterNot { it.getBoolean("available") }
+                .mapTo(mutableSetOf()) { it.getString("itemId") })
+    }
+
+    fun individualCart(): Result<IndividualServerCart> = withToken { token ->
+        val response = DebugBackendApi.request("GET", "/api/v1/me/cart/individual", token = token)
+        if (response.status != 200) Result(error = response.error ?: "Could not load your cart.")
+        else Result(value = parseIndividualCart(response.body!!))
+    }
+
+    fun replaceIndividualCart(expectedVersion: Long, lines: List<IndividualLine>): Result<IndividualServerCart> =
+        withToken { token ->
+            val rows = JSONArray()
+            lines.forEach { rows.put(JSONObject().put("itemId", it.itemId).put("quantity", it.quantity)) }
+            val response = DebugBackendApi.request("PUT", "/api/v1/me/cart/individual",
+                JSONObject().put("expectedVersion", expectedVersion).put("lines", rows), token)
+            if (response.status != 200) Result(error = response.error ?: "Cart changed. Refresh and try again.")
+            else Result(value = parseIndividualCart(response.body!!))
+        }
+
+    fun checkoutIndividualCart(expectedVersion: Long, idempotencyKey: String): Result<IndividualOrderPreview> =
+        withToken { token ->
+            val response = DebugBackendApi.request("POST", "/api/v1/me/cart/individual/checkout",
+                JSONObject().put("expectedVersion", expectedVersion), token, idempotencyKey)
+            if (response.status !in 200..201) Result(error = response.error ?: "Could not save the demo order.")
+            else Result(value = parseIndividualOrder(response.body!!))
+        }
+
+    private fun parseIndividualCart(row: JSONObject): IndividualServerCart {
+        val items = row.getJSONArray("lines")
+        return IndividualServerCart(row.getLong("version"), row.getLong("subtotalPaise"),
+            row.getBoolean("readyForCheckout"), (0 until items.length()).map { index ->
+                val item = items.getJSONObject(index)
+                IndividualServerCartLine(item.getString("itemId"), item.getInt("quantity"),
+                    item.getLong("unitPricePaise"), item.getBoolean("available"))
+            })
+    }
+
     fun individualOrders(): Result<List<IndividualOrderPreview>> = withToken { token ->
         val response = DebugBackendApi.request("GET", "/api/v1/me/individual-demo-orders", token = token)
         if (response.status != 200) Result(error = response.error ?: "Could not load saved orders.")
         else Result(value = parseIndividualOrders(response.body!!.getJSONArray("orders")))
+    }
+
+    fun sellerIndividualOrders(sellerId: String): Result<List<IndividualOrderPreview>> = withToken { token ->
+        val response = DebugBackendApi.request("GET", "/api/v1/sellers/$sellerId/individual-demo-orders", token = token)
+        if (response.status != 200) Result(error = response.error ?: "Could not load seller demo orders.")
+        else Result(value = parseIndividualOrders(response.body!!.getJSONArray("orders")))
+    }
+
+    fun simulateIndividualPayment(id: String, outcome: String): Result<IndividualOrderPreview> = withToken { token ->
+        val response = DebugBackendApi.request("POST", "/api/v1/me/individual-demo-orders/$id/simulate-payment",
+            JSONObject().put("outcome", outcome), token)
+        if (response.status != 200) Result(error = response.error ?: "Demo payment simulation failed.")
+        else Result(value = parseIndividualOrder(response.body!!))
+    }
+
+    fun beginSandboxPayment(type: String, sourceId: String, key: String): Result<SandboxPayment> = withToken { token ->
+        val response = DebugBackendApi.request("POST", "/api/v1/me/sandbox-payments/$type/$sourceId",
+            token = token, idempotencyKey = key)
+        if (response.status !in 200..201) Result(error = response.error ?: "PhonePe UAT is unavailable.")
+        else Result(value = parseSandboxPayment(response.body!!))
+    }
+
+    fun sandboxPayments(): Result<List<SandboxPayment>> = withToken { token ->
+        val response = DebugBackendApi.request("GET", "/api/v1/me/sandbox-payments", token = token)
+        if (response.status != 200) Result(error = response.error ?: "Could not load UAT attempts.")
+        else {
+            val rows = response.body!!.getJSONArray("payments")
+            Result(value = (0 until rows.length()).map { parseSandboxPayment(rows.getJSONObject(it)) })
+        }
+    }
+
+    fun sandboxPayment(id: String): Result<SandboxPayment> = withToken { token ->
+        val response = DebugBackendApi.request("GET", "/api/v1/me/sandbox-payments/$id", token = token)
+        if (response.status != 200) Result(error = response.error ?: "Could not load UAT attempt.")
+        else Result(value = parseSandboxPayment(response.body!!))
+    }
+
+    fun reconcileSandboxPayment(id: String): Result<SandboxPayment> = withToken { token ->
+        val response = DebugBackendApi.request("POST", "/api/v1/me/sandbox-payments/$id/reconcile", token = token)
+        if (response.status != 200) Result(error = response.error ?: "Could not verify PhonePe UAT status.")
+        else Result(value = parseSandboxPayment(response.body!!))
+    }
+
+    private fun parseSandboxPayment(row: JSONObject): SandboxPayment {
+        check(!row.optBoolean("paymentVerified"))
+        return SandboxPayment(row.getString("id"), row.getString("sourceType"), row.getString("sourceId"),
+            row.getLong("amountPaise"), row.getString("status"), row.getString("merchantOrderId"),
+            row.optString("providerOrderId").takeUnless { it.isBlank() || it == "null" },
+            row.optString("sdkToken").takeUnless { it.isBlank() || it == "null" },
+            row.optString("merchantId").takeUnless { it.isBlank() || it == "null" },
+            row.optString("idempotencyKey").takeUnless { it.isBlank() || it == "null" })
+    }
+
+    fun transitionIndividual(sellerId: String, id: String, status: String): Result<IndividualOrderPreview> = withToken { token ->
+        val response = DebugBackendApi.request("POST", "/api/v1/sellers/$sellerId/individual-demo-orders/$id/demo-status",
+            JSONObject().put("status", status), token)
+        if (response.status != 200) Result(error = response.error ?: "Demo order transition failed.")
+        else Result(value = parseIndividualOrder(response.body!!))
     }
 
     fun submitIndividual(draft: IndividualDraft): Result<IndividualOrderPreview> = withToken { token ->
@@ -44,6 +169,7 @@ object DebugCommerceApi {
         draft.lines.forEach { lines.put(JSONObject().put("itemId", it.itemId).put("quantity", it.quantity)) }
         val body = JSONObject().put("sellerId", sellerId).put("lines", lines)
             .put("pickupAt", pickup.atZone(RIT_TIME_ZONE).toInstant().toString())
+            .put("instructions", draft.instructions)
         if (draft.specialPickup) body.put("specialPickupReason", draft.specialReason)
         val response = DebugBackendApi.request("POST", "/api/v1/bulk/requests", body, token,
             idempotencyKey = idempotencyKey)
@@ -95,7 +221,9 @@ object DebugCommerceApi {
                 val line = rows.getJSONObject(index)
                 QuoteLineSnapshot(line.getString("itemId"), line.getString("itemName"),
                     line.getInt("quantity"), line.getLong("unitPricePaise"))
-            }, row.getLong("subtotalPaise"), locallySaved = true)
+            }, row.getLong("subtotalPaise"), locallySaved = true, status = row.getString("status"),
+            demoPaymentOutcome = row.optString("demoPaymentOutcome", "NOT_ATTEMPTED"),
+            sandboxPaymentStatus = row.optString("sandboxPaymentStatus").takeUnless { it.isBlank() || it == "null" })
     }
 
     private fun parseBulk(row: JSONObject): BulkRequestRecord {
@@ -121,7 +249,7 @@ object DebugCommerceApi {
             local(row.getString("expiresAt")), if (specialApproved == true) version else null)
         return BulkRequestRecord(thread, DevelopmentDemoAccounts.serverIdentity?.userId.orEmpty(),
             "Customer", BulkDraft(sellerId, lines.map { BulkLine(it.itemId, it.quantity) }, pickup,
-                reason.isNotBlank(), reason), row.getInt("minimumUnits"), LocalDateTime.now(RIT_TIME_ZONE))
+                reason.isNotBlank(), reason, row.optString("instructions")), row.getInt("minimumUnits"), LocalDateTime.now(RIT_TIME_ZONE))
     }
 
     private fun local(instant: String): LocalDateTime =
@@ -129,6 +257,9 @@ object DebugCommerceApi {
 
     private inline fun <T> withToken(action: (String) -> Result<T>): Result<T> {
         val token = DevelopmentDemoAccounts.token() ?: return Result(error = "Sign in again.")
-        return try { action(token) } catch (_: Exception) { Result(error = "Local backend unavailable.") }
+        return try { action(token) } catch (_: Exception) {
+            Result(error = if (BuildConfig.RIT_CLOUD_DEMO) "Cloud service unavailable. Retry shortly."
+                else "Local backend unavailable.")
+        }
     }
 }

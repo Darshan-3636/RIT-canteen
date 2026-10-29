@@ -7,5 +7,6 @@ object DevelopmentIndividualOrders {
     fun activate(userId: String) = Unit
     fun deactivate() = Unit
     fun applyServer(recordsFromServer: List<IndividualOrderPreview>) = Unit
+    fun upsertServer(record: IndividualOrderPreview) = Unit
     fun reset() = Unit
 }

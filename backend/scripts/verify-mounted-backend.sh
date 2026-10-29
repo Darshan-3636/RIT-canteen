@@ -115,6 +115,44 @@ individual_id="$(jq -r '.id' <<<"$body")"
 request GET /api/v1/me/individual-demo-orders '' "$other_customer"; expect 200 individual-privacy
 jq -e --arg id "$individual_id" '([.orders[].id]|index($id)==null)' >/dev/null <<<"$body" || fail individual-privacy
 
+request GET /api/v1/me/cart/individual '' "$customer"; expect 200 initial-cart
+cart_version="$(jq -r '.version' <<<"$body")"
+request PUT /api/v1/me/cart/individual "$(jq -nc --argjson v "$cart_version" '{expectedVersion:$v,lines:[{itemId:"masala-dosa",quantity:2}]}')" "$customer"
+expect 200 cart-add; json '.subtotalPaise==10000 and .readyForCheckout==true and .lines[0].quantity==2' cart-add
+cart_version="$(jq -r '.version' <<<"$body")"
+request GET /api/v1/me/cart/individual '' "$other_customer"; expect 200 cross-customer-cart
+json '(.lines|length)==0' cross-customer-cart
+request PUT /api/v1/me/cart/individual '{"expectedVersion":0,"lines":[]}' "$customer"; expect 409 stale-cart
+checkout_key="lead-cart-$(date +%s)-$$"
+checkout_body="$(jq -nc --argjson v "$cart_version" '{expectedVersion:$v}')"
+request POST /api/v1/me/cart/individual/checkout "$checkout_body" "$customer" "$checkout_key"
+expect 201 cart-checkout; json '.status=="DEMO_SAVED" and .demoOnly==true and .paymentVerified==false and .subtotalPaise==10000' cart-checkout
+cart_order_id="$(jq -r '.id' <<<"$body")"
+request POST /api/v1/me/cart/individual/checkout "$checkout_body" "$customer" "$checkout_key"
+expect 201 cart-checkout-replay
+jq -e --arg id "$cart_order_id" '.id==$id' >/dev/null <<<"$body" || fail cart-checkout-replay
+request GET /api/v1/me/cart/individual '' "$customer"; expect 200 cleared-cart
+json '(.lines|length)==0' cleared-cart
+request POST "/api/v1/me/individual-demo-orders/$cart_order_id/simulate-payment" '{"outcome":"SUCCESS"}' "$other_customer"
+expect 404 payment-account-isolation
+request POST "/api/v1/me/individual-demo-orders/$cart_order_id/simulate-payment" '{"outcome":"SUCCESS"}' "$customer"
+expect 200 demo-payment; json '.status=="DEMO_PAYMENT_SIMULATED" and .demoPaymentOutcome=="SUCCESS" and .paymentVerified==false' demo-payment
+request GET /api/v1/sellers/main-canteen/individual-demo-orders '' "$main_owner"
+expect 200 seller-individual-queue
+jq -e --arg id "$cart_order_id" 'any(.orders[]; .id==$id and .paymentVerified==false)' >/dev/null <<<"$body" || fail seller-individual-queue
+request GET /api/v1/sellers/north-counter/individual-demo-orders '' "$north_owner"
+expect 200 other-seller-queue
+jq -e --arg id "$cart_order_id" '([.orders[].id]|index($id)==null)' >/dev/null <<<"$body" || fail seller-isolation-individual
+request POST "/api/v1/sellers/main-canteen/individual-demo-orders/$cart_order_id/demo-status" '{"status":"DEMO_READY"}' "$main_owner"
+expect 409 premature-ready
+for demo_status in DEMO_ACCEPTED DEMO_READY DEMO_COMPLETED; do
+  request POST "/api/v1/sellers/main-canteen/individual-demo-orders/$cart_order_id/demo-status" "{\"status\":\"$demo_status\"}" "$main_owner"
+  expect 200 "individual-$demo_status"
+  json ".status==\"$demo_status\" and .paymentVerified==false" "individual-$demo_status"
+done
+request POST "/api/v1/sellers/main-canteen/individual-demo-orders/$cart_order_id/demo-status" '{"status":"DEMO_COMPLETED"}' "$main_owner"
+expect 409 duplicate-completion
+
 pickup="$(date -u -d '+72 hours' '+%Y-%m-%dT%H:%M:%SZ')"
 bulk_body="$(jq -nc --arg p "$pickup" '{sellerId:"north-counter",lines:[{itemId:"north-lunch",quantity:8}],pickupAt:$p}')"
 request PUT /api/v1/sellers/north-counter/hours '{"hours":[]}' "$north_owner"; expect 204 reset-disposable-demo-hours
@@ -186,6 +224,9 @@ request GET "/api/v1/me/bulk/requests/$bulk_id" '' "$customer"; expect 200 persi
 json '.status=="AGREED_AWAITING_PAYMENT" and .version==2' persisted-quote
 request GET /api/v1/me/individual-demo-orders '' "$customer"; expect 200 persisted-individual
 jq -e --arg id "$individual_id" 'any(.orders[]; .id==$id)' >/dev/null <<<"$body" || fail persisted-individual
+jq -e --arg id "$cart_order_id" 'any(.orders[]; .id==$id and .status=="DEMO_COMPLETED" and .paymentVerified==false)' >/dev/null <<<"$body" || fail persisted-cart-order
+request GET /api/v1/me/cart/individual '' "$customer"; expect 200 persisted-cleared-cart
+json '(.lines|length)==0' persisted-cleared-cart
 request GET /api/v1/me/bulk-templates '' "$customer"; expect 200 persisted-template
 jq -e --arg id "$template_id" 'any(.items[]; .id==$id)' >/dev/null <<<"$body" || fail persisted-template
 request GET "/api/v1/me/support/tickets/$ticket_id" '' "$customer"; expect 200 persisted-ticket
@@ -196,4 +237,4 @@ json '.availability=="UNAVAILABLE"' persisted-seller-edit
 request PATCH /api/v1/sellers/main-canteen/menu/items/plain-dosa/availability '{"availability":"AVAILABLE"}' "$main_owner"
 expect 200 owner-restore
 
-printf 'Mounted backend smoke passed: 72 catalog rows, role/tenant checks, quote, engagement/admin, honest unsupported routes and restart persistence.\n'
+printf 'Mounted backend smoke passed: 72 catalog rows, isolated/idempotent cart, simulated payment, seller demo lifecycle, role/tenant checks, quote, engagement/admin, honest unsupported routes and restart persistence.\n'

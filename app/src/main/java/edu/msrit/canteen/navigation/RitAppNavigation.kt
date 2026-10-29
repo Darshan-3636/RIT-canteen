@@ -44,8 +44,13 @@ import edu.msrit.canteen.customer.DevelopmentSampleHistory
 import edu.msrit.canteen.customer.BulkDraftSession
 import edu.msrit.canteen.customer.BulkDraft
 import edu.msrit.canteen.customer.BulkLine
+import edu.msrit.canteen.customer.BulkServerDraft
+import edu.msrit.canteen.customer.bulkSubmissionKeyForVersion
 import edu.msrit.canteen.customer.CartMode
 import edu.msrit.canteen.customer.IndividualCartSession
+import edu.msrit.canteen.customer.IndividualLine
+import edu.msrit.canteen.customer.IndividualOrderPreview
+import edu.msrit.canteen.customer.SandboxPayment
 import edu.msrit.canteen.customer.DevelopmentIndividualOrders
 import edu.msrit.canteen.customer.DevelopmentDemoCheckout
 import edu.msrit.canteen.customer.DemoActionResult
@@ -75,6 +80,7 @@ import edu.msrit.canteen.ui.screens.IndividualOrderDetailScreen
 import edu.msrit.canteen.ui.screens.DemoCheckoutScreen
 import edu.msrit.canteen.ui.screens.DemoOrderDetailScreen
 import edu.msrit.canteen.ui.screens.SellerDemoIndividualQueue
+import edu.msrit.canteen.ui.screens.SellerIndividualBackendScreen
 import edu.msrit.canteen.ui.screens.SellerDemoPickupScreen
 import edu.msrit.canteen.ui.screens.SellerDemoOrderDetailScreen
 import edu.msrit.canteen.ui.screens.RitConfirmDialog
@@ -86,6 +92,8 @@ import edu.msrit.canteen.customer.RIT_TIME_ZONE
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.DebugServerCatalog
 import edu.msrit.canteen.customer.DebugCommerceApi
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import edu.msrit.canteen.customer.DebugCustomerAccountApi
 import edu.msrit.canteen.customer.QuoteStage
 import edu.msrit.canteen.ui.screens.SellerDailyOperationsOverview
@@ -263,7 +271,9 @@ internal object Route {
 }
 
 @Composable
-fun RitAppNavigation(appearance: AppearancePreference) {
+fun RitAppNavigation(appearance: AppearancePreference,
+                     onSandboxCheckout: (SandboxPayment) -> Boolean = { false },
+                     sandboxCallbackId: String? = null) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -286,12 +296,123 @@ fun RitAppNavigation(appearance: AppearancePreference) {
         true
     }
     val bulkDraft = remember { BulkDraftSession() }
+    val bulkDraftMutex = remember { Mutex() }
+    var bulkDraftReady by remember { mutableStateOf(false) }
+    var bulkDraftSaving by remember { mutableStateOf(false) }
+    var bulkDraftError by remember { mutableStateOf<String?>(null) }
+    var bulkDraftVersion by remember { mutableStateOf(0L) }
+    var bulkDraftSyncedRevision by remember { mutableStateOf(bulkDraft.revision) }
+    var bulkDraftAccountEpoch by remember { mutableStateOf(0L) }
+    suspend fun refreshBulkDraft(): Boolean = bulkDraftMutex.withLock {
+        val epoch = bulkDraftAccountEpoch
+        bulkDraftReady = false
+        val response = withContext(Dispatchers.IO) { DebugCommerceApi.bulkDraft() }
+        if (epoch != bulkDraftAccountEpoch) return@withLock false
+        val saved = response.value
+        if (saved == null) {
+            bulkDraftError = response.error ?: "Could not load your saved bulk draft."
+            false
+        } else {
+            bulkDraft.applyServer(saved)
+            bulkDraftVersion = saved.version
+            bulkDraftSyncedRevision = bulkDraft.revision
+            bulkDraftError = null
+            bulkDraftReady = true
+            true
+        }
+    }
+    suspend fun saveBulkDraft(): Boolean = bulkDraftMutex.withLock {
+        if (!BuildConfig.RIT_CLOUD_DEMO) return@withLock true
+        if (!bulkDraftReady) {
+            bulkDraftError = "Saved draft unavailable. Reload it before editing."
+            return@withLock false
+        }
+        bulkDraftSaving = true
+        val epoch = bulkDraftAccountEpoch
+        try {
+            while (bulkDraft.revision != bulkDraftSyncedRevision) {
+                if (epoch != bulkDraftAccountEpoch || !bulkDraftReady) return@withLock false
+                val revision = bulkDraft.revision
+                val snapshot = bulkDraft.draft
+                val response = withContext(Dispatchers.IO) {
+                    DebugCommerceApi.replaceBulkDraft(bulkDraftVersion, snapshot)
+                }
+                if (epoch != bulkDraftAccountEpoch) return@withLock false
+                val saved = response.value
+                if (saved == null) {
+                    bulkDraftError = response.error ?: "Draft not saved. Reload before continuing."
+                    return@withLock false
+                }
+                bulkDraftVersion = saved.version
+                bulkDraftSyncedRevision = revision
+                bulkDraftError = null
+            }
+            true
+        } finally { bulkDraftSaving = false }
+    }
+    bulkDraft.onChanged = {
+        if (BuildConfig.RIT_CLOUD_DEMO && bulkDraftReady) scope.launch { saveBulkDraft() }
+    }
+    val bulkDraftStatus = if (!BuildConfig.RIT_CLOUD_DEMO) null else when {
+        bulkDraftError != null -> "Not saved to server: $bulkDraftError"
+        bulkDraftSaving || bulkDraft.revision != bulkDraftSyncedRevision -> "Saving draft to your account…"
+        bulkDraftReady -> "Saved to your account · not sent to seller"
+        else -> "Loading saved bulk draft…"
+    }
     val individualCart = remember { IndividualCartSession() }
+    val individualCartMutex = remember { Mutex() }
+    var individualCartBusy by remember { mutableStateOf(false) }
+    var individualCartError by remember { mutableStateOf<String?>(null) }
+    var sellerIndividualOrders by remember { mutableStateOf<List<IndividualOrderPreview>>(emptyList()) }
+    var sellerIndividualFeedback by remember { mutableStateOf<String?>(null) }
+    suspend fun refreshSellerIndividual(sellerId: String) {
+        val response = withContext(Dispatchers.IO) { DebugCommerceApi.sellerIndividualOrders(sellerId) }
+        if (response.value != null) {
+            sellerIndividualOrders = response.value
+            sellerIndividualFeedback = null
+        } else sellerIndividualFeedback = response.error
+    }
+    suspend fun refreshIndividualCart(): Boolean {
+        val response = withContext(Dispatchers.IO) { DebugCommerceApi.individualCart() }
+        response.value?.let {
+            individualCart.applyServer(it)
+            individualCartError = null
+            return true
+        }
+        individualCartError = response.error ?: "Could not refresh your cart."
+        return false
+    }
+    suspend fun changeIndividualCart(edit: (List<IndividualLine>) -> List<IndividualLine>): Boolean =
+        individualCartMutex.withLock {
+            individualCartBusy = true
+            try {
+                if (individualCart.serverCart == null && !refreshIndividualCart()) return@withLock false
+                val current = individualCart.serverCart ?: return@withLock false
+                val updated = edit(current.lines.map { IndividualLine(it.itemId, it.quantity) })
+                if (updated.size > 100 || updated.any { it.quantity !in 1..999 }) {
+                    individualCartError = "Cart quantities must be between 1 and 999."
+                    return@withLock false
+                }
+                val result = withContext(Dispatchers.IO) {
+                    DebugCommerceApi.replaceIndividualCart(current.version, updated)
+                }
+                if (result.value != null) {
+                    individualCart.applyServer(result.value)
+                    individualCartError = null
+                    true
+                } else {
+                    refreshIndividualCart()
+                    individualCartError = result.error ?: "Cart update failed."
+                    false
+                }
+            } finally { individualCartBusy = false }
+        }
     var selectedCustomerSellerId by rememberSaveable { mutableStateOf<String?>(null) }
     val cartCount = individualCart.draft.totalUnits + bulkDraft.draft.lines.sumOf { it.quantity }
     val demoCustomerId = DevelopmentPreviewAccess.activeIdentity?.authorization?.takeIf {
         AppMode.Customer in it.modes }?.userId.orEmpty()
     suspend fun loadBulk(sellerId: String? = null) {
+        if (BuildConfig.RIT_CLOUD_DEMO) DevelopmentSellerOperations.applyServer(emptyList())
         val response = withContext(Dispatchers.IO) { DebugCommerceApi.bulkRequests(sellerId) }
         response.value?.let(DevelopmentSellerOperations::applyServer)
     }
@@ -302,22 +423,33 @@ fun RitAppNavigation(appearance: AppearancePreference) {
     }
     fun finishDemoSignIn(account: DemoAccount) {
         DevelopmentPreviewAccess.clearPreviewSelection()
+        bulkDraftAccountEpoch++
+        bulkDraftReady = false
+        bulkDraft.applyServer(BulkServerDraft(0, BulkDraft(), 0, emptySet()))
+        bulkDraftVersion = 0
+        bulkDraftSyncedRevision = bulkDraft.revision
+        bulkDraftError = null
         if (account.role == DevelopmentRole.Customer) {
             DevelopmentCustomerAccount.activate(account.id, CustomerProfile(account.name, account.email,
                 requireNotNull(account.affiliation), account.department))
             DevelopmentIndividualOrders.activate(account.id)
         } else { DevelopmentCustomerAccount.deactivate(); DevelopmentIndividualOrders.deactivate() }
         individualCart.clear(); bulkDraft.clear(); selectedCustomerSellerId = null
+        sellerIndividualOrders = emptyList(); sellerIndividualFeedback = null
         scope.launch {
             val snapshot = runCatching { withContext(Dispatchers.IO) { DebugServerCatalog.fetch() } }.getOrNull()
             if (snapshot == null) DebugServerCatalog.clear() else DebugServerCatalog.apply(snapshot)
             if (account.role == DevelopmentRole.Customer) {
+                if (BuildConfig.RIT_CLOUD_DEMO) demoFavorites.activateCloud(account.id)
                 val profile = withContext(Dispatchers.IO) { DebugCustomerAccountApi.fetchProfile() }
                 profile.profile?.let { DevelopmentCustomerAccount.updateProfile(it, account.id) }
                 val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
                 orders.value?.let(DevelopmentIndividualOrders::applyServer)
+                refreshIndividualCart()
+                if (BuildConfig.RIT_CLOUD_DEMO) refreshBulkDraft()
             }
             loadBulk(account.sellerId)
+            if (account.sellerId != null) refreshSellerIndividual(account.sellerId)
             withContext(Dispatchers.Main.immediate) {
                 navController.navigate(homeFor(account)) {
                     popUpTo(navController.graph.id) { inclusive = true }
@@ -327,11 +459,19 @@ fun RitAppNavigation(appearance: AppearancePreference) {
         }
     }
     fun signOutDemo() {
+        bulkDraftAccountEpoch++
+        bulkDraftReady = false
+        bulkDraft.applyServer(BulkServerDraft(0, BulkDraft(), 0, emptySet()))
+        bulkDraftVersion = 0
+        bulkDraftSyncedRevision = bulkDraft.revision
+        bulkDraftError = null
         DevelopmentDemoAccounts.signOut(); DevelopmentPreviewAccess.clearPreviewSelection()
         DebugServerCatalog.clear()
+        demoFavorites.clearCloud()
         DevelopmentSellerOperations.applyServer(emptyList())
         DevelopmentCustomerAccount.deactivate(); DevelopmentIndividualOrders.deactivate()
         individualCart.clear(); bulkDraft.clear(); selectedCustomerSellerId = null
+        sellerIndividualOrders = emptyList(); sellerIndividualFeedback = null
         navController.navigate(Route.Welcome) {
             popUpTo(navController.graph.id) { inclusive = true }
             launchSingleTop = true
@@ -403,10 +543,13 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                                         DebugServerCatalog.fetch() } }.getOrNull()
                                     if (snapshot != null) DebugServerCatalog.apply(snapshot)
                                     if (account.role == DevelopmentRole.Customer) {
+                                        if (BuildConfig.RIT_CLOUD_DEMO) demoFavorites.activateCloud(account.id)
                                         val profile = withContext(Dispatchers.IO) { DebugCustomerAccountApi.fetchProfile() }
                                         profile.profile?.let { DevelopmentCustomerAccount.updateProfile(it, account.id) }
                                         val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
                                         orders.value?.let(DevelopmentIndividualOrders::applyServer)
+                                        refreshIndividualCart()
+                                        if (BuildConfig.RIT_CLOUD_DEMO) refreshBulkDraft()
                                     }
                                     loadBulk(account.sellerId)
                                 }
@@ -498,6 +641,9 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                     val page = entry.arguments?.getString("page").orEmpty()
                     val id = entry.arguments?.getString("id").orEmpty()
                     val userId = DevelopmentPreviewAccess.activeIdentity?.authorization?.userId
+                    androidx.compose.runtime.LaunchedEffect(page, id, userId) {
+                        if (BuildConfig.RIT_CLOUD_DEMO) customerAccount.refreshCloud(page, id, userId)
+                    }
                     val back: () -> Unit = { navController.popBackStack() }
                     val go: (String) -> Unit = { navController.navigate(Route.customerAccount(it)) }
                     when (page) {
@@ -514,7 +660,7 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                         "preferences" -> CustomerPreferenceScreen(customerAccount, userId, false, back)
                         "privacy" -> CustomerPreferenceScreen(customerAccount, userId, true, back)
                         "account" -> CustomerAccountManagementScreen(customerAccount.profile, back, ::signOutDemo)
-                        "notifications" -> CustomerNotificationsScreen(customerAccount, back)
+                        "notifications" -> CustomerNotificationsScreen(customerAccount, userId, back)
                         "support" -> CustomerSupportScreen(customerAccount, back, { go("ticket-new") },
                             { navController.navigate(Route.customerAccount("ticket", it)) })
                         "ticket-new" -> CustomerTicketFormScreen(customerAccount, userId, back,
@@ -608,7 +754,15 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                 var pendingBulkItem by remember { mutableStateOf<String?>(null) }
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     FoodDetailsScreen(entry.arguments?.getString("itemId").orEmpty(), onBack = { navController.popBackStack() },
-                        onAddIndividual = { itemId -> PreviewCatalog.items.firstOrNull { it.id == itemId }?.let(individualCart::add) },
+                        onAddIndividual = { itemId, done ->
+                            scope.launch {
+                                val success = changeIndividualCart { lines ->
+                                    val count = lines.firstOrNull { it.itemId == itemId }?.quantity ?: 0
+                                    lines.filterNot { it.itemId == itemId } + IndividualLine(itemId, count + 1)
+                                }
+                                done(success)
+                            }
+                        },
                         onViewCart = { navController.navigate(Route.cart()) },
                         onAddBulk = { itemId ->
                             val item = PreviewCatalog.items.firstOrNull { it.id == itemId }
@@ -683,7 +837,8 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                     CustomerQuickReorderScreen(onBack = { navController.popBackStack() },
                         onFood = { navController.navigate(Route.foodDetails(it)) },
                         onSeller = { navController.navigate(Route.sellerProfile(it)) },
-                        history = DevelopmentSampleHistory)
+                        history = if (BuildConfig.RIT_CLOUD_DEMO)
+                            edu.msrit.canteen.customer.EmptyOrderHistory else DevelopmentSampleHistory)
                 } }
             }
             composable(Route.Cart, arguments = listOf(navArgument("mode") { type = NavType.StringType })) { entry ->
@@ -696,29 +851,46 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                         onChooseSeller = { navController.navigate(Route.BulkSellers) },
                         onIndividualReview = { navController.navigate(Route.IndividualReview) },
                         onBulkPickup = { navController.navigate(Route.BulkPickup) },
-                        onBottom = ::openCustomerBottom, cartCount = cartCount)
+                        onBottom = ::openCustomerBottom, cartCount = cartCount,
+                        onIndividualQuantity = { item, quantity ->
+                            scope.launch { changeIndividualCart { lines ->
+                                lines.filterNot { it.itemId == item.id } +
+                                    if (quantity > 0) listOf(IndividualLine(item.id, quantity)) else emptyList()
+                            } }
+                        },
+                        onClearIndividual = { scope.launch { changeIndividualCart { emptyList() } } },
+                        individualBusy = individualCartBusy, individualError = individualCartError,
+                        bulkSyncStatus = bulkDraftStatus)
                 } }
             }
             composable(Route.IndividualReview) {
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     var submitError by remember { mutableStateOf<String?>(null) }
+                    var submitting by remember { mutableStateOf(false) }
                     IndividualReviewScreen(individualCart, { navController.popBackStack() }, {
+                        if (submitting) return@IndividualReviewScreen
                         submitError = null
+                        submitting = true
                         scope.launch {
-                            val result = withContext(Dispatchers.IO) {
-                                DebugCommerceApi.submitIndividual(individualCart.draft)
+                            val cart = individualCart.serverCart
+                            val result = if (cart == null) DebugCommerceApi.Result<edu.msrit.canteen.customer.IndividualOrderPreview>(
+                                error = "Refresh the cart before checkout.") else withContext(Dispatchers.IO) {
+                                DebugCommerceApi.checkoutIndividualCart(cart.version, individualCart.checkoutIdempotencyKey())
                             }
                             val order = result.value
                             if (order != null) {
+                                DevelopmentIndividualOrders.upsertServer(order)
                                 individualCart.clear()
+                                refreshIndividualCart()
                                 val history = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
                                 history.value?.let(DevelopmentIndividualOrders::applyServer)
                                 withContext(Dispatchers.Main.immediate) {
                                     navController.navigate(Route.individualOrderDetail(order.id))
                                 }
                             } else submitError = result.error ?: "Could not save demo order."
+                            submitting = false
                         }
-                    }, errorMessage = submitError)
+                    }, errorMessage = submitError, saving = submitting)
                 } }
             }
             composable(Route.Orders) {
@@ -740,8 +912,103 @@ fun RitAppNavigation(appearance: AppearancePreference) {
             }
             composable(Route.IndividualOrderDetail, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
+                    var paymentFeedback by remember { mutableStateOf<String?>(null) }
+                    var paymentBusy by remember { mutableStateOf(false) }
+                    var sandboxPayment by remember { mutableStateOf<SandboxPayment?>(null) }
+                    val orderId = entry.arguments?.getString("id").orEmpty()
+                    var paymentKey by androidx.compose.runtime.saveable.rememberSaveable(orderId) {
+                        mutableStateOf(java.util.UUID.randomUUID().toString())
+                    }
+                    androidx.compose.runtime.LaunchedEffect(orderId) {
+                        val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
+                        orders.value?.let(DevelopmentIndividualOrders::applyServer)
+                        val attempts = withContext(Dispatchers.IO) { DebugCommerceApi.sandboxPayments() }
+                        sandboxPayment = attempts.value?.firstOrNull { it.sourceType == "INDIVIDUAL" && it.sourceId == orderId }
+                    }
+                    androidx.compose.runtime.LaunchedEffect(sandboxCallbackId, orderId, sandboxPayment?.id) {
+                        val callback = sandboxCallbackId ?: return@LaunchedEffect
+                        if (sandboxPayment?.id != callback) return@LaunchedEffect
+                        paymentBusy = true
+                        val result = withContext(Dispatchers.IO) { DebugCommerceApi.reconcileSandboxPayment(callback) }
+                        sandboxPayment = result.value ?: sandboxPayment
+                        paymentFeedback = result.value?.let { "PhonePe UAT status: ${it.status}. No real money was charged." }
+                            ?: result.error ?: "UAT status could not be confirmed. Check again."
+                        val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
+                        orders.value?.let(DevelopmentIndividualOrders::applyServer)
+                        paymentBusy = false
+                    }
                     IndividualOrderDetailScreen(DevelopmentIndividualOrders.records.find { it.id == entry.arguments?.getString("id") },
-                        { navController.popBackStack() })
+                        { navController.popBackStack() }, onDemoPayment = { outcome ->
+                            if (paymentBusy) return@IndividualOrderDetailScreen
+                            paymentBusy = true
+                            paymentFeedback = null
+                            scope.launch {
+                                try {
+                                    val id = entry.arguments?.getString("id").orEmpty()
+                                    val result = withContext(Dispatchers.IO) { DebugCommerceApi.simulateIndividualPayment(id, outcome) }
+                                    if (result.value != null) {
+                                        DevelopmentIndividualOrders.upsertServer(result.value)
+                                        paymentFeedback = if (outcome == "SUCCESS")
+                                            "DEMO payment simulated successfully. No money was charged or verified."
+                                        else "DEMO $outcome saved. No money was charged or verified."
+                                        val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
+                                        orders.value?.let(DevelopmentIndividualOrders::applyServer)
+                                    } else paymentFeedback = result.error ?: "Demo simulation failed."
+                                } finally { paymentBusy = false }
+                            }
+                        }, feedback = paymentFeedback, paymentBusy = paymentBusy,
+                        sandboxPayment = sandboxPayment,
+                        onSandboxStart = if (BuildConfig.DEBUG && BuildConfig.RIT_CLOUD_DEMO) ({
+                            if (!paymentBusy) {
+                                paymentBusy = true
+                                paymentFeedback = null
+                                scope.launch {
+                                    try {
+                                        val existing = sandboxPayment
+                                        if (existing?.status in setOf("SANDBOX_FAILED", "EXPIRED"))
+                                            paymentKey = java.util.UUID.randomUUID().toString()
+                                        val key = paymentKey
+                                        val result = withContext(Dispatchers.IO) {
+                                            if (existing == null || existing.status in setOf("SANDBOX_FAILED", "EXPIRED")) {
+                                                DebugCommerceApi.beginSandboxPayment("INDIVIDUAL", orderId, key)
+                                            } else if (existing.status == "INITIATED") {
+                                                val detail = DebugCommerceApi.sandboxPayment(existing.id)
+                                                val priorKey = detail.value?.idempotencyKey
+                                                if (priorKey != null) DebugCommerceApi.beginSandboxPayment("INDIVIDUAL", orderId, priorKey)
+                                                else detail
+                                            }
+                                            else DebugCommerceApi.sandboxPayment(existing.id)
+                                        }
+                                        val attempt = result.value
+                                        if (attempt == null) paymentFeedback = result.error ?: "PhonePe UAT is unavailable."
+                                        else {
+                                            sandboxPayment = attempt
+                                            paymentFeedback = if (attempt.status == "PENDING" &&
+                                                !attempt.sdkToken.isNullOrBlank() && !attempt.providerOrderId.isNullOrBlank() &&
+                                                !attempt.merchantId.isNullOrBlank() && onSandboxCheckout(attempt))
+                                                "PhonePe UAT opened. Return here to check the server-confirmed status."
+                                            else "UAT checkout could not open. Check its status before retrying."
+                                        }
+                                    } finally { paymentBusy = false }
+                                }
+                            }
+                        }) else null,
+                        onSandboxCheck = if (BuildConfig.DEBUG && BuildConfig.RIT_CLOUD_DEMO) ({
+                            val id = sandboxPayment?.id
+                            if (id != null && !paymentBusy) {
+                                paymentBusy = true
+                                scope.launch {
+                                    try {
+                                        val result = withContext(Dispatchers.IO) { DebugCommerceApi.reconcileSandboxPayment(id) }
+                                        sandboxPayment = result.value ?: sandboxPayment
+                                        paymentFeedback = result.value?.let { "PhonePe UAT status: ${it.status}. No real money was charged." }
+                                            ?: result.error ?: "UAT status could not be confirmed."
+                                        val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
+                                        orders.value?.let(DevelopmentIndividualOrders::applyServer)
+                                    } finally { paymentBusy = false }
+                                }
+                            }
+                        }) else null)
                 } }
             }
             composable(Route.DemoOrderDetail, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
@@ -759,6 +1026,9 @@ fun RitAppNavigation(appearance: AppearancePreference) {
             composable(Route.DemoCheckout, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
                 val reference = entry.arguments?.getString("reference").orEmpty()
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
+                    if (BuildConfig.RIT_CLOUD_DEMO) {
+                        CustomerUnavailableScreen("payment", { navController.popBackStack() })
+                    } else {
                     val actor = DevelopmentPreviewAccess.activeIdentity?.authorization
                     val order = DevelopmentDemoCheckout.orders.find {
                         it.reference == reference && it.customerId == demoCustomerId }
@@ -769,6 +1039,7 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                         { navController.navigate(Route.demoOrderDetail(reference)) {
                             popUpTo(Route.DemoCheckout) { inclusive = true }
                         } })
+                    }
                 } }
             }
             composable(Route.BulkSellers) {
@@ -782,7 +1053,10 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                     BulkCartScreen(bulkDraft, DevelopmentBulkPreview, onBack = { navController.popBackStack() },
                         onChooseSeller = { navController.navigate(Route.BulkSellers) },
                         onPickup = { navController.navigate(Route.BulkPickup) },
-                        onViewCart = { navController.navigate(Route.cart(CartMode.BULK)) })
+                        onViewCart = { navController.navigate(Route.cart(CartMode.BULK)) },
+                        syncMessage = bulkDraftStatus,
+                        onReloadSaved = if (BuildConfig.RIT_CLOUD_DEMO && bulkDraftError != null)
+                            ({ scope.launch { refreshBulkDraft() } }) else null)
                 } }
             }
             composable(Route.BulkPickup) {
@@ -805,12 +1079,21 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                                 submitting = true
                                 submitError = null
                                 scope.launch {
+                                    if (!saveBulkDraft()) {
+                                        submitError = bulkDraftError ?: "Bulk draft was not saved. Reload and try again."
+                                        submitting = false
+                                        return@launch
+                                    }
+                                    val submittedDraft = bulkDraft.draft
+                                    val submissionKey = if (BuildConfig.RIT_CLOUD_DEMO)
+                                        bulkSubmissionKeyForVersion(bulkDraftVersion) else bulkDraft.idempotencyKey()
                                     val result = withContext(Dispatchers.IO) {
-                                        DebugCommerceApi.submitBulk(bulkDraft.draft, bulkDraft.idempotencyKey())
+                                        DebugCommerceApi.submitBulk(submittedDraft, submissionKey)
                                     }
                                     submitting = false
                                     if (result.value != null) {
                                         bulkDraft.clear()
+                                        saveBulkDraft()
                                         loadBulk()
                                         withContext(Dispatchers.Main.immediate) {
                                             navController.navigate(Route.customerDemoDetail(result.value.reference))
@@ -818,7 +1101,7 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                                     } else submitError = result.error ?: "Could not submit request."
                                 }
                             }
-                        }, errorMessage = submitError)
+                        }, errorMessage = submitError, syncMessage = bulkDraftStatus)
                 } }
             }
             composable(Route.BulkOrders) {
@@ -886,7 +1169,7 @@ fun RitAppNavigation(appearance: AppearancePreference) {
             composable(Route.SellerOverview) {
                 val sellerId = activeSellerId() ?: ""
                 InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
-                    androidx.compose.runtime.LaunchedEffect(sellerId) { loadBulk(sellerId) }
+                    androidx.compose.runtime.LaunchedEffect(sellerId) { loadBulk(sellerId); refreshSellerIndividual(sellerId) }
                     SellerDailyOperationsOverview(
                         records = DevelopmentSellerOperations.records, sellerId = sellerId,
                         sellerName = PreviewCatalog.sellers.find { it.id == sellerId }?.name ?: "Seller",
@@ -910,7 +1193,7 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                         onBottom = ::openSellerBottom,
                         canViewInsights = DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "analytics.view")),
                         demoOrders = emptyList(),
-                        onOpenIndividual = null,
+                        onOpenIndividual = { navController.navigate(Route.SellerIndividualQueue) },
                         onVerifyPickup = null,
                         onOpenHours = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "hours.edit")))
                             ({ navController.navigate(Route.SellerManageHours) }) else null,
@@ -923,14 +1206,21 @@ fun RitAppNavigation(appearance: AppearancePreference) {
             composable(Route.SellerIndividualQueue) {
                 val sellerId = activeSellerId() ?: ""
                 InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
-                    SellerDemoIndividualQueue(DevelopmentDemoCheckout.orders.filter { it.sellerId == sellerId },
+                    androidx.compose.runtime.LaunchedEffect(sellerId) { refreshSellerIndividual(sellerId) }
+                    SellerIndividualBackendScreen(sellerIndividualOrders,
+                        DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "bulk.respond")),
                         onBack = { navController.popBackStack() },
-                        onRespond = { reference, accept ->
-                            DevelopmentDemoCheckout.respondIndividual(reference, accept,
-                                DevelopmentPreviewAccess.activeIdentity?.authorization)
-                        }, onVerify = { navController.navigate(Route.SellerDemoPickup) },
-                        canRespond = DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "bulk.respond")),
-                        onOrder = { navController.navigate(Route.sellerDemoOrderDetail(it)) })
+                        onTransition = { id, next ->
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    DebugCommerceApi.transitionIndividual(sellerId, id, next)
+                                }
+                                if (result.value != null) {
+                                    refreshSellerIndividual(sellerId)
+                                    sellerIndividualFeedback = "Demo status saved."
+                                } else sellerIndividualFeedback = result.error ?: "Could not update demo order."
+                            }
+                        }, feedback = sellerIndividualFeedback)
                 } }
             }
             composable(Route.SellerDemoOrderDetail,
@@ -958,13 +1248,13 @@ fun RitAppNavigation(appearance: AppearancePreference) {
             composable(Route.SellerInbox) {
                 val sellerId = activeSellerId() ?: ""
                 InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
-                    androidx.compose.runtime.LaunchedEffect(sellerId) { loadBulk(sellerId) }
+                    androidx.compose.runtime.LaunchedEffect(sellerId) { loadBulk(sellerId); refreshSellerIndividual(sellerId) }
                     SellerTabFrame(SellerBottomItem.Orders, ::openSellerBottom) {
                     SellerInboxScreen(DevelopmentSellerOperations.records, sellerId,
                         onBack = { navController.popBackStack() },
                         onRequest = { navController.navigate(Route.sellerDetail(it)) },
-                        onIndividual = null,
-                        newIndividualCount = 0,
+                        onIndividual = { navController.navigate(Route.SellerIndividualQueue) },
+                        newIndividualCount = sellerIndividualOrders.count { it.status == "DEMO_PAYMENT_SIMULATED" },
                         onVerifyPickup = null)
                     }
                 } }
@@ -1252,6 +1542,27 @@ fun RitAppNavigation(appearance: AppearancePreference) {
             composable(Route.CustomerDemoDetail, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->
                 val reference = entry.arguments?.getString("reference").orEmpty()
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
+                    var sandboxPayment by remember { mutableStateOf<SandboxPayment?>(null) }
+                    var sandboxBusy by remember { mutableStateOf(false) }
+                    var sandboxFeedback by remember { mutableStateOf<String?>(null) }
+                    var paymentKey by androidx.compose.runtime.saveable.rememberSaveable(reference) {
+                        mutableStateOf(java.util.UUID.randomUUID().toString())
+                    }
+                    androidx.compose.runtime.LaunchedEffect(reference) {
+                        val attempts = withContext(Dispatchers.IO) { DebugCommerceApi.sandboxPayments() }
+                        sandboxPayment = attempts.value?.firstOrNull { it.sourceType == "BULK" && it.sourceId == reference }
+                    }
+                    androidx.compose.runtime.LaunchedEffect(sandboxCallbackId, reference, sandboxPayment?.id) {
+                        val callback = sandboxCallbackId ?: return@LaunchedEffect
+                        if (sandboxPayment?.id != callback) return@LaunchedEffect
+                        sandboxBusy = true
+                        val result = withContext(Dispatchers.IO) { DebugCommerceApi.reconcileSandboxPayment(callback) }
+                        sandboxPayment = result.value ?: sandboxPayment
+                        sandboxFeedback = result.value?.let { "PhonePe UAT status: ${it.status}. No real money was charged." }
+                            ?: result.error ?: "UAT status could not be confirmed. Check again."
+                        loadBulk()
+                        sandboxBusy = false
+                    }
                     val record = DevelopmentSellerOperations.records.find {
                         it.reference == reference && it.customerUserId == demoCustomerId }
                     if (record == null) CustomerUnavailableScreen("request", { navController.popBackStack() })
@@ -1277,7 +1588,58 @@ fun RitAppNavigation(appearance: AppearancePreference) {
                                 finished(result.error ?: "Request withdrawn on local backend.")
                             }
                         },
-                        onCheckout = null, demoOrder = null, onTrack = null)
+                        onCheckout = null, demoOrder = null, onTrack = null,
+                        sandboxPayment = sandboxPayment, sandboxFeedback = sandboxFeedback, sandboxBusy = sandboxBusy,
+                        onSandboxStart = if (BuildConfig.DEBUG && BuildConfig.RIT_CLOUD_DEMO) ({
+                            if (!sandboxBusy) {
+                                sandboxBusy = true
+                                sandboxFeedback = null
+                                scope.launch {
+                                    try {
+                                        val existing = sandboxPayment
+                                        if (existing?.status in setOf("SANDBOX_FAILED", "EXPIRED"))
+                                            paymentKey = java.util.UUID.randomUUID().toString()
+                                        val key = paymentKey
+                                        val result = withContext(Dispatchers.IO) {
+                                            if (existing == null || existing.status in setOf("SANDBOX_FAILED", "EXPIRED"))
+                                                DebugCommerceApi.beginSandboxPayment("BULK", reference, key)
+                                            else if (existing.status == "INITIATED") {
+                                                val detail = DebugCommerceApi.sandboxPayment(existing.id)
+                                                val priorKey = detail.value?.idempotencyKey
+                                                if (priorKey != null) DebugCommerceApi.beginSandboxPayment("BULK", reference, priorKey)
+                                                else detail
+                                            }
+                                            else DebugCommerceApi.sandboxPayment(existing.id)
+                                        }
+                                        val attempt = result.value
+                                        if (attempt == null) sandboxFeedback = result.error ?: "PhonePe UAT is unavailable."
+                                        else {
+                                            sandboxPayment = attempt
+                                            sandboxFeedback = if (attempt.status == "PENDING" &&
+                                                !attempt.sdkToken.isNullOrBlank() && !attempt.providerOrderId.isNullOrBlank() &&
+                                                !attempt.merchantId.isNullOrBlank() && onSandboxCheckout(attempt))
+                                                "PhonePe UAT opened. Return here to check the server-confirmed status."
+                                            else "UAT checkout could not open. Check its status before retrying."
+                                        }
+                                    } finally { sandboxBusy = false }
+                                }
+                            }
+                        }) else null,
+                        onSandboxCheck = if (BuildConfig.DEBUG && BuildConfig.RIT_CLOUD_DEMO) ({
+                            val id = sandboxPayment?.id
+                            if (id != null && !sandboxBusy) {
+                                sandboxBusy = true
+                                scope.launch {
+                                    try {
+                                        val result = withContext(Dispatchers.IO) { DebugCommerceApi.reconcileSandboxPayment(id) }
+                                        sandboxPayment = result.value ?: sandboxPayment
+                                        sandboxFeedback = result.value?.let { "PhonePe UAT status: ${it.status}. No real money was charged." }
+                                            ?: result.error ?: "UAT status could not be confirmed."
+                                        loadBulk()
+                                    } finally { sandboxBusy = false }
+                                }
+                            }
+                        }) else null)
                 } }
             }
             composable(Route.CustomerDemoCounter, arguments = listOf(navArgument("reference") { type = NavType.StringType })) { entry ->

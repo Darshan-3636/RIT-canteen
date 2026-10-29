@@ -84,11 +84,15 @@ internal fun validateAndPrice(connection:Connection,context:BackendContext,selle
     return priced to pickup
 }
 
-internal fun createBulk(context:BackendContext,principal:AuthenticatedPrincipal,sellerId:String,lines:List<DraftLine>,pickupAt:String,reason:String?,key:String):BulkRequestDto {
+internal fun createBulk(context:BackendContext,principal:AuthenticatedPrincipal,sellerId:String,lines:List<DraftLine>,pickupAt:String,reason:String?,instructions:String,key:String):BulkRequestDto {
     expireDue(context)
     if(key.length !in 1..128 || key.any(Char::isISOControl)) throw bad("INVALID_IDEMPOTENCY_KEY","Idempotency-Key must contain 1 to 128 visible characters")
+    val note = instructions.trim()
+    if (note.length > 500) throw bad("INSTRUCTIONS_TOO_LONG","Pickup instructions must be at most 500 characters")
     val digest=MessageDigest.getInstance("SHA-256").digest(buildString {
         append(sellerId).append('|').append(pickupAt).append('|').append(reason.orEmpty())
+        // Preserve the pre-instructions digest for retries of existing requests.
+        if (note.isNotEmpty()) append("|instructions:").append(note)
         lines.sortedBy { it.itemId }.forEach { append('|').append(it.itemId).append(':').append(it.quantity) }
     }.toByteArray())
     return context.transaction { c ->
@@ -103,9 +107,9 @@ internal fun createBulk(context:BackendContext,principal:AuthenticatedPrincipal,
         }
         val priced=validateAndPrice(c,context,sellerId,lines,pickupAt,reason)
         val id=UUID.randomUUID(); val expiry=now.plusSeconds(24*60*60L)
-        val inserted=c.prepareStatement("""INSERT INTO bulk_requests(id,customer_user_id,seller_id,current_version,status,idempotency_key,idempotency_hash,created_at,updated_at)
-             VALUES (?,?,?,1,'SUBMITTED',?,?,?,?) ON CONFLICT(customer_user_id,idempotency_key) DO NOTHING""").use { s ->
-            s.setObject(1,id); s.setObject(2,principal.userId); s.setString(3,sellerId); s.setString(4,key); s.setBytes(5,digest); s.setTimestamp(6,Timestamp.from(now)); s.setTimestamp(7,Timestamp.from(now)); s.executeUpdate()==1
+        val inserted=c.prepareStatement("""INSERT INTO bulk_requests(id,customer_user_id,seller_id,current_version,status,idempotency_key,idempotency_hash,instructions,created_at,updated_at)
+             VALUES (?,?,?,1,'SUBMITTED',?,?,?,?,?) ON CONFLICT(customer_user_id,idempotency_key) DO NOTHING""").use { s ->
+            s.setObject(1,id); s.setObject(2,principal.userId); s.setString(3,sellerId); s.setString(4,key); s.setBytes(5,digest); s.setString(6,note); s.setTimestamp(7,Timestamp.from(now)); s.setTimestamp(8,Timestamp.from(now)); s.executeUpdate()==1
         }
         if (!inserted) {
             val previous=c.prepareStatement("SELECT id,idempotency_hash FROM bulk_requests WHERE customer_user_id=? AND idempotency_key=?").use { s -> s.setObject(1,principal.userId); s.setString(2,key); s.executeQuery().use { r -> if(r.next()) UUIDRow(r.getObject(1,UUID::class.java),r.getBytes(2)) else null } } ?: throw conflict("IDEMPOTENCY_CONFLICT","Request key is currently being processed")
@@ -234,14 +238,14 @@ private fun expire(c:Connection,id:UUID,version:Int) {
     c.prepareStatement("UPDATE bulk_quote_revisions SET status='EXPIRED' WHERE request_id=? AND version=?").use { s -> s.setObject(1,id);s.setInt(2,version);s.executeUpdate() }
 }
 
-internal fun loadBulk(c:Connection,id:UUID):BulkRequestDto? = c.prepareStatement("""SELECT r.id,r.seller_id,r.current_version,r.status,q.pickup_at,q.special_pickup_reason,q.subtotal_paise,q.expires_at,p.bulk_minimum_units
+internal fun loadBulk(c:Connection,id:UUID):BulkRequestDto? = c.prepareStatement("""SELECT r.id,r.seller_id,r.current_version,r.status,r.instructions,q.pickup_at,q.special_pickup_reason,q.subtotal_paise,q.expires_at,p.bulk_minimum_units
     FROM bulk_requests r JOIN bulk_quote_revisions q ON q.request_id=r.id AND q.version=r.current_version LEFT JOIN seller_ordering_policies p ON p.seller_id=r.seller_id WHERE r.id=?""").use { s ->
     s.setObject(1,id);s.executeQuery().use { r -> if(!r.next()) null else {
         val version=r.getInt("current_version")
         val approvals=c.prepareStatement("SELECT actor_kind FROM bulk_quote_approvals WHERE request_id=? AND version=?").use { q -> q.setObject(1,id);q.setInt(2,version);q.executeQuery().use { rs -> buildSet { while(rs.next()) add(rs.getString(1)) } } }
         val special=c.prepareStatement("SELECT approved FROM bulk_special_pickup_decisions WHERE request_id=? AND version=?").use { q -> q.setObject(1,id);q.setInt(2,version);q.executeQuery().use { rs -> if(rs.next()) rs.getBoolean(1) else null } }
         val lines=c.prepareStatement("SELECT item_id,item_name_snapshot,quantity,unit_price_paise FROM bulk_quote_lines WHERE request_id=? AND version=? ORDER BY item_id").use { q -> q.setObject(1,id);q.setInt(2,version);q.executeQuery().use { rs -> buildList { while(rs.next()) add(BulkQuoteLineDto(rs.getString(1),rs.getString(2),rs.getInt(3),rs.getLong(4))) } } }
-        BulkRequestDto(id.toString(),r.getString("seller_id"),version,r.getString("status"),r.getTimestamp("pickup_at").toInstant().toString(),r.getString("special_pickup_reason"),r.getLong("subtotal_paise"),r.getInt("bulk_minimum_units").takeIf { it>0 } ?: 8,r.getTimestamp("expires_at").toInstant().toString(),"CUSTOMER" in approvals,"SELLER" in approvals,special,lines)
+        BulkRequestDto(id.toString(),r.getString("seller_id"),version,r.getString("status"),r.getTimestamp("pickup_at").toInstant().toString(),r.getString("special_pickup_reason"),r.getLong("subtotal_paise"),r.getInt("bulk_minimum_units").takeIf { it>0 } ?: 8,r.getTimestamp("expires_at").toInstant().toString(),"CUSTOMER" in approvals,"SELLER" in approvals,special,lines,r.getString("instructions"))
     } }
 }
 
@@ -268,8 +272,5 @@ internal fun createIndividual(context:BackendContext,principal:AuthenticatedPrin
 }
 internal fun customerIndividual(context:BackendContext,user:UUID):IndividualDemoOrderListDto = context.dataSource.connection.use { c ->
     val ids=c.prepareStatement("SELECT id FROM individual_demo_orders WHERE customer_user_id=? ORDER BY created_at DESC").use { s -> s.setObject(1,user);s.executeQuery().use { r -> buildList { while(r.next()) add(r.getObject(1,UUID::class.java)) } } }
-    IndividualDemoOrderListDto(ids.mapNotNull { id -> c.prepareStatement("SELECT seller_id,status,demo_only,payment_verified,subtotal_paise,created_at FROM individual_demo_orders WHERE id=? AND customer_user_id=?").use { s -> s.setObject(1,id);s.setObject(2,user);s.executeQuery().use { r -> if(!r.next()) null else {
-        val lines=c.prepareStatement("SELECT item_id,item_name_snapshot,quantity,unit_price_paise FROM individual_demo_order_lines WHERE order_id=? ORDER BY item_id").use { q -> q.setObject(1,id);q.executeQuery().use { rows -> buildList { while(rows.next()) add(IndividualDemoLineDto(rows.getString(1),rows.getString(2),rows.getInt(3),rows.getLong(4))) } } }
-        IndividualDemoOrderDto(id.toString(),r.getString(1),r.getString(2),r.getBoolean(3),r.getBoolean(4),r.getLong(5),r.getTimestamp(6).toInstant().toString(),lines)
-    } } } })
+    IndividualDemoOrderListDto(ids.mapNotNull { loadDemoIndividual(c,it) })
 }

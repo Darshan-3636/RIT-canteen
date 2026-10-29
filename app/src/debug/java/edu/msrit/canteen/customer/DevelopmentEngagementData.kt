@@ -1,5 +1,6 @@
 package edu.msrit.canteen.customer
 
+import edu.msrit.canteen.BuildConfig
 import java.time.Instant
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,10 +28,10 @@ object DevelopmentPromotions : PromotionSource {
         Promotion("unpublished-demo", PreviewCatalog.MAIN_ID, "Hidden demo", "Unpublished.", PromotionKind.BANNER,
             Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-12-31T00:00:00Z"), false),
     )
-    override var promotions by mutableStateOf(initial)
+    override var promotions by mutableStateOf(if (BuildConfig.RIT_CLOUD_DEMO) emptyList() else initial)
         private set
     fun replaceDemo(value: List<Promotion>) { promotions = value }
-    fun resetDemo() { promotions = initial }
+    fun resetDemo() { promotions = if (BuildConfig.RIT_CLOUD_DEMO) emptyList() else initial }
 }
 
 object DevelopmentSampleHistory : OrderHistorySource {

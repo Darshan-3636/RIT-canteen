@@ -74,18 +74,19 @@ fun RitConfirmDialog(title: String, body: String, onDismiss: () -> Unit, onConfi
 }
 
 @Composable
-private fun QuantityStepper(name: String, quantity: Int, onChange: (Int) -> Unit, tag: String) {
+private fun QuantityStepper(name: String, quantity: Int, onChange: (Int) -> Unit, tag: String,
+                            enabled: Boolean = true) {
     val colors = RitThemeTokens.colors
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.size(48.dp).clip(CircleShape).background(colors.surface)
-            .clickable(role = Role.Button) { onChange(quantity - 1) }
+            .clickable(enabled = enabled, role = Role.Button) { onChange(quantity - 1) }
             .semantics { contentDescription = "Remove one $name" }.testTag("${tag}_minus"),
             contentAlignment = Alignment.Center) {
             RitText("−", RitType.title, colors.accent)
         }
         RitText("$quantity", RitType.label, modifier = Modifier.testTag("${tag}_quantity"))
         Box(Modifier.size(48.dp).clip(CircleShape).background(colors.surface)
-            .clickable(role = Role.Button) { if (quantity < Int.MAX_VALUE) onChange(quantity + 1) }
+            .clickable(enabled = enabled, role = Role.Button) { if (quantity < Int.MAX_VALUE) onChange(quantity + 1) }
             .semantics { contentDescription = "Add one $name" }.testTag("${tag}_plus"),
             contentAlignment = Alignment.Center) {
             RitText("+", RitType.title, colors.accent)
@@ -100,7 +101,12 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
                        onIndividualReview: () -> Unit, onBulkPickup: () -> Unit,
                        catalog: CustomerCatalogSource = PreviewCatalog,
                        onBottom: ((RitBottomItem) -> Unit)? = null,
-                       cartCount: Int = 0) {
+                       cartCount: Int = 0,
+                       onIndividualQuantity: ((edu.msrit.canteen.customer.MenuItem, Int) -> Unit)? = null,
+                       onClearIndividual: (() -> Unit)? = null,
+                       individualBusy: Boolean = false,
+                       individualError: String? = null,
+                       bulkSyncStatus: String? = null) {
     val colors = RitThemeTokens.colors
     var mode by remember(initialMode) { mutableStateOf(initialMode) }
     var clearMode by remember { mutableStateOf<CartMode?>(null) }
@@ -126,21 +132,28 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
                     RitEmptyState("Your individual cart is empty", "Add a dosa, coffee or another prepared item from Main Canteen.")
                     RitSecondaryButton("Browse prepared food", onBrowse, Modifier.fillMaxWidth())
                 }
+                if (individualError != null) item {
+                    RitText(individualError, RitType.small, colors.accent, Modifier.testTag("individual_cart_error"))
+                }
                 items(individual.draft.lines, key = { it.itemId }) { line ->
                     val item = catalog.items.find { it.id == line.itemId }
-                    if (item == null || line.itemId in individualCheck.unavailableItemIds) {
+                    val serverLine = individual.serverCart?.lines?.find { it.itemId == line.itemId }
+                    if (item == null || line.itemId in individualCheck.unavailableItemIds || serverLine?.available == false) {
                         RitText("An item is no longer available", RitType.body, colors.accent)
                     } else {
-                        CartLine(item.name, item.price.display, item.photo, line.quantity,
-                            item.price.rupees.toLong() * line.quantity * 100L,
-                            { individual.setQuantity(item, it) }, "individual_${item.id}", item.localImageUri)
+                        val unit = serverLine?.unitPricePaise ?: item.price.rupees.toLong() * 100L
+                        CartLine(item.name, displayPaise(unit), item.photo, line.quantity,
+                            unit * line.quantity,
+                            { next -> if (onIndividualQuantity == null) individual.setQuantity(item, next)
+                                else onIndividualQuantity(item, next) }, "individual_${item.id}", item.localImageUri,
+                            enabled = !individualBusy)
                     }
                 }
                 if (individual.draft.lines.isNotEmpty()) item {
                     Spacer(Modifier.height(14.dp))
-                    RitText("Subtotal  ${displayPaise(individualCheck.subtotalPaise)}", RitType.title,
+                    RitText("Subtotal  ${displayPaise(individual.serverCart?.subtotalPaise ?: individualCheck.subtotalPaise)}", RitType.title,
                         modifier = Modifier.testTag("individual_subtotal"))
-                    RitText("Illustrative price. Real payment and kitchen submission are unavailable; local demo review is available.", RitType.small, colors.muted)
+                    RitText("Current menu price when connected. Payment and kitchen submission are unavailable; demo review is available.", RitType.small, colors.muted)
                     Spacer(Modifier.height(9.dp))
                     RitSecondaryButton("Clear individual cart", { clearMode = CartMode.INDIVIDUAL }, Modifier.fillMaxWidth())
                 }
@@ -148,6 +161,9 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
                 item {
                     RitText(bulkSeller?.name ?: "Choose a seller", RitType.title)
                     RitText("One seller per bulk request · demo estimate only", RitType.small, colors.muted)
+                    if (bulkSyncStatus != null) RitText(bulkSyncStatus, RitType.small,
+                        if (bulkSyncStatus.startsWith("Not saved")) colors.accent else colors.muted,
+                        Modifier.testTag("bulk_cart_sync_status"))
                     Spacer(Modifier.height(12.dp))
                 }
                 if (bulk.draft.lines.isEmpty()) item {
@@ -178,7 +194,8 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
         }
         if (mode == CartMode.INDIVIDUAL) {
             RitPrimaryButton("Review Order", onIndividualReview, Modifier.fillMaxWidth().padding(20.dp)
-                .testTag("cart_review_individual"), enabled = individualCheck.readyForReview)
+                .testTag("cart_review_individual"), enabled = !individualBusy &&
+                (individual.serverCart?.readyForCheckout ?: individualCheck.readyForReview))
         } else {
             RitPrimaryButton("Continue to pickup", onBulkPickup, Modifier.fillMaxWidth().padding(20.dp)
                 .testTag("cart_review_bulk"), enabled = bulkCheck.totalUnits >= bulkCheck.minimum &&
@@ -192,7 +209,8 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
     }
     clearMode?.let { target -> RitConfirmDialog("Clear ${if (target == CartMode.BULK) "bulk" else "individual"} cart?",
         "Only this cart will be cleared. Your other cart stays as it is.", { clearMode = null }, {
-            if (target == CartMode.BULK) bulk.clear() else individual.clear()
+            if (target == CartMode.BULK) bulk.clear() else if (onClearIndividual == null) individual.clear()
+                else onClearIndividual()
             clearMode = null
         }, "Clear this cart") }
 }
@@ -200,7 +218,7 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
 @Composable
 private fun CartLine(name: String, price: String, photo: edu.msrit.canteen.customer.FoodPhoto?,
                      quantity: Int, totalPaise: Long, onQuantity: (Int) -> Unit, tag: String,
-                     localImageUri: String?) {
+                     localImageUri: String?, enabled: Boolean = true) {
     val colors = RitThemeTokens.colors
     Row(Modifier.fillMaxWidth().padding(vertical = 5.dp).border(1.dp, colors.outline,
         RoundedCornerShape(RitRadii.card)).background(colors.card, RoundedCornerShape(RitRadii.card))
@@ -212,7 +230,7 @@ private fun CartLine(name: String, price: String, photo: edu.msrit.canteen.custo
             RitText(name, RitType.label)
             RitText("$price each", RitType.small, colors.muted)
             RitText("Line total  ${displayPaise(totalPaise)}", RitType.label)
-            QuantityStepper(name, quantity, onQuantity, tag)
+            QuantityStepper(name, quantity, onQuantity, tag, enabled)
         }
     }
 }
@@ -220,7 +238,7 @@ private fun CartLine(name: String, price: String, photo: edu.msrit.canteen.custo
 @Composable
 fun IndividualReviewScreen(individual: IndividualCartSession, onBack: () -> Unit,
                            onSaveDemo: () -> Unit, catalog: CustomerCatalogSource = PreviewCatalog,
-                           errorMessage: String? = null) {
+                           errorMessage: String? = null, saving: Boolean = false) {
     val colors = RitThemeTokens.colors
     val check = checkIndividualCart(individual.draft, catalog)
     Column(Modifier.fillMaxSize().background(colors.background).testTag("individual_review")) {
@@ -230,21 +248,24 @@ fun IndividualReviewScreen(individual: IndividualCartSession, onBack: () -> Unit
             RitText("Individual prepared-food selection", RitType.body, colors.muted)
             Spacer(Modifier.height(20.dp))
             check.lines.forEach { (item, quantity) ->
+                val unit = individual.serverCart?.lines?.find { it.itemId == item.id }?.unitPricePaise
+                    ?: item.price.rupees.toLong() * 100L
                 Row(Modifier.fillMaxWidth().padding(vertical = 7.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     RitText("${quantity} × ${item.name}", RitType.body, modifier = Modifier.weight(1f))
-                    RitText(displayPaise(item.price.rupees.toLong() * quantity * 100L), RitType.body)
+                    RitText(displayPaise(unit * quantity), RitType.body)
                 }
             }
             Spacer(Modifier.height(14.dp))
-            RitText("Subtotal  ${displayPaise(check.subtotalPaise)}", RitType.title)
+            RitText("Subtotal  ${displayPaise(individual.serverCart?.subtotalPaise ?: check.subtotalPaise)}", RitType.title)
             Spacer(Modifier.height(15.dp))
-            BulkInfoCard("Saved demo history only", "This is stored by the local server. It is not a kitchen request, payment, reservation or pickup promise.")
+            BulkInfoCard("Saved demo history only", "This is stored by the backend. It is not a kitchen request, payment, reservation or pickup promise.")
             if (errorMessage != null) {
                 Spacer(Modifier.height(10.dp))
                 RitText(errorMessage, RitType.body, colors.accent)
             }
         }
-        RitPrimaryButton("Save demo order", onSaveDemo, Modifier.fillMaxWidth().padding(20.dp)
-            .testTag("individual_save_demo"), enabled = check.readyForReview)
+        RitPrimaryButton(if (saving) "Saving…" else "Save demo order", onSaveDemo,
+            Modifier.fillMaxWidth().padding(20.dp).testTag("individual_save_demo"),
+            enabled = !saving && (individual.serverCart?.readyForCheckout ?: check.readyForReview))
     }
 }

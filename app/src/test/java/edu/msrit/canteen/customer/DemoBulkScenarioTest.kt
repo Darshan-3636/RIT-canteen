@@ -1,5 +1,8 @@
 package edu.msrit.canteen.customer
 
+import edu.msrit.canteen.BuildConfig
+import org.junit.Assume.assumeFalse
+import org.junit.Before
 import edu.msrit.canteen.navigation.DevelopmentPreviewAccess
 import edu.msrit.canteen.navigation.DevelopmentRole
 import org.junit.Assert.assertEquals
@@ -11,6 +14,7 @@ import org.junit.Test
 import java.time.LocalDateTime
 
 class DemoBulkScenarioTest {
+    @Before fun localFixtureOnly() = assumeFalse("Local negotiation fixtures are disabled in cloud mode", BuildConfig.RIT_CLOUD_DEMO)
     private val now = LocalDateTime.of(2026, 10, 21, 10, 0)
     private fun scenario() = DemoBulkScenario(clock = { now })
     private fun identity(role: DevelopmentRole) =

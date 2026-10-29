@@ -3,6 +3,8 @@ package edu.msrit.canteen.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,6 +27,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import edu.msrit.canteen.customer.BulkRequestRecord
 import edu.msrit.canteen.customer.IndividualOrderPreview
+import edu.msrit.canteen.customer.SandboxPayment
 import edu.msrit.canteen.customer.DemoOrder
 import edu.msrit.canteen.customer.DemoOrderKind
 import edu.msrit.canteen.customer.PreviewCatalog
@@ -37,6 +40,7 @@ import edu.msrit.canteen.ui.components.RitBottomNavigation
 import edu.msrit.canteen.ui.components.RitChip
 import edu.msrit.canteen.ui.components.RitEmptyState
 import edu.msrit.canteen.ui.components.RitSecondaryButton
+import edu.msrit.canteen.ui.components.RitPrimaryButton
 import edu.msrit.canteen.ui.components.RitText
 import edu.msrit.canteen.ui.theme.RitRadii
 import edu.msrit.canteen.ui.theme.RitThemeTokens
@@ -78,7 +82,7 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
             contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp)) {
             item {
                 RitText("Your activity", RitType.heading)
-                RitText("Stored on local demo server · no actual orders or charges", RitType.small, colors.muted,
+                RitText("Stored on demo backend · no actual charges or fulfillment", RitType.small, colors.muted,
                     Modifier.testTag("orders_demo_disclosure"))
                 Spacer(Modifier.height(14.dp))
             }
@@ -95,7 +99,9 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                         it.customerId == customerUserId && it.kind == DemoOrderKind.INDIVIDUAL })
                     item { RitEmptyState("No individual previews", "Select prepared food from Main Canteen to build a demo order.") }
                 items(individual, key = { it.id }) { record ->
-                    OrderCard("Individual · Main Canteen", if (record.locallySaved) "Saved on demo server · not placed" else "Sample history · not a real purchase",
+                    OrderCard("Individual · Main Canteen", if (record.locallySaved)
+                        record.status.removePrefix("DEMO_").lowercase().replace('_', ' ') + " · demo only"
+                        else "Sample history · not a real purchase",
                         record.lines.joinToString { "${it.quantity}× ${it.title}" },
                         "${record.placedAt.format(orderDate)} · ${displayPaise(record.totalPaise)}",
                         { onIndividual(record.id) }, "orders_individual_${record.id}", record.lines.firstOrNull()?.itemId)
@@ -152,14 +158,24 @@ private fun OrderCard(title: String, status: String, detail: String, foot: Strin
 }
 
 @Composable
-fun IndividualOrderDetailScreen(record: IndividualOrderPreview?, onBack: () -> Unit) {
+fun IndividualOrderDetailScreen(record: IndividualOrderPreview?, onBack: () -> Unit,
+                                onDemoPayment: ((String) -> Unit)? = null, feedback: String? = null,
+                                paymentBusy: Boolean = false, sandboxPayment: SandboxPayment? = null,
+                                onSandboxStart: (() -> Unit)? = null,
+                                onSandboxCheck: (() -> Unit)? = null) {
     val colors = RitThemeTokens.colors
     Column(Modifier.fillMaxSize().background(colors.background).testTag("individual_order_detail")) {
-        CatalogHeader("Order Preview", onBack)
-        if (record == null) RitEmptyState("Preview unavailable", "This local record may have been reset.")
-        else Column(Modifier.padding(20.dp)) {
-            RitText(if (record.locallySaved) "Saved locally" else "Sample history", RitType.heading)
-            RitText("Not submitted to a seller · no payment or kitchen acceptance", RitType.body, colors.muted)
+        CatalogHeader("Demo order", onBack)
+        if (record == null) RitEmptyState("Preview unavailable", "Refresh Orders to load this server record.")
+        else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+            RitText(if (record.locallySaved) "Demo order · ${record.status.removePrefix("DEMO_").replace('_', ' ')}" else "Sample history", RitType.heading,
+                modifier = Modifier.testTag("individual_order_status"))
+            RitText("Backend ID: ${record.id}", RitType.small, colors.muted)
+            RitText("Demo only · no money charged or verified payment. Seller actions are simulated.", RitType.body, colors.muted)
+            record.sandboxPaymentStatus?.let { status ->
+                RitText("PhonePe UAT: $status · DEMO PAYMENT — NO REAL MONEY TRANSFERRED", RitType.body, colors.muted,
+                    Modifier.testTag("individual_sandbox_payment_status"))
+            }
             Spacer(Modifier.height(18.dp))
             record.lines.forEach { line ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -171,7 +187,47 @@ fun IndividualOrderDetailScreen(record: IndividualOrderPreview?, onBack: () -> U
                 }
             }
             Spacer(Modifier.height(12.dp))
-            RitText("Illustrative total  ${displayPaise(record.totalPaise)}", RitType.title)
+            RitText("Demo total  ${displayPaise(record.totalPaise)}", RitType.title)
+            if (record.locallySaved && onSandboxStart != null) {
+                Spacer(Modifier.height(18.dp))
+                RitText("PhonePe UAT sandbox", RitType.label)
+                RitText("DEMO / TEST ONLY · no real money or verified sales. The server checks PhonePe's status.",
+                    RitType.small, colors.muted)
+                sandboxPayment?.let {
+                    RitText("Attempt: ${it.status.replace('_', ' ')} · ${it.merchantOrderId}", RitType.small,
+                        colors.muted, Modifier.testTag("individual_uat_attempt_status"))
+                }
+                if (record.status in setOf("DEMO_SAVED", "DEMO_PAYMENT_PENDING", "DEMO_PAYMENT_FAILED") &&
+                    sandboxPayment?.status !in setOf("SANDBOX_SUCCESS", "CANCELLED")) {
+                    Spacer(Modifier.height(8.dp))
+                    RitPrimaryButton(if (paymentBusy) "Contacting UAT…" else if (sandboxPayment == null)
+                        "Pay with PhonePe UAT" else "Continue PhonePe UAT", onSandboxStart,
+                        Modifier.fillMaxWidth().testTag("individual_phonepe_uat_start"), enabled = !paymentBusy)
+                }
+                if (sandboxPayment != null && sandboxPayment.status in setOf("PENDING", "INITIATED", "CANCELLED") &&
+                    onSandboxCheck != null) {
+                    Spacer(Modifier.height(8.dp))
+                    RitSecondaryButton("Check PhonePe UAT status", onSandboxCheck,
+                        Modifier.fillMaxWidth().testTag("individual_phonepe_uat_check"), enabled = !paymentBusy)
+                }
+            }
+            if (record.locallySaved && record.sandboxPaymentStatus == null &&
+                record.status in setOf("DEMO_SAVED", "DEMO_PAYMENT_PENDING", "DEMO_PAYMENT_FAILED") && onDemoPayment != null) {
+                Spacer(Modifier.height(18.dp))
+                RitText("Simulate a payment outcome", RitType.label)
+                RitText("This is a test action, not PhonePe or a bank transaction.", RitType.small, colors.muted)
+                Spacer(Modifier.height(8.dp))
+                RitPrimaryButton(if (paymentBusy) "Saving DEMO outcome…" else "Simulate Payment", { onDemoPayment("SUCCESS") },
+                    Modifier.fillMaxWidth().testTag("individual_demo_pay_success"), enabled = !paymentBusy)
+                Spacer(Modifier.height(8.dp))
+                RitSecondaryButton("Simulate pending", { onDemoPayment("PENDING") },
+                    Modifier.fillMaxWidth().testTag("individual_demo_pay_pending"), enabled = !paymentBusy)
+                Spacer(Modifier.height(8.dp))
+                RitSecondaryButton("Simulate failure", { onDemoPayment("FAILURE") },
+                    Modifier.fillMaxWidth().testTag("individual_demo_pay_failure"), enabled = !paymentBusy)
+            }
+            if (!feedback.isNullOrBlank()) RitText(feedback, RitType.body, colors.accent,
+                Modifier.padding(top = 10.dp).testTag("individual_demo_payment_feedback"))
         }
     }
 }

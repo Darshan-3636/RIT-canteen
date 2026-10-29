@@ -94,6 +94,7 @@ fun RitSecondaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     leadingIcon: RitIconKind? = null,
+    enabled: Boolean = true,
 ) {
     val colors = RitThemeTokens.colors
     val shape = RoundedCornerShape(RitRadii.pill)
@@ -102,7 +103,7 @@ fun RitSecondaryButton(
             .heightIn(min = 54.dp)
             .clip(shape)
             .border(1.dp, colors.outline, shape)
-            .clickable(role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,

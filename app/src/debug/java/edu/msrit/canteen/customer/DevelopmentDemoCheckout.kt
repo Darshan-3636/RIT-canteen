@@ -3,6 +3,7 @@ package edu.msrit.canteen.customer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import edu.msrit.canteen.BuildConfig
 import edu.msrit.canteen.navigation.AuthorizedIdentity
 import edu.msrit.canteen.navigation.PresentationAccess
 import edu.msrit.canteen.navigation.ProtectedArea
@@ -24,6 +25,7 @@ object DevelopmentDemoCheckout : DemoCheckoutRepository {
         PresentationAccess.allows(actor, ProtectedArea.Seller(sellerId, "bulk.respond"))
 
     override fun submitIndividual(draft: IndividualDraft, actor: AuthorizedIdentity?): Pair<DemoActionResult, String?> {
+        if (BuildConfig.RIT_CLOUD_DEMO) return DemoActionResult.INVALID_STATE to null
         if (!PresentationAccess.allows(actor, ProtectedArea.Customer)) return DemoActionResult.UNAUTHORIZED to null
         val check = checkIndividualCart(draft, PreviewCatalog)
         if (!check.readyForReview || check.lines.any { it.first.sellerId != PreviewCatalog.MAIN_ID })
@@ -38,6 +40,7 @@ object DevelopmentDemoCheckout : DemoCheckoutRepository {
     }
 
     override fun respondIndividual(reference: String, accept: Boolean, actor: AuthorizedIdentity?): DemoActionResult {
+        if (BuildConfig.RIT_CLOUD_DEMO) return DemoActionResult.INVALID_STATE
         val order = orders.find { it.reference == reference && it.kind == DemoOrderKind.INDIVIDUAL }
             ?: return DemoActionResult.NOT_FOUND
         if (!seller(actor, order.sellerId)) return DemoActionResult.UNAUTHORIZED
@@ -47,6 +50,7 @@ object DevelopmentDemoCheckout : DemoCheckoutRepository {
     }
 
     override fun previewBulk(reference: String, actor: AuthorizedIdentity?): DemoOrder? {
+        if (BuildConfig.RIT_CLOUD_DEMO) return null
         val record = DevelopmentSellerOperations.records.find { it.reference == reference } ?: return null
         if (!customer(actor, record.customerUserId) || !eligibleBulk(record)) return null
         return orders.find { it.reference == reference } ?: DemoOrder(reference, DemoOrderKind.BULK,
@@ -63,6 +67,7 @@ object DevelopmentDemoCheckout : DemoCheckoutRepository {
 
     override fun simulatePayment(reference: String, outcome: DemoPaymentOutcome,
                                  actor: AuthorizedIdentity?): DemoActionResult {
+        if (BuildConfig.RIT_CLOUD_DEMO) return DemoActionResult.INVALID_STATE
         val existing = orders.find { it.reference == reference }
         val order = existing ?: previewBulk(reference, actor) ?: return DemoActionResult.NOT_FOUND
         if (!customer(actor, order.customerId)) return DemoActionResult.UNAUTHORIZED
@@ -99,6 +104,7 @@ object DevelopmentDemoCheckout : DemoCheckoutRepository {
     }
 
     override fun verifyCode(code: String, actor: AuthorizedIdentity?): Pair<DemoActionResult, DemoOrder?> {
+        if (BuildConfig.RIT_CLOUD_DEMO) return DemoActionResult.INVALID_STATE to null
         val compact = code.uppercase().filterNot { it == '-' || it.isWhitespace() }
         if (compact.length != 16) return DemoActionResult.NOT_FOUND to null
         val normalized = compact.chunked(4).joinToString("-")
@@ -117,6 +123,7 @@ object DevelopmentDemoCheckout : DemoCheckoutRepository {
     }
 
     override fun collect(code: String, actor: AuthorizedIdentity?): DemoActionResult {
+        if (BuildConfig.RIT_CLOUD_DEMO) return DemoActionResult.INVALID_STATE
         val (result, order) = verifyCode(code, actor)
         if (result != DemoActionResult.APPLIED || order == null) return result
         replace(order.copy(state = DemoOrderState.DEMO_COLLECTED,

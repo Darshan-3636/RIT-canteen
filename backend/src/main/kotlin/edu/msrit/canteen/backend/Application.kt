@@ -19,7 +19,11 @@ import edu.msrit.canteen.backend.core.BackendConfig
 import edu.msrit.canteen.backend.core.BackendContext
 import edu.msrit.canteen.backend.core.close
 import edu.msrit.canteen.backend.features.commerce.seedCommerceFixtures
+import edu.msrit.canteen.backend.features.commerce.CloudDemoDataSeed
 import edu.msrit.canteen.backend.features.commerce.registerCommerceRoutes
+import edu.msrit.canteen.backend.features.commerce.PhonePeUatGateway
+import edu.msrit.canteen.backend.features.commerce.SandboxPaymentGateway
+import edu.msrit.canteen.backend.features.commerce.UnavailableSandboxPaymentGateway
 import edu.msrit.canteen.backend.features.engagement.registerEngagementRoutes
 import edu.msrit.canteen.backend.features.integration.PostgresCommerceReadPort
 import io.ktor.http.HttpStatusCode
@@ -52,18 +56,20 @@ fun main() {
     try {
         if (config.demoSeedEnabled || config.cloudDemoSeedEnabled) seedCommerceFixtures(context)
         if (config.cloudDemoSeedEnabled) CloudDemoIdentitySeed.seed(context)
+        if (config.cloudDemoSeedEnabled) CloudDemoDataSeed.seed(context)
     } catch (failure: Throwable) {
         context.close()
         throw failure
     }
     Runtime.getRuntime().addShutdownHook(Thread { context.close() })
     embeddedServer(Netty, host = config.httpHost, port = config.httpPort) {
-        backendModule(context)
+        backendModule(context, sandboxGateway = PhonePeUatGateway.fromEnvironment(config.environment))
     }.start(wait = true)
 }
 
 /** Owner integration mounts both contributor modules beneath the shared V1 prefix. */
-fun Application.backendModule(context: BackendContext, mountContributorRoutes: Boolean = true) {
+fun Application.backendModule(context: BackendContext, mountContributorRoutes: Boolean = true,
+                              sandboxGateway: SandboxPaymentGateway = UnavailableSandboxPaymentGateway) {
     val accounts = AccountService(context)
     install(ContentNegotiation) {
         json(Json { encodeDefaults = true; explicitNulls = true; ignoreUnknownKeys = false })
@@ -91,13 +97,14 @@ fun Application.backendModule(context: BackendContext, mountContributorRoutes: B
         }
         route("/api/v1") {
             if (mountContributorRoutes) {
-                registerCommerceRoutes(context)
+                registerCommerceRoutes(context, sandboxGateway)
                 registerEngagementRoutes(context, PostgresCommerceReadPort(context))
             }
             post("/auth/register") {
-                if (context.config.environment == edu.msrit.canteen.backend.core.RuntimeEnvironment.CLOUD_DEMO) {
+                if (context.config.environment == edu.msrit.canteen.backend.core.RuntimeEnvironment.CLOUD_DEMO &&
+                    !context.config.cloudDemoSelfSignupEnabled) {
                     call.respondApiError(HttpStatusCode.Forbidden, "REGISTRATION_DISABLED",
-                        "Public account registration is disabled for this cloud demo")
+                        "Customer registration is disabled until the demo owner enables it")
                     return@post
                 }
                 val request = call.readJson<RegisterRequest>()

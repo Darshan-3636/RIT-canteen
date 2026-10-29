@@ -1,5 +1,6 @@
 package edu.msrit.canteen.customer
 
+import edu.msrit.canteen.BuildConfig
 import edu.msrit.canteen.navigation.AppMode
 import edu.msrit.canteen.navigation.AuthorizedIdentity
 import org.junit.After
@@ -9,6 +10,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.Assume.assumeFalse
 
 class DevelopmentDemoCheckoutTest {
     private val customer = AuthorizedIdentity("customer-a", setOf(AppMode.Customer))
@@ -20,8 +22,15 @@ class DevelopmentDemoCheckoutTest {
     private val northStaff = AuthorizedIdentity("north-staff", setOf(AppMode.OperationalStaff("north-counter")),
         mapOf("north-counter" to setOf("bulk.view")))
 
-    @Before fun reset() { DevelopmentDemoCheckout.reset(); DevelopmentSellerOperations.reset() }
-    @After fun cleanup() { DevelopmentDemoCheckout.reset(); DevelopmentSellerOperations.reset() }
+    @Before fun reset() {
+        assumeFalse("The local checkout simulator is deliberately disabled in cloud mode", BuildConfig.RIT_CLOUD_DEMO)
+        DevelopmentDemoCheckout.reset(); DevelopmentSellerOperations.reset()
+    }
+    @After fun cleanup() {
+        if (!BuildConfig.RIT_CLOUD_DEMO) {
+            DevelopmentDemoCheckout.reset(); DevelopmentSellerOperations.reset()
+        }
+    }
 
     private fun submitIndividual(): String {
         val cart = IndividualCartSession()

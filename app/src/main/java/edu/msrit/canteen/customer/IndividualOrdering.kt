@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.time.LocalDateTime
+import java.util.UUID
 
 enum class CartMode { INDIVIDUAL, BULK }
 
@@ -12,10 +13,30 @@ data class IndividualDraft(val lines: List<IndividualLine> = emptyList()) {
     val totalUnits: Int get() = lines.sumOf { it.quantity }
 }
 
+data class IndividualServerCartLine(val itemId: String, val quantity: Int, val unitPricePaise: Long,
+                                    val available: Boolean)
+data class IndividualServerCart(val version: Long, val subtotalPaise: Long,
+                                val readyForCheckout: Boolean, val lines: List<IndividualServerCartLine>)
+
 /** Selection only. This cannot submit, charge, reserve, or notify a kitchen. */
 class IndividualCartSession(private val catalog: CustomerCatalogSource = PreviewCatalog) {
     var draft by mutableStateOf(IndividualDraft())
         private set
+    var serverCart by mutableStateOf<IndividualServerCart?>(null)
+        private set
+    private var checkoutVersion: Long? = null
+    private var checkoutKey: String = UUID.randomUUID().toString()
+
+    fun applyServer(cart: IndividualServerCart) {
+        draft = IndividualDraft(cart.lines.map { IndividualLine(it.itemId, it.quantity) })
+        serverCart = cart
+        if (checkoutVersion != cart.version) {
+            checkoutVersion = cart.version
+            checkoutKey = UUID.randomUUID().toString()
+        }
+    }
+
+    fun checkoutIdempotencyKey(): String = checkoutKey
 
     fun setQuantity(item: MenuItem, quantity: Int): Boolean {
         val seller = catalog.sellers.find { it.id == item.sellerId } ?: return false
@@ -31,7 +52,12 @@ class IndividualCartSession(private val catalog: CustomerCatalogSource = Preview
         return setQuantity(item, current + 1)
     }
 
-    fun clear() { draft = IndividualDraft() }
+    fun clear() {
+        draft = IndividualDraft()
+        serverCart = null
+        checkoutVersion = null
+        checkoutKey = UUID.randomUUID().toString()
+    }
 }
 
 data class IndividualCartCheck(val lines: List<Pair<MenuItem, Int>>, val subtotalPaise: Long,
@@ -55,4 +81,12 @@ fun checkIndividualCart(draft: IndividualDraft, catalog: CustomerCatalogSource):
 
 data class IndividualOrderPreview(val id: String, val placedAt: LocalDateTime,
                                   val lines: List<QuoteLineSnapshot>, val totalPaise: Long,
-                                  val locallySaved: Boolean = false)
+                                  val locallySaved: Boolean = false, val status: String = "SAMPLE",
+                                  val demoPaymentOutcome: String = "NOT_ATTEMPTED",
+                                  val sandboxPaymentStatus: String? = null)
+
+/** UAT metadata only. The server remains authoritative for amount and status. */
+data class SandboxPayment(val id: String, val sourceType: String, val sourceId: String,
+                          val amountPaise: Long, val status: String, val merchantOrderId: String,
+                          val providerOrderId: String?, val sdkToken: String?, val merchantId: String?,
+                          val idempotencyKey: String? = null)

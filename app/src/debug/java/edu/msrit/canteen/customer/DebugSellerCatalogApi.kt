@@ -28,10 +28,10 @@ object DebugSellerCatalogApi {
                 val availability = DebugBackendApi.request("PATCH",
                     "/api/v1/sellers/" + item.sellerId + "/menu/items/" + item.id + "/availability",
                     JSONObject().put("availability", item.availability.name), token)
-                if (availability.status == 200) Result(true, "Item and availability saved on local backend.")
+                if (availability.status == 200) Result(true, "Item and availability saved on server.")
                 else Result(false, availability.error ?: "Item details saved, but availability failed. Refresh the menu.")
-            } else Result(true, "Item saved on local backend.")
-        } catch (_: Exception) { Result(false, "Local backend unavailable.") }
+            } else Result(true, "Item saved on server.")
+        } catch (_: Exception) { Result(false, "Server unavailable.") }
     }
 
     fun setAvailability(sellerId: String, itemId: String, available: Boolean,
@@ -45,9 +45,9 @@ object DebugSellerCatalogApi {
             val visibility = DebugBackendApi.request("PATCH", path,
                 JSONObject().put("published", published)
                     .put("unavailableVisibility", if (showUnavailable) "SHOW" else "HIDE"), token)
-            if (visibility.status == 200) Result(true, "Visibility saved on local backend.")
+            if (visibility.status == 200) Result(true, "Visibility saved on server.")
             else Result(false, visibility.error ?: "Visibility update failed; availability may have changed. Refresh the menu.")
-        } catch (_: Exception) { Result(false, "Local backend unavailable.") }
+        } catch (_: Exception) { Result(false, "Server unavailable.") }
     }
 
     fun saveMinimum(sellerId: String, minimum: Int): Result {
@@ -55,9 +55,9 @@ object DebugSellerCatalogApi {
         return try {
             val response = DebugBackendApi.request("PATCH", "/api/v1/sellers/" + sellerId + "/bulk-policy",
                 JSONObject().put("minimumUnits", minimum), token)
-            if (response.status == 200) Result(true, "Minimum saved on local backend.")
+            if (response.status == 200) Result(true, "Minimum saved on server.")
             else Result(false, response.error ?: "Minimum update failed.")
-        } catch (_: Exception) { Result(false, "Local backend unavailable.") }
+        } catch (_: Exception) { Result(false, "Server unavailable.") }
     }
 
     fun saveHours(sellerId: String, policy: SellerBulkPolicy): Result {
@@ -70,9 +70,9 @@ object DebugSellerCatalogApi {
         return try {
             val response = DebugBackendApi.request("PUT", "/api/v1/sellers/" + sellerId + "/hours",
                 JSONObject().put("hours", rows), token)
-            if (response.status == 204) Result(true, "Weekly hours saved on local backend.")
+            if (response.status == 204) Result(true, "Weekly hours saved on server.")
             else Result(false, response.error ?: "Hours update failed.")
-        } catch (_: Exception) { Result(false, "Local backend unavailable.") }
+        } catch (_: Exception) { Result(false, "Server unavailable.") }
     }
 
     fun setClosure(sellerId: String, date: LocalDate, reason: String?): Result {
@@ -82,8 +82,8 @@ object DebugSellerCatalogApi {
                 "/api/v1/sellers/" + sellerId + "/closures/" + date, token = token)
             else DebugBackendApi.request("PUT", "/api/v1/sellers/" + sellerId + "/closures/" + date,
                 JSONObject().put("reason", reason), token)
-            if (response.status in 200..204) Result(true, "Closure saved on local backend.")
+            if (response.status in 200..204) Result(true, "Closure saved on server.")
             else Result(false, response.error ?: "Closure update failed.")
-        } catch (_: Exception) { Result(false, "Local backend unavailable.") }
+        } catch (_: Exception) { Result(false, "Server unavailable.") }
     }
 }

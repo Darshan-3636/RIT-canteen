@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import edu.msrit.canteen.customer.BulkTimeWindow
+import edu.msrit.canteen.BuildConfig
 import edu.msrit.canteen.customer.DevelopmentBulkPreview
 import edu.msrit.canteen.customer.DevelopmentPromotions
 import edu.msrit.canteen.customer.DevelopmentSellerOperations
@@ -89,7 +90,8 @@ private fun BusinessPage(title: String, tag: String, onBack: () -> Unit, content
     Column(Modifier.fillMaxSize().background(colors.background).testTag(tag)) {
         CatalogHeader(title, onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
-            RitText("Local backend demo · unsupported changes are not saved", RitType.small, colors.muted)
+            RitText(if (BuildConfig.RIT_CLOUD_DEMO) "Server-backed demo · unsupported changes are unavailable"
+                else "Local backend demo · unsupported changes are not saved", RitType.small, colors.muted)
             Spacer(Modifier.height(14.dp))
             content()
             Spacer(Modifier.height(40.dp))
@@ -144,12 +146,15 @@ fun SellerBusinessHomeScreen(sellerId: String, userId: String, repo: SellerBusin
         Spacer(Modifier.height(8.dp))
         if (SellerCapability.CATALOG in caps || SellerCapability.AVAILABILITY in caps)
             BusinessCard("Menu management", "Items, availability and categories", onMenu, "seller_manage_menu")
-        if (SellerCapability.CATALOG in caps) BusinessCard("Categories", "Organize your menu", onCategories, "seller_manage_categories")
+        if (!BuildConfig.RIT_CLOUD_DEMO && SellerCapability.CATALOG in caps)
+            BusinessCard("Categories", "Organize your menu", onCategories, "seller_manage_categories")
         Spacer(Modifier.height(12.dp))
         RitText("People & promotions", RitType.title)
         Spacer(Modifier.height(8.dp))
-        if (SellerCapability.PROMOTIONS in caps) BusinessCard("Promotions", "Drafts, scheduled and expired placements", onPromotions, "seller_manage_promotions")
-        if (SellerCapability.EMPLOYEES in caps) BusinessCard("Team and permissions", "Seller-scoped delegated access", onEmployees, "seller_manage_employees")
+        if (!BuildConfig.RIT_CLOUD_DEMO && SellerCapability.PROMOTIONS in caps)
+            BusinessCard("Promotions", "Drafts, scheduled and expired placements", onPromotions, "seller_manage_promotions")
+        if (!BuildConfig.RIT_CLOUD_DEMO && SellerCapability.EMPLOYEES in caps)
+            BusinessCard("Team and permissions", "Seller-scoped delegated access", onEmployees, "seller_manage_employees")
         Spacer(Modifier.height(12.dp))
         RitText("Business profile & settings", RitType.title)
         Spacer(Modifier.height(8.dp))
@@ -178,7 +183,7 @@ fun SellerMenuManagementScreen(sellerId: String, userId: String, repo: SellerBus
     Column(Modifier.fillMaxSize().background(colors.background).testTag("seller_menu_management")) {
         CatalogHeader("Menu management", if (rootTab) null else onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
-            RitText("Local backend catalog", RitType.small, colors.muted)
+            RitText(if (BuildConfig.RIT_CLOUD_DEMO) "Server catalog" else "Local backend catalog", RitType.small, colors.muted)
             RitText(seller?.name ?: "Seller", RitType.heading)
             RitText("Prepared and packaged eligibility follows fixed platform rules.", RitType.small)
             Spacer(Modifier.height(12.dp))
@@ -197,8 +202,10 @@ fun SellerMenuManagementScreen(sellerId: String, userId: String, repo: SellerBus
                 RitPrimaryButton("+ Add food item · unavailable", {}, Modifier.fillMaxWidth().testTag("seller_add_item"),
                     enabled = false)
                 Spacer(Modifier.height(9.dp))
-                RitSecondaryButton("Manage categories", onCategories, Modifier.fillMaxWidth())
-                Spacer(Modifier.height(12.dp))
+                if (!BuildConfig.RIT_CLOUD_DEMO) {
+                    RitSecondaryButton("Manage categories", onCategories, Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(12.dp))
+                }
             }
         }
         LazyColumn(Modifier.fillMaxSize().testTag("seller_menu_items"),
@@ -452,14 +459,17 @@ fun SellerBusinessSettingsScreen(sellerId: String, userId: String, repo: SellerB
     BusinessPage("Business settings", "seller_business_settings", onBack) {
         RitText(PreviewCatalog.sellers.find { it.id == sellerId }?.name ?: "Seller", RitType.heading)
         Spacer(Modifier.height(12.dp))
-        if (SellerCapability.PROFILE in caps) BusinessCard("Public profile", "Name, description, location and local preview image", onProfile)
+        if (!BuildConfig.RIT_CLOUD_DEMO && SellerCapability.PROFILE in caps)
+            BusinessCard("Public profile", "Name, description, location and local preview image", onProfile)
         if (SellerCapability.HOURS in caps) {
             BusinessCard("Working hours", "Weekly schedule in Asia/Kolkata", onHours, "seller_settings_hours")
             BusinessCard("Holidays & closures", "Special closed dates and reasons", onClosures)
             BusinessCard("Bulk-order minimum", "Combined eligible units from one seller", onMinimum, "seller_settings_minimum")
         }
-        if (SellerCapability.EMPLOYEES in caps) BusinessCard("Team & permissions", "Manage delegated debug employees", onEmployees)
-        if (SellerCapability.PROMOTIONS in caps) BusinessCard("Promotions", "Seller-owned demo placements", onPromotions)
+        if (!BuildConfig.RIT_CLOUD_DEMO && SellerCapability.EMPLOYEES in caps)
+            BusinessCard("Team & permissions", "Manage delegated debug employees", onEmployees)
+        if (!BuildConfig.RIT_CLOUD_DEMO && SellerCapability.PROMOTIONS in caps)
+            BusinessCard("Promotions", "Seller-owned demo placements", onPromotions)
         BusinessCard("Notifications", "Preferences are not connected to a delivery service yet.")
         BusinessCard("Payment configuration", "Not connected. PhonePe merchant eligibility and settlement requirements remain unverified; no credentials or transactions here.")
     }

@@ -4,6 +4,7 @@ import android.content.Context
 
 /** Inert release counterpart: no mock identity, data or mutation is available. */
 object DevelopmentCustomerAccount : CustomerAccountRepository {
+    val cloudError: String? = null
     override val profile: CustomerProfile? = null
     override val preferences = CustomerPreferences()
     override val tickets: List<CustomerSupportTicket> = emptyList()
@@ -22,5 +23,15 @@ object DevelopmentCustomerAccount : CustomerAccountRepository {
     fun initialize(context: Context) = Unit
     fun activate(userId: String, initial: CustomerProfile) = Unit
     fun deactivate() = Unit
+    suspend fun refreshCloud(page: String, id: String, userId: String?) = Unit
+    suspend fun saveCloudPreferences(value: CustomerPreferences, userId: String?): String? = "Unavailable."
+    suspend fun markCloudNotificationRead(id: String, userId: String?): String? = "Unavailable."
+    suspend fun saveCloudTemplate(name: String, draft: BulkDraft, id: String?, userId: String?): String? = "Unavailable."
+    suspend fun removeCloudTemplate(id: String, userId: String?): String? = "Unavailable."
+    suspend fun createCloudTicket(category: CustomerIssueCategory, subject: String, description: String,
+                                  reference: String?, sellerId: String?, clientRequestId: String, userId: String?): Pair<String?, String?> =
+        null to "Unavailable."
+    suspend fun replyCloudTicket(id: String, message: String, clientMessageId: String, userId: String?): String? = "Unavailable."
+    suspend fun escalateCloudTicket(id: String, userId: String?): String? = "Unavailable."
     override fun reset() = Unit
 }

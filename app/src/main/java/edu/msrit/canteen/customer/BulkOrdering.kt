@@ -25,14 +25,33 @@ data class BulkDraft(
     val instructions: String = "",
 )
 
+data class BulkServerDraft(val version: Long, val draft: BulkDraft, val subtotalPaise: Long,
+                           val unavailableItemIds: Set<String>)
+
+/** Account-scoped backend key survives app restarts and a timed-out submission retry. */
+fun bulkSubmissionKeyForVersion(version: Long): String {
+    require(version >= 0)
+    return "bulk-draft-version-$version"
+}
+
 class BulkDraftSession {
     var draft by mutableStateOf(BulkDraft())
         private set
+    var revision: Long = 0
+        private set
+    var onChanged: (() -> Unit)? = null
     private var submissionKey: String = UUID.randomUUID().toString()
 
     /** Stable across transport retries; changing the draft starts a new server attempt. */
     fun idempotencyKey(): String = submissionKey
-    private fun changed() { submissionKey = UUID.randomUUID().toString() }
+    private fun changed() { revision++; submissionKey = UUID.randomUUID().toString(); onChanged?.invoke() }
+
+    /** Server responses replace local edits only after an explicit fetch, not after a stale-write failure. */
+    fun applyServer(value: BulkServerDraft) {
+        draft = value.draft
+        revision++
+        submissionKey = UUID.randomUUID().toString()
+    }
 
     fun selectSeller(sellerId: String): Boolean {
         if (draft.sellerId != null && draft.sellerId != sellerId && draft.lines.isNotEmpty()) return false
@@ -66,6 +85,7 @@ data class SellerBulkPolicy(
     val weeklyHours: Map<DayOfWeek, List<BulkTimeWindow>> = emptyMap(),
     val holidays: Set<LocalDate> = emptySet(),
     val temporaryClosures: Set<LocalDate> = emptySet(),
+    val specialPickupEnabled: Boolean = true,
 ) {
     init { require(minimumOverride == null || minimumOverride > 0) }
     val minimum: Int get() = minimumOverride ?: DEFAULT_BULK_MINIMUM

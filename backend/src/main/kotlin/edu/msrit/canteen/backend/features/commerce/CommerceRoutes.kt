@@ -20,7 +20,8 @@ import java.util.UUID
 import java.sql.Connection
 
 /** Commerce feature seam. The application owner mounts this below `/api/v1` after branch integration. */
-fun Route.registerCommerceRoutes(context: BackendContext) {
+fun Route.registerCommerceRoutes(context: BackendContext,
+                                 sandboxGateway: SandboxPaymentGateway = UnavailableSandboxPaymentGateway) {
     get("/sellers") { call.commerce { call.respond(context.dataSource.connection.use { SellerListDto(sellers(it)) }) } }
     get("/sellers/{sellerId}") {
         call.commerce {
@@ -50,6 +51,41 @@ fun Route.registerCommerceRoutes(context: BackendContext) {
             val result=context.dataSource.connection.use { c -> menuItems(c,seller,null,null).firstOrNull { it.id==item } }
                 ?: throw CommerceFault(404,"ITEM_NOT_FOUND","Menu item not found")
             call.respond(result)
+        }
+    }
+    get("/sellers/{sellerId}/operating-policy") {
+        call.commerce {
+            val seller = call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")
+            val policy = context.dataSource.connection.use { db ->
+                val row = db.prepareStatement(
+                    """SELECT p.bulk_minimum_units,p.special_pickup_enabled,p.timezone
+                       FROM seller_ordering_policies p JOIN sellers s ON s.id=p.seller_id
+                       WHERE p.seller_id=? AND s.active""").use { stmt ->
+                    stmt.setString(1,seller)
+                    stmt.executeQuery().use { result ->
+                        if (result.next()) Triple(result.getInt(1), result.getBoolean(2), result.getString(3)) else null
+                    }
+                } ?: throw CommerceFault(404,"SELLER_NOT_FOUND","Seller not found")
+                val hours = db.prepareStatement(
+                    "SELECT day_of_week,opens_at,closes_at FROM seller_hours WHERE seller_id=? ORDER BY day_of_week").use { stmt ->
+                    stmt.setString(1,seller)
+                    stmt.executeQuery().use { result -> buildList {
+                        while (result.next()) add(SellerHourEntry(result.getInt(1),
+                            result.getObject(2, java.time.LocalTime::class.java).toString(),
+                            result.getObject(3, java.time.LocalTime::class.java).toString()))
+                    } }
+                }
+                val closures = db.prepareStatement(
+                    "SELECT local_date,reason FROM seller_closures WHERE seller_id=? AND local_date>=CURRENT_DATE ORDER BY local_date").use { stmt ->
+                    stmt.setString(1,seller)
+                    stmt.executeQuery().use { result -> buildList {
+                        while (result.next()) add(SellerClosureDto(
+                            result.getObject(1, java.time.LocalDate::class.java).toString(), result.getString(2)))
+                    } }
+                }
+                SellerOperatingPolicyDto(seller,row.first,row.second,row.third,hours,closures)
+            }
+            call.respond(policy)
         }
     }
     patch("/sellers/{sellerId}/menu/items/{itemId}/availability") {
@@ -165,7 +201,8 @@ fun Route.registerCommerceRoutes(context: BackendContext) {
             val principal=call.requireAuthenticatedUser(context) ?: return@commerce
             val body=call.receive<BulkCreateRequest>()
             val key=call.request.headers["Idempotency-Key"] ?: throw CommerceFault(400,"IDEMPOTENCY_KEY_REQUIRED","Idempotency-Key header is required")
-            call.respond(HttpStatusCode.Created,createBulk(context,principal,body.sellerId,body.lines,body.pickupAt,body.specialPickupReason,key))
+            call.respond(HttpStatusCode.Created,createBulk(context,principal,body.sellerId,body.lines,body.pickupAt,
+                body.specialPickupReason,body.instructions,key))
         }
     }
     get("/me/bulk/requests") {
@@ -227,11 +264,75 @@ fun Route.registerCommerceRoutes(context: BackendContext) {
             call.respond(PickupScheduleDto(emptyList(),"No paid or operationally confirmed pickups are available in this demo backend."))
         }
     }
+    get("/me/cart/individual") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce;call.respond(readIndividualCart(context,p)) }
+    }
+    get("/me/draft/bulk") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            call.respond(readBulkDraft(context,p)) }
+    }
+    put("/me/draft/bulk") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            call.respond(replaceBulkDraft(context,p,call.receive<BulkDraftReplaceRequest>())) }
+    }
+    put("/me/cart/individual") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            call.respond(replaceIndividualCart(context,p,call.receive<IndividualCartReplaceRequest>())) }
+    }
+    post("/me/cart/individual/checkout") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            val key=call.request.headers["Idempotency-Key"] ?: throw CommerceFault(400,"IDEMPOTENCY_KEY_REQUIRED","Idempotency-Key header is required")
+            call.respond(HttpStatusCode.Created,checkoutIndividualCart(context,p,call.receive<IndividualCartCheckoutRequest>(),key)) }
+    }
     post("/me/individual-demo-orders") {
         call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce;val b=call.receive<CustomerDemoOrderRequest>();call.respond(HttpStatusCode.Created,createIndividual(context,p,b.lines)) }
     }
     get("/me/individual-demo-orders") {
         call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce;call.respond(customerIndividual(context,p.userId)) }
+    }
+    post("/me/individual-demo-orders/{orderId}/simulate-payment") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            val body=call.receive<DemoPaymentRequest>()
+            call.respond(simulateIndividualPayment(context,p,call.uuidParameter("orderId"),body.outcome)) }
+    }
+    post("/me/sandbox-payments/{type}/{sourceId}") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            val key=call.request.headers["Idempotency-Key"]
+                ?: throw CommerceFault(400,"IDEMPOTENCY_KEY_REQUIRED","Idempotency-Key header is required")
+            call.respond(HttpStatusCode.Created,beginSandboxPayment(context,sandboxGateway,p,
+                call.parameters["type"].orEmpty(),call.uuidParameter("sourceId"),key)) }
+    }
+    get("/me/sandbox-payments") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            call.respond(customerSandboxPayments(context,p)) }
+    }
+    get("/me/sandbox-payments/{paymentId}") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            call.respond(customerSandboxPayment(context,p,call.uuidParameter("paymentId"),sandboxGateway.merchantId)) }
+    }
+    post("/me/sandbox-payments/{paymentId}/reconcile") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            call.respond(reconcileSandboxPayment(context,sandboxGateway,p,call.uuidParameter("paymentId"))) }
+    }
+    post("/me/sandbox-payments/{paymentId}/cancel") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            call.respond(cancelSandboxPayment(context,p,call.uuidParameter("paymentId"))) }
+    }
+    get("/sellers/{sellerId}/sandbox-payments") {
+        call.commerce { val seller=call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")
+            if(call.requireSellerCapability(context,seller,"bulk.view")==null) return@commerce
+            call.respond(sellerSandboxPayments(context,seller)) }
+    }
+    get("/sellers/{sellerId}/individual-demo-orders") {
+        call.commerce { val seller=call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")
+            if(call.requireSellerCapability(context,seller,"bulk.view")==null) return@commerce
+            call.respond(sellerIndividual(context,seller)) }
+    }
+    post("/sellers/{sellerId}/individual-demo-orders/{orderId}/demo-status") {
+        call.commerce { val seller=call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")
+            val p=call.requireSellerCapability(context,seller,"bulk.respond") ?: return@commerce
+            val body=call.receive<DemoSellerStatusRequest>()
+            call.respond(transitionIndividualDemo(context,p,seller,call.uuidParameter("orderId"),body.status)) }
     }
 }
 
