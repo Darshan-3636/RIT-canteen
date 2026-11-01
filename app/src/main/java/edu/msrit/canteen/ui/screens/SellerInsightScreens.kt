@@ -1,6 +1,8 @@
 package edu.msrit.canteen.ui.screens
 
 import edu.msrit.canteen.BuildConfig
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
@@ -33,6 +36,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -93,8 +97,10 @@ import edu.msrit.canteen.ui.theme.RitThemeTokens
 import edu.msrit.canteen.ui.theme.RitType
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class SellerInsightPage { OVERVIEW, TRENDS, PRODUCTS, CUSTOMERS, PROMOTIONS, FORECAST,
@@ -202,6 +208,25 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
     var cloudError by remember(sellerId, page) { mutableStateOf<String?>(null) }
     var cloudLoading by remember(sellerId, page) { mutableStateOf(false) }
     var cloudRetry by remember(sellerId, page) { mutableIntStateOf(0) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var reportBusy by remember(sellerId, page) { mutableStateOf(false) }
+    var reportFeedback by remember(sellerId, page) { mutableStateOf<String?>(null) }
+    val saveReport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        if (uri == null) reportBusy = false
+        else scope.launch {
+            val feedback = withContext(Dispatchers.IO) {
+                val result = DebugSellerAnalyticsApi.exportCsv(sellerId, range.start, range.end)
+                if (result.csv == null) result.error ?: "Report export failed."
+                else runCatching {
+                    requireNotNull(context.contentResolver.openOutputStream(uri, "w"))
+                        .use { it.write(result.csv.toByteArray(Charsets.UTF_8)) }
+                }.fold({ "CSV report saved." }, { "Could not save the CSV file." })
+            }
+            reportFeedback = feedback
+            reportBusy = false
+        }
+    }
     LaunchedEffect(sellerId, page, range, cloudRetry) {
         if (BuildConfig.RIT_CLOUD_DEMO && page in setOf(SellerInsightPage.OVERVIEW, SellerInsightPage.TRENDS)) {
             cloudLoading = true
@@ -266,6 +291,20 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                             RitType.small, RitThemeTokens.colors.muted)
                     }
                 }
+            } else if (page == SellerInsightPage.REPORT_BUILDER) {
+                RitText("Export stored request and support counts. Verified revenue is unavailable.",
+                    RitType.body, RitThemeTokens.colors.muted)
+                PeriodPicker { range = it }
+                Spacer(Modifier.height(12.dp))
+                RitPrimaryButton(if (reportBusy) "Preparing report..." else "Save CSV report", {
+                    if (!reportBusy) {
+                        reportFeedback = null
+                        reportBusy = true
+                        saveReport.launch("seller-report-${range.start}-${range.end}.csv")
+                    }
+                }, Modifier.fillMaxWidth(), enabled = !reportBusy && range.valid() &&
+                    ChronoUnit.DAYS.between(range.start, range.end) <= 366)
+                reportFeedback?.let { RitText(it, RitType.small, RitThemeTokens.colors.muted) }
             } else RitEmptyState("Feature unavailable", when (page) {
                 SellerInsightPage.PRODUCTS, SellerInsightPage.CUSTOMERS, SellerInsightPage.PROMOTIONS,
                 SellerInsightPage.FORECAST -> "No verified payment or product-sales source exists for this report."

@@ -17,6 +17,9 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import java.util.UUID
+import edu.msrit.canteen.backend.features.management.CatalogService
+import edu.msrit.canteen.backend.features.engagement.ApiFailure
+import edu.msrit.canteen.backend.features.engagement.recordAudit
 import java.sql.Connection
 
 /** Commerce feature seam. The application owner mounts this below `/api/v1` after branch integration. */
@@ -37,7 +40,7 @@ fun Route.registerCommerceRoutes(context: BackendContext,
             val category=call.request.queryParameters["categoryId"]
             val result=context.dataSource.connection.use { c ->
                 if(sellers(c).none { it.id==seller }) throw CommerceFault(404,"SELLER_NOT_FOUND","Seller not found")
-                val categories=c.prepareStatement("SELECT category_id FROM seller_categories WHERE seller_id=? ORDER BY category_id").use { s -> s.setString(1,seller);s.executeQuery().use { r -> buildList { while(r.next()) add(r.getString(1)) } } }
+                val categories=c.prepareStatement("SELECT sc.category_id FROM seller_categories sc JOIN menu_categories mc ON mc.id=sc.category_id WHERE sc.seller_id=? AND sc.active AND mc.active ORDER BY sc.sort_order,mc.sort_order,sc.category_id").use { s -> s.setString(1,seller);s.executeQuery().use { r -> buildList { while(r.next()) add(r.getString(1)) } } }
                 if(category!=null && category !in categories) throw CommerceFault(404,"CATEGORY_NOT_FOUND","Category is not offered by this seller")
                 MenuDto(seller,categories,menuItems(c,seller,call.request.queryParameters["query"],category))
             }
@@ -76,7 +79,7 @@ fun Route.registerCommerceRoutes(context: BackendContext,
                     } }
                 }
                 val closures = db.prepareStatement(
-                    "SELECT local_date,reason FROM seller_closures WHERE seller_id=? AND local_date>=CURRENT_DATE ORDER BY local_date").use { stmt ->
+                    "SELECT local_date,reason FROM seller_closures WHERE seller_id=? AND local_date>=(now() AT TIME ZONE 'Asia/Kolkata')::date ORDER BY local_date").use { stmt ->
                     stmt.setString(1,seller)
                     stmt.executeQuery().use { result -> buildList {
                         while (result.next()) add(SellerClosureDto(
@@ -94,11 +97,7 @@ fun Route.registerCommerceRoutes(context: BackendContext,
             val item=call.parameters["itemId"] ?: throw CommerceFault(400,"ITEM_ID_REQUIRED","Item id is required")
             val principal=call.requireSellerCapability(context,seller,"availability.edit") ?: return@commerce
             val body=call.receive<AvailabilityPatch>()
-            if(body.availability !in setOf("AVAILABLE","UNAVAILABLE")) throw CommerceFault(400,"INVALID_AVAILABILITY","availability must be AVAILABLE or UNAVAILABLE")
-            context.transaction { c ->
-                if(!context.authorization.hasSellerCapability(c,principal,seller,"availability.edit")) throw CommerceFault(403,"SELLER_CAPABILITY_REQUIRED","This seller action is not permitted")
-                c.prepareStatement("UPDATE menu_items SET availability=?,updated_at=now() WHERE seller_id=? AND id=?").use { s -> s.setString(1,body.availability);s.setString(2,seller);s.setString(3,item);if(s.executeUpdate()!=1) throw CommerceFault(404,"ITEM_NOT_FOUND","Menu item not found") }
-            }
+            CatalogService(context).availability(principal,seller,item,body.availability,body.expectedVersion)
             call.respond(context.dataSource.connection.use { menuItem(it,seller,item) }
                 ?: throw CommerceFault(404,"ITEM_NOT_FOUND","Menu item not found"))
         }
@@ -109,21 +108,7 @@ fun Route.registerCommerceRoutes(context: BackendContext,
             val item=call.parameters["itemId"] ?: throw CommerceFault(400,"ITEM_ID_REQUIRED","Item id is required")
             val principal=call.requireSellerCapability(context,seller,"catalog.edit") ?: return@commerce
             val body=call.receive<CatalogItemPatch>()
-            if(listOf(body.name,body.description,body.pricePaise,body.published,body.dietary,body.unavailableVisibility).all { it==null }) throw CommerceFault(400,"EMPTY_PATCH","Provide at least one catalog field")
-            body.name?.let { if(it.isBlank() || it.length>120) throw CommerceFault(400,"INVALID_NAME","Name must contain 1 to 120 characters") }
-            body.description?.let { if(it.length>1200) throw CommerceFault(400,"INVALID_DESCRIPTION","Description is too long") }
-            body.pricePaise?.let { if(it<0) throw CommerceFault(400,"INVALID_PRICE","pricePaise cannot be negative") }
-            body.dietary?.let { if(it !in setOf("VEGETARIAN","NON_VEGETARIAN","NOT_SPECIFIED")) throw CommerceFault(400,"INVALID_DIETARY","Unknown dietary value") }
-            body.unavailableVisibility?.let { if(it !in setOf("SHOW","HIDE")) throw CommerceFault(400,"INVALID_VISIBILITY","unavailableVisibility must be SHOW or HIDE") }
-            context.transaction { c ->
-                if(!context.authorization.hasSellerCapability(c,principal,seller,"catalog.edit")) throw CommerceFault(403,"SELLER_CAPABILITY_REQUIRED","This seller action is not permitted")
-                c.prepareStatement("""UPDATE menu_items SET name=COALESCE(?,name),description=COALESCE(?,description),price_paise=COALESCE(?,price_paise),published=COALESCE(?,published),dietary=COALESCE(?,dietary),unavailable_visibility=COALESCE(?,unavailable_visibility),updated_at=now() WHERE seller_id=? AND id=?""").use { s ->
-                    s.setString(1,body.name?.trim());s.setString(2,body.description);if(body.pricePaise==null)s.setNull(3,java.sql.Types.BIGINT) else s.setLong(3,body.pricePaise)
-                    if(body.published==null)s.setNull(4,java.sql.Types.BOOLEAN) else s.setBoolean(4,body.published)
-                    s.setString(5,body.dietary);s.setString(6,body.unavailableVisibility);s.setString(7,seller);s.setString(8,item)
-                    if(s.executeUpdate()!=1) throw CommerceFault(404,"ITEM_NOT_FOUND","Menu item not found")
-                }
-            }
+            CatalogService(context).update(principal,seller,item,body)
             call.respond(context.dataSource.connection.use { c -> menuItem(c,seller,item) }
                 ?: throw CommerceFault(404,"ITEM_NOT_FOUND","Menu item not found"))
         }
@@ -137,6 +122,8 @@ fun Route.registerCommerceRoutes(context: BackendContext,
             body.minimumUnits?.let { if(it !in 1..999) throw CommerceFault(400,"INVALID_MINIMUM","minimumUnits must be between 1 and 999") }
             context.transaction { c ->
                 if(!context.authorization.hasSellerCapability(c,principal,seller,"hours.edit")) throw CommerceFault(403,"SELLER_CAPABILITY_REQUIRED","This seller action is not permitted")
+                c.lockSellerPolicy(seller,call.policyVersion())
+                recordAudit(c,principal.userId,"SELLER","seller.operations.update","SELLER",seller,seller)
                 c.prepareStatement("INSERT INTO seller_ordering_policies(seller_id,bulk_minimum_units,special_pickup_enabled) VALUES (?,?,?) ON CONFLICT(seller_id) DO UPDATE SET bulk_minimum_units=COALESCE(?,seller_ordering_policies.bulk_minimum_units),special_pickup_enabled=COALESCE(?,seller_ordering_policies.special_pickup_enabled),updated_at=now()").use { s ->
                     s.setString(1,seller);s.setInt(2,body.minimumUnits ?: 8);s.setBoolean(3,body.specialPickupEnabled ?: false)
                     if(body.minimumUnits==null)s.setNull(4,java.sql.Types.INTEGER) else s.setInt(4,body.minimumUnits)
@@ -161,7 +148,8 @@ fun Route.registerCommerceRoutes(context: BackendContext,
             }
             context.transaction { c ->
                 if(!context.authorization.hasSellerCapability(c,principal,seller,"hours.edit")) throw CommerceFault(403,"SELLER_CAPABILITY_REQUIRED","This seller action is not permitted")
-                c.lockSellerPolicy(seller)
+                c.lockSellerPolicy(seller,call.policyVersion())
+                recordAudit(c,principal.userId,"SELLER","seller.operations.update","SELLER",seller,seller)
                 c.prepareStatement("DELETE FROM seller_hours WHERE seller_id=?").use { it.setString(1,seller);it.executeUpdate() }
                 c.prepareStatement("INSERT INTO seller_hours(seller_id,day_of_week,opens_at,closes_at) VALUES (?,?,?,?)").use { s -> parsed.forEach { (day,open,close) -> s.setString(1,seller);s.setInt(2,day);s.setObject(3,open);s.setObject(4,close);s.addBatch() };s.executeBatch() }
             }
@@ -176,7 +164,8 @@ fun Route.registerCommerceRoutes(context: BackendContext,
             val body=call.receive<SellerClosureRequest>();if(body.reason.length>300) throw CommerceFault(400,"INVALID_REASON","Closure reason is too long")
             context.transaction { c ->
                 if(!context.authorization.hasSellerCapability(c,principal,seller,"hours.edit")) throw CommerceFault(403,"SELLER_CAPABILITY_REQUIRED","This seller action is not permitted")
-                c.lockSellerPolicy(seller)
+                c.lockSellerPolicy(seller,call.policyVersion())
+                recordAudit(c,principal.userId,"SELLER","seller.operations.update","SELLER",seller,seller)
                 c.prepareStatement("INSERT INTO seller_closures(seller_id,local_date,reason) VALUES (?,?,?) ON CONFLICT(seller_id,local_date) DO UPDATE SET reason=EXCLUDED.reason").use { s -> s.setString(1,seller);s.setObject(2,date);s.setString(3,body.reason);s.executeUpdate() }
             }
             call.respond(HttpStatusCode.NoContent)
@@ -189,7 +178,8 @@ fun Route.registerCommerceRoutes(context: BackendContext,
             val date=try { java.time.LocalDate.parse(call.parameters["localDate"] ?: "") } catch (_:Exception) { throw CommerceFault(400,"INVALID_DATE","localDate must be YYYY-MM-DD") }
             context.transaction { c ->
                 if(!context.authorization.hasSellerCapability(c,principal,seller,"hours.edit")) throw CommerceFault(403,"SELLER_CAPABILITY_REQUIRED","This seller action is not permitted")
-                c.lockSellerPolicy(seller)
+                c.lockSellerPolicy(seller,call.policyVersion())
+                recordAudit(c,principal.userId,"SELLER","seller.operations.update","SELLER",seller,seller)
                 c.prepareStatement("DELETE FROM seller_closures WHERE seller_id=? AND local_date=?").use { s -> s.setString(1,seller);s.setObject(2,date);s.executeUpdate() }
             }
             call.respond(HttpStatusCode.NoContent)
@@ -252,6 +242,14 @@ fun Route.registerCommerceRoutes(context: BackendContext,
     }
     post("/sellers/{sellerId}/bulk/requests/{requestId}/special-pickup-decision") {
         call.commerce { val seller=call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required");val p=call.requireSellerCapability(context,seller,"bulk.respond") ?: return@commerce;val b=call.receive<SpecialPickupDecisionRequest>();call.respond(decideSpecialPickup(context,p,seller,call.uuidParameter("requestId"),b.expectedVersion,b.approved)) }
+    }
+    post("/sellers/{sellerId}/bulk/requests/{requestId}/reject") {
+        call.commerce {
+            val seller=call.parameters["sellerId"]!!
+            val actor=call.requireSellerCapability(context,seller,"bulk.respond") ?: return@commerce
+            val request=call.receive<BulkRejectRequest>()
+            call.respond(rejectBulk(context,actor,seller,call.uuidParameter("requestId"),request))
+        }
     }
     post("/bulk/requests/{requestId}/withdraw") {
         call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce;val b=call.receive<ApprovalRequest>();call.respond(withdrawBulk(context,p,call.uuidParameter("requestId"),b.expectedVersion)) }
@@ -336,16 +334,23 @@ fun Route.registerCommerceRoutes(context: BackendContext,
     }
 }
 
-private fun Connection.lockSellerPolicy(sellerId:String) {
+private fun Connection.lockSellerPolicy(sellerId:String,expected:Long?) {
     prepareStatement("INSERT INTO seller_ordering_policies(seller_id) VALUES (?) ON CONFLICT(seller_id) DO NOTHING").use { it.setString(1,sellerId);it.executeUpdate() }
-    prepareStatement("SELECT seller_id FROM seller_ordering_policies WHERE seller_id=? FOR UPDATE").use { it.setString(1,sellerId);it.executeQuery().use { rows -> if(!rows.next()) throw CommerceFault(404,"SELLER_NOT_FOUND","Seller not found") } }
+    prepareStatement("SELECT version FROM seller_ordering_policies WHERE seller_id=? FOR UPDATE").use { it.setString(1,sellerId);it.executeQuery().use { rows -> if(!rows.next()) throw CommerceFault(404,"SELLER_NOT_FOUND","Seller not found"); if(expected!=null && rows.getLong(1)!=expected) throw CommerceFault(409,"VERSION_CONFLICT","Operating policy changed") } }
+    prepareStatement("UPDATE seller_ordering_policies SET version=version+1,updated_at=now() WHERE seller_id=?").use { it.setString(1,sellerId);it.executeUpdate() }
 }
 
 private suspend inline fun ApplicationCall.commerce(crossinline action:suspend ()->Unit) {
     try { action() }
+    catch (failure:ApiFailure) { respondApiError(failure.status,failure.code,failure.message) }
     catch (failure:CommerceFault) { respondApiError(HttpStatusCode.fromValue(failure.http),failure.code,failure.message) }
     catch (failure:io.ktor.server.plugins.BadRequestException) { respondApiError(HttpStatusCode.BadRequest,"INVALID_REQUEST","Request body is invalid") }
 }
 
 private fun ApplicationCall.uuidParameter(name:String):UUID = try { UUID.fromString(parameters[name] ?: throw IllegalArgumentException()) }
 catch (_:IllegalArgumentException) { throw CommerceFault(400,"INVALID_ID","$name must be a UUID") }
+
+private fun ApplicationCall.policyVersion():Long? = request.headers["If-Match"]?.let {
+    it.trim('"').toLongOrNull()?.takeIf { value -> value>=0 }
+        ?: throw CommerceFault(400,"INVALID_VERSION","If-Match must contain a nonnegative version")
+}

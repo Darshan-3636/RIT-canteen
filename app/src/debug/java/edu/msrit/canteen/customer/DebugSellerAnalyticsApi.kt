@@ -8,6 +8,18 @@ import java.time.LocalDate
 /** Seller-scoped, capability-checked server data. Never manufactures revenue. */
 object DebugSellerAnalyticsApi {
     data class Result(val value: SellerCloudAnalytics? = null, val error: String? = null)
+    data class CsvResult(val csv: String? = null, val error: String? = null)
+
+    fun exportCsv(sellerId: String, from: LocalDate, to: LocalDate): CsvResult {
+        val token = DevelopmentDemoAccounts.token() ?: return CsvResult(error = "Sign in again.")
+        return try {
+            val response = DebugBackendApi.request("GET",
+                "/api/v1/sellers/$sellerId/reports/export?from=$from&to=$to", token = token)
+            if (response.status == 200 && response.raw?.startsWith("metric,value,unit,label,from,to") == true)
+                CsvResult(csv = response.raw)
+            else CsvResult(error = response.error ?: "Could not export the report (${response.status}).")
+        } catch (_: Exception) { CsvResult(error = "Report export unavailable. Retry later.") }
+    }
 
     fun summary(sellerId: String, from: LocalDate, to: LocalDate): Result {
         val token = DevelopmentDemoAccounts.token() ?: return Result(error = "Sign in again.")

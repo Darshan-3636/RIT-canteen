@@ -11,6 +11,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.util.UUID
+import edu.msrit.canteen.backend.features.engagement.recordAudit
 
 internal class CommerceFault(val http: Int, val code: String, override val message: String): RuntimeException(message)
 internal data class PricedLine(val itemId:String,val name:String,val quantity:Int,val price:Long)
@@ -58,7 +59,7 @@ internal fun validateAndPrice(connection:Connection,context:BackendContext,selle
     val policy=connection.prepareStatement("SELECT bulk_minimum_units,special_pickup_enabled FROM seller_ordering_policies WHERE seller_id=? FOR SHARE").use { s -> s.setString(1,sellerId); s.executeQuery().use { r -> if(r.next()) r.getInt(1) to r.getBoolean(2) else 8 to false } }
     val priced=lines.map { line ->
         connection.prepareStatement("""SELECT i.name,i.price_paise FROM menu_items i JOIN seller_categories c ON c.seller_id=i.seller_id AND c.category_id=i.category_id
-            WHERE i.id=? AND i.seller_id=? AND i.published AND i.availability='AVAILABLE' FOR SHARE OF i""").use { s ->
+            WHERE i.id=? AND i.seller_id=? AND i.published AND i.archived_at IS NULL AND $ACTIVE_CATEGORY_SQL AND i.availability='AVAILABLE' FOR SHARE OF i""").use { s ->
             s.setString(1,line.itemId); s.setString(2,sellerId); s.executeQuery().use { r ->
                 if(!r.next()) throw rule("ITEM_UNAVAILABLE","One or more items are unavailable for this seller")
                 PricedLine(line.itemId,r.getString(1),line.quantity,r.getLong(2))
@@ -148,6 +149,7 @@ internal fun counteroffer(context:BackendContext,principal:AuthenticatedPrincipa
         val version=current.first+1; val now=context.clock.instant(); val expiry=now.plusSeconds(24*60*60L)
         insertRevision(c,id,version,"COUNTEROFFER",terms.pickupAt,terms.specialPickupReason,priced.first,principal.userId,now,expiry)
         event(c,id,version,principal.userId,"COUNTEROFFER")
+        recordAudit(c,principal.userId,"SELLER","seller.bulk.counteroffer","BULK_REQUEST",id.toString(),sellerId)
         loadBulk(c,id)!!
     }
 }
@@ -184,6 +186,7 @@ internal fun approveBulk(context:BackendContext,principal:AuthenticatedPrincipal
     }
     c.prepareStatement("INSERT INTO bulk_quote_approvals(request_id,version,actor_kind,actor_user_id) VALUES (?,?,?,?) ON CONFLICT(request_id,version,actor_kind) DO NOTHING").use { s -> s.setObject(1,id);s.setInt(2,expected);s.setString(3,kind);s.setObject(4,principal.userId);s.executeUpdate() }
     event(c,id,expected,principal.userId,if(kind=="CUSTOMER")"CUSTOMER_APPROVED" else "SELLER_APPROVED")
+    if(sellerId!=null) recordAudit(c,principal.userId,"SELLER","seller.bulk.approve","BULK_REQUEST",id.toString(),sellerId)
     val approvals=c.prepareStatement("SELECT actor_kind FROM bulk_quote_approvals WHERE request_id=? AND version=?").use { s -> s.setObject(1,id);s.setInt(2,expected);s.executeQuery().use { r -> buildSet { while(r.next()) add(r.getString(1)) } } }
     val specialApproved=if(revision.third=="SPECIAL") c.prepareStatement("SELECT approved FROM bulk_special_pickup_decisions WHERE request_id=? AND version=?").use { s -> s.setObject(1,id);s.setInt(2,expected);s.executeQuery().use { r -> r.next() && r.getBoolean(1) } } else true
     if(approvals.containsAll(setOf("CUSTOMER","SELLER")) && specialApproved) {
@@ -200,6 +203,7 @@ internal fun decideSpecialPickup(context:BackendContext,principal:AuthenticatedP
     return context.transaction { c ->
     if(!context.authorization.hasSellerCapability(c,principal,sellerId,"bulk.respond")) throw CommerceFault(403,"SELLER_CAPABILITY_REQUIRED","This seller action is not permitted")
     val row=lock(c,id,sellerId);checkEditable(c,id,row,expected,context)
+    recordAudit(c,principal.userId,"SELLER","seller.bulk.pickup_decision","BULK_REQUEST",id.toString(),sellerId)
     val owner=c.prepareStatement("SELECT customer_user_id FROM bulk_requests WHERE id=?").use { s -> s.setObject(1,id);s.executeQuery().use { r -> r.next();r.getObject(1,UUID::class.java) } }
     if(owner==principal.userId) throw CommerceFault(403,"SEPARATE_APPROVAL_REQUIRED","The request customer cannot decide seller pickup approval")
     val kind=c.prepareStatement("SELECT pickup_kind,expires_at FROM bulk_quote_revisions WHERE request_id=? AND version=?").use { s -> s.setObject(1,id);s.setInt(2,expected);s.executeQuery().use { r -> if(r.next()) r.getString(1) to r.getTimestamp(2).toInstant() else throw CommerceFault(404,"REVISION_NOT_FOUND","Current revision not found") } }
@@ -264,7 +268,7 @@ internal fun createIndividual(context:BackendContext,principal:AuthenticatedPrin
     if(lines.map { it.itemId }.toSet().size!=lines.size) throw bad("DUPLICATE_ITEMS","Each item may appear only once")
     if(lines.any { it.quantity !in 1..999 }) throw bad("INVALID_QUANTITY","Each quantity must be between 1 and 999")
     val seller=c.prepareStatement("SELECT id FROM sellers WHERE is_main_canteen AND active").use { s -> s.executeQuery().use { r -> if(r.next()) r.getString(1) else throw rule("MAIN_CANTEEN_UNAVAILABLE","Main Canteen is unavailable") } }
-    val priced=lines.map { line -> c.prepareStatement("SELECT name,price_paise FROM menu_items WHERE id=? AND seller_id=? AND kind='PREPARED' AND published AND availability='AVAILABLE' FOR SHARE").use { s -> s.setString(1,line.itemId);s.setString(2,seller);s.executeQuery().use { r -> if(r.next()) PricedLine(line.itemId,r.getString(1),line.quantity,r.getLong(2)) else throw rule("INDIVIDUAL_ITEM_UNAVAILABLE","Only available Main Canteen prepared food can be saved individually") } } }
+    val priced=lines.map { line -> c.prepareStatement("SELECT i.name,i.price_paise FROM menu_items i WHERE i.id=? AND i.seller_id=? AND i.kind='PREPARED' AND i.published AND i.archived_at IS NULL AND $ACTIVE_CATEGORY_SQL AND i.availability='AVAILABLE' FOR SHARE OF i").use { s -> s.setString(1,line.itemId);s.setString(2,seller);s.executeQuery().use { r -> if(r.next()) PricedLine(line.itemId,r.getString(1),line.quantity,r.getLong(2)) else throw rule("INDIVIDUAL_ITEM_UNAVAILABLE","Only available Main Canteen prepared food can be saved individually") } } }
     val id=UUID.randomUUID();val sum=totalPaise(priced);val now=context.clock.instant()
     c.prepareStatement("INSERT INTO individual_demo_orders(id,customer_user_id,seller_id,subtotal_paise,created_at) VALUES (?,?,?,?,?)").use { s -> s.setObject(1,id);s.setObject(2,principal.userId);s.setString(3,seller);s.setLong(4,sum);s.setTimestamp(5,Timestamp.from(now));s.executeUpdate() }
     c.prepareStatement("INSERT INTO individual_demo_order_lines(order_id,seller_id,item_id,item_name_snapshot,quantity,unit_price_paise) VALUES (?,?,?,?,?,?)").use { s -> priced.forEach { s.setObject(1,id);s.setString(2,seller);s.setString(3,it.itemId);s.setString(4,it.name);s.setInt(5,it.quantity);s.setLong(6,it.price);s.addBatch() };s.executeBatch() }
@@ -273,4 +277,19 @@ internal fun createIndividual(context:BackendContext,principal:AuthenticatedPrin
 internal fun customerIndividual(context:BackendContext,user:UUID):IndividualDemoOrderListDto = context.dataSource.connection.use { c ->
     val ids=c.prepareStatement("SELECT id FROM individual_demo_orders WHERE customer_user_id=? ORDER BY created_at DESC").use { s -> s.setObject(1,user);s.executeQuery().use { r -> buildList { while(r.next()) add(r.getObject(1,UUID::class.java)) } } }
     IndividualDemoOrderListDto(ids.mapNotNull { loadDemoIndividual(c,it) })
+}
+
+internal fun rejectBulk(context:BackendContext,principal:AuthenticatedPrincipal,sellerId:String,id:UUID,request:BulkRejectRequest):BulkRequestDto {
+    val reason=request.reason.trim()
+    if(reason.isEmpty() || reason.length>500) throw CommerceFault(400,"INVALID_REASON","Provide a reason of 1 to 500 characters")
+    expireDue(context)
+    return context.transaction { c ->
+        if(!context.authorization.hasSellerCapability(c,principal,sellerId,"bulk.respond")) throw CommerceFault(403,"SELLER_CAPABILITY_REQUIRED","This seller action is not permitted")
+        val current=lock(c,id,sellerId); checkEditable(c,id,current,request.expectedVersion,context)
+        c.prepareStatement("UPDATE bulk_requests SET status='REJECTED',updated_at=now() WHERE id=?").use { it.setObject(1,id);it.executeUpdate() }
+        c.prepareStatement("UPDATE bulk_quote_revisions SET status='REJECTED' WHERE request_id=? AND version=?").use { it.setObject(1,id);it.setInt(2,request.expectedVersion);it.executeUpdate() }
+        event(c,id,request.expectedVersion,principal.userId,"REJECTED")
+        recordAudit(c,principal.userId,"SELLER","seller.bulk.reject","BULK_REQUEST",id.toString(),sellerId,mapOf("reason" to reason))
+        loadBulk(c,id)!!
+    }
 }

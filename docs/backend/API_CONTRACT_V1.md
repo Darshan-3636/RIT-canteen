@@ -1,5 +1,7 @@
 # RIT Canteen backend API contract V1 — Phase A freeze
 
+Current seller/admin additions (V048), including catalog lifecycle, membership administration and CSV export: [Seller/Admin API](SELLER_ADMIN_API.md).
+
 Base path: `/api/v1`. Requests/responses use JSON UTF-8. IDs are UUID strings for users/sessions/memberships and stable text slugs for sellers/items. Times are ISO-8601 UTC instants (for example `2026-10-27T12:00:00Z`); seller-local business date/hour calculations use `Asia/Kolkata`. Financial fields in future modules are integer **paise**, not floating-point rupees. Versioned incompatible changes require an explicit coordinated V2/amendment.
 
 **Checkpoint state:** `/health` and `/ready` are operational. Auth/profile paths below are reserved and fail closed with `503 AUTH_NOT_READY` in Phase A; protected paths return `401` first when there is no valid bearer session. Phase B implements their successful behavior without changing the shapes below. Commerce and engagement routes are not mounted at this checkpoint.

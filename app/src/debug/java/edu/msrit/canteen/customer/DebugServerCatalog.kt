@@ -11,9 +11,39 @@ object DebugServerCatalog {
     data class Snapshot(val sellers: List<Seller>, val categories: List<MenuCategory>, val items: List<MenuItem>,
                         val policies: List<Pair<SellerBulkPolicy, List<SellerClosure>>> = emptyList())
     private val categoryNames = PreviewCatalog.categories.associate { it.id to it.name }
+    private val cacheLock = Any()
+    private var cachedPublic: Snapshot? = null
+    private var cachedAtMillis = 0L
+    private val cachedPolicies = mutableMapOf<String, Pair<Long, Pair<SellerBulkPolicy, List<SellerClosure>>>>()
+    private const val PUBLIC_CACHE_MILLIS = 30_000L
 
     /** Blocking transport. Fetch on Dispatchers.IO, then apply on the UI thread. */
-    fun fetch(): Snapshot {
+    fun fetch(policySellerId: String? = null, force: Boolean = false): Snapshot {
+        val public = synchronized(cacheLock) {
+            val now = android.os.SystemClock.elapsedRealtime()
+            cachedPublic?.takeIf { !force && now - cachedAtMillis < PUBLIC_CACHE_MILLIS } ?: fetchPublic().also {
+                cachedPublic = it
+                cachedAtMillis = android.os.SystemClock.elapsedRealtime()
+            }
+        }
+        val policies = policySellerId?.let { id -> listOf(policy(id, force)) }.orEmpty()
+        return public.copy(policies = policies)
+    }
+
+    /** Blocking read; cache only short-lived scheduling data. The server still validates requests. */
+    fun policy(sellerId: String, force: Boolean = false): Pair<SellerBulkPolicy, List<SellerClosure>> =
+        synchronized(cacheLock) {
+            val now = android.os.SystemClock.elapsedRealtime()
+            cachedPolicies[sellerId]?.takeIf { !force && now - it.first < PUBLIC_CACHE_MILLIS }?.second
+                ?: fetchPolicy(sellerId).also { cachedPolicies[sellerId] =
+                    android.os.SystemClock.elapsedRealtime() to it }
+        }
+
+    fun applyPolicy(value: Pair<SellerBulkPolicy, List<SellerClosure>>) {
+        DevelopmentSellerBusiness.applyServerPolicy(value.first, value.second)
+    }
+
+    private fun fetchPublic(): Snapshot {
         val response = DebugBackendApi.request("GET", "/api/v1/sellers")
         check(response.status == 200) { response.error ?: "Could not load sellers" }
         val sellersJson = response.body!!.getJSONArray("sellers")
@@ -44,11 +74,8 @@ object DebugServerCatalog {
             (0 until rows.length()).map { index -> toMenuItem(rows.getJSONObject(index)) }
         }
         val categoryIds = items.map(MenuItem::categoryId).distinct()
-        val policies = sellers.mapNotNull { seller ->
-            runCatching { fetchPolicy(seller.id) }.getOrNull()
-        }
         return Snapshot(sellers, categoryIds.map { MenuCategory(it, categoryNames[it] ?: it
-            .replace('-', ' ').replaceFirstChar(Char::uppercase)) }, items, policies)
+            .replace('-', ' ').replaceFirstChar(Char::uppercase)) }, items)
     }
 
     private fun fetchPolicy(sellerId: String): Pair<SellerBulkPolicy, List<SellerClosure>> {
@@ -72,14 +99,12 @@ object DebugServerCatalog {
     }
 
     fun apply(snapshot: Snapshot) {
-        DevelopmentSellerBusiness.clearServerPolicies()
         PreviewCatalog.applyDemoSnapshot(snapshot.sellers, snapshot.categories, snapshot.items)
-        snapshot.policies.forEach { (policy, closures) ->
-            DevelopmentSellerBusiness.applyServerPolicy(policy, closures)
-        }
+        snapshot.policies.forEach(::applyPolicy)
     }
 
     fun clear() {
+        synchronized(cacheLock) { cachedPublic = null; cachedAtMillis = 0L; cachedPolicies.clear() }
         DevelopmentSellerBusiness.clearServerPolicies()
         PreviewCatalog.applyDemoSnapshot(emptyList(), emptyList(), emptyList())
     }

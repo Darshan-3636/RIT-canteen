@@ -1,6 +1,7 @@
 package edu.msrit.canteen.backend.auth
 
 import edu.msrit.canteen.backend.api.CustomerAffiliation
+import edu.msrit.canteen.backend.core.managementLock
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.sql.Connection
@@ -71,8 +72,9 @@ class AuthorizationService(private val dataSource: DataSource, private val clock
     }
 
     /** Recheck in the same transaction as a guarded administrator write. */
-    fun isPlatformAdmin(connection: Connection, principal: AuthenticatedPrincipal): Boolean =
-        connection.prepareStatement(
+    fun isPlatformAdmin(connection: Connection, principal: AuthenticatedPrincipal): Boolean {
+        connection.managementLock()
+        return connection.prepareStatement(
             """SELECT u.is_platform_admin FROM users u JOIN sessions s ON s.user_id = u.id
                WHERE u.id = ? AND u.status = 'ACTIVE' AND s.id = ? AND s.revoked_at IS NULL
                  AND s.expires_at > ?"""
@@ -83,6 +85,7 @@ class AuthorizationService(private val dataSource: DataSource, private val clock
                 statement.setTimestamp(3, Timestamp.from(clock.instant()))
                 statement.executeQuery().use { rows -> rows.next() && rows.getBoolean(1) }
             }
+    }
 
     fun hasSellerCapability(principal: AuthenticatedPrincipal, sellerId: String, capability: String): Boolean =
         dataSource.connection.use { connection ->
@@ -92,6 +95,7 @@ class AuthorizationService(private val dataSource: DataSource, private val clock
     /** Call this overload inside [edu.msrit.canteen.backend.core.transaction] for guarded writes. */
     fun hasSellerCapability(connection: Connection, principal: AuthenticatedPrincipal,
                             sellerId: String, capability: String): Boolean {
+        connection.managementLock()
         if (capability !in SellerCapabilities.ALL) return false
         if (!hasLiveSession(connection, principal)) return false
         val membershipId = connection.prepareStatement(

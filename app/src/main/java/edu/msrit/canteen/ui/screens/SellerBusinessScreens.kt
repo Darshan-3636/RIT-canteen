@@ -146,14 +146,14 @@ fun SellerBusinessHomeScreen(sellerId: String, userId: String, repo: SellerBusin
         Spacer(Modifier.height(8.dp))
         if (SellerCapability.CATALOG in caps || SellerCapability.AVAILABILITY in caps)
             BusinessCard("Menu management", "Items, availability and categories", onMenu, "seller_manage_menu")
-        if (!BuildConfig.RIT_CLOUD_DEMO && SellerCapability.CATALOG in caps)
+        if (SellerCapability.CATALOG in caps)
             BusinessCard("Categories", "Organize your menu", onCategories, "seller_manage_categories")
         Spacer(Modifier.height(12.dp))
         RitText("People & promotions", RitType.title)
         Spacer(Modifier.height(8.dp))
         if (!BuildConfig.RIT_CLOUD_DEMO && SellerCapability.PROMOTIONS in caps)
             BusinessCard("Promotions", "Drafts, scheduled and expired placements", onPromotions, "seller_manage_promotions")
-        if (!BuildConfig.RIT_CLOUD_DEMO && SellerCapability.EMPLOYEES in caps)
+        if (SellerCapability.EMPLOYEES in caps)
             BusinessCard("Team and permissions", "Seller-scoped delegated access", onEmployees, "seller_manage_employees")
         Spacer(Modifier.height(12.dp))
         RitText("Business profile & settings", RitType.title)
@@ -169,6 +169,7 @@ fun SellerMenuManagementScreen(sellerId: String, userId: String, repo: SellerBus
     val caps = repo.capabilities(userId, sellerId)
     var query by remember { mutableStateOf("") }
     var category by remember { mutableStateOf<String?>(null) }
+    var showArchived by remember { mutableStateOf(false) }
     val seller = PreviewCatalog.sellers.find { it.id == sellerId }
     val activeCategoryIds = seller?.categoryIds?.filter { id ->
         PreviewCatalog.items.any { it.sellerId == sellerId && it.categoryId == id }
@@ -199,16 +200,18 @@ fun SellerMenuManagementScreen(sellerId: String, userId: String, repo: SellerBus
             }
             Spacer(Modifier.height(13.dp))
             if (SellerCapability.CATALOG in caps) {
-                RitPrimaryButton("+ Add food item · unavailable", {}, Modifier.fillMaxWidth().testTag("seller_add_item"),
-                    enabled = false)
+                RitPrimaryButton("+ Add food item", { onItem(null) }, Modifier.fillMaxWidth().testTag("seller_add_item"))
                 Spacer(Modifier.height(9.dp))
-                if (!BuildConfig.RIT_CLOUD_DEMO) {
-                    RitSecondaryButton("Manage categories", onCategories, Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(12.dp))
-                }
+                RitSecondaryButton("Manage categories", onCategories, Modifier.fillMaxWidth())
+                Spacer(Modifier.height(9.dp))
+                if (BuildConfig.RIT_CLOUD_DEMO) RitSecondaryButton(
+                    if (showArchived) "Show current menu" else "Archived items",
+                    { showArchived = !showArchived }, Modifier.fillMaxWidth())
+                Spacer(Modifier.height(12.dp))
             }
         }
-        LazyColumn(Modifier.fillMaxSize().testTag("seller_menu_items"),
+        if (BuildConfig.RIT_CLOUD_DEMO && showArchived) CloudSellerArchivedItems(sellerId, Modifier.fillMaxSize())
+        else LazyColumn(Modifier.fillMaxSize().testTag("seller_menu_items"),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)) {
             if (filteredItems.isEmpty()) item { BusinessCard("No matching items", "Try another search or category.") }
             items(filteredItems, key = { it.id }) { item ->
@@ -245,7 +248,9 @@ fun SellerItemEditorScreen(sellerId: String, userId: String, itemId: String?, re
     var showUnavailable by remember(itemId) { mutableStateOf(old?.unavailableVisibility != UnavailableVisibility.HIDE) }
     var photoUri by remember(itemId) { mutableStateOf(old?.localImageUri) }
     var message by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
     var confirmDiscard by remember { mutableStateOf(false) }
+    var confirmArchive by remember(itemId) { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) photoUri = uri.toString()
     }
@@ -320,34 +325,64 @@ fun SellerItemEditorScreen(sellerId: String, userId: String, itemId: String?, re
             BusinessCard("Visibility restricted", "Your role can edit item details but cannot change availability or publication.")
         }
         BusinessMessage(message)
-        RitPrimaryButton("Save item", {
+        RitPrimaryButton(if (saving) "Saving…" else "Save item", {
+            if (saving) return@RitPrimaryButton
             val amount = price.toIntOrNull()
             message = when {
                 name.isBlank() -> "Item name is required."
                 amount == null || amount < 0 -> "Enter a valid nonnegative price."
                 else -> {
-                    val item = MenuItem(old?.id ?: "${sellerId}-item-${UUID.randomUUID()}", sellerId, category,
+                    val item = MenuItem(old?.id ?: "item-${UUID.randomUUID()}", sellerId, category,
                         name.trim(), description.trim(), Price(amount), kind, dietary,
                         if (available) ItemAvailability.AVAILABLE else ItemAvailability.UNAVAILABLE,
                         published, if (showUnavailable) UnavailableVisibility.SHOW else UnavailableVisibility.HIDE,
                         old?.photo, old?.featured ?: false, photoUri,
                         tags.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet())
-                    if (old == null) "Adding new items is not supported by the current backend."
-                    else {
-                        scope.launch {
+                    saving = true
+                    scope.launch {
+                        try {
                             val result = withContext(Dispatchers.IO) { DebugSellerCatalogApi.saveItem(item) }
                             if (result.success) {
                                 val snapshot = runCatching { withContext(Dispatchers.IO) {
-                                    DebugServerCatalog.fetch() } }.getOrNull()
-                                if (snapshot != null) DebugServerCatalog.apply(snapshot)
-                                withContext(Dispatchers.Main.immediate) { onSaved() }
+                                    DebugServerCatalog.fetch(policySellerId = sellerId, force = true) } }.getOrNull()
+                                if (snapshot != null) {
+                                    DebugServerCatalog.apply(snapshot)
+                                    onSaved()
+                                } else message = "Saved on server, but refresh failed. Retry loading the menu."
                             } else message = result.message
-                        }
-                        null
+                        } finally { saving = false }
                     }
+                    null
                 }
             }
-        }, Modifier.fillMaxWidth().testTag("seller_save_item"))
+        }, Modifier.fillMaxWidth().testTag("seller_save_item"), enabled = !saving)
+        if (old != null && SellerCapability.CATALOG in repo.capabilities(userId, sellerId)) {
+            Spacer(Modifier.height(8.dp))
+            RitSecondaryButton(if (confirmArchive) "Cancel archive" else "Archive item", {
+                confirmArchive = !confirmArchive
+            }, Modifier.fillMaxWidth(), enabled = !saving)
+            if (confirmArchive) {
+                RitText("Archiving removes this item from the customer menu. Historical orders remain unchanged.",
+                    RitType.small, RitThemeTokens.colors.muted)
+                RitPrimaryButton(if (saving) "Archiving…" else "Confirm archive", {
+                    if (saving) return@RitPrimaryButton
+                    saving = true
+                    scope.launch {
+                        try {
+                            val result = withContext(Dispatchers.IO) {
+                                DebugSellerCatalogApi.setArchived(sellerId, old.id, true)
+                            }
+                            if (result.success) {
+                                val snapshot = runCatching { withContext(Dispatchers.IO) {
+                                    DebugServerCatalog.fetch(policySellerId = sellerId, force = true) } }.getOrNull()
+                                if (snapshot != null) { DebugServerCatalog.apply(snapshot); onSaved() }
+                                else message = "Archived on server, but menu refresh failed."
+                            } else message = result.message
+                        } finally { saving = false }
+                    }
+                }, Modifier.fillMaxWidth(), enabled = !saving)
+            }
+        }
     }
 }
 
@@ -360,6 +395,7 @@ fun SellerAvailabilityScreen(sellerId: String, itemId: String, userId: String, r
     var published by remember(itemId) { mutableStateOf(item?.published ?: false) }
     var visible by remember(itemId) { mutableStateOf(item?.unavailableVisibility != UnavailableVisibility.HIDE) }
     var message by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
     BusinessPage("Availability & visibility", "seller_availability", onBack) {
         if (item == null) BusinessCard("Item unavailable", "This item does not belong to your seller.") else {
             RitText(item.name, RitType.heading)
@@ -392,17 +428,24 @@ fun SellerAvailabilityScreen(sellerId: String, itemId: String, userId: String, r
                 else -> "Visible and eligible under seller/platform rules"
             })
             BusinessMessage(message)
-            RitPrimaryButton("Save visibility", {
+            RitPrimaryButton(if (saving) "Saving…" else "Save visibility", {
+                if (saving) return@RitPrimaryButton
+                saving = true
                 scope.launch {
-                    val result = withContext(Dispatchers.IO) {
-                        DebugSellerCatalogApi.setAvailability(sellerId, itemId, available, published, visible)
-                    }
-                    val snapshot = runCatching { withContext(Dispatchers.IO) {
-                        DebugServerCatalog.fetch() } }.getOrNull()
-                    if (snapshot != null) DebugServerCatalog.apply(snapshot)
-                    message = result.message
+                    try {
+                        val result = withContext(Dispatchers.IO) {
+                            DebugSellerCatalogApi.setAvailability(sellerId, itemId, available, published, visible)
+                        }
+                        if (result.success) {
+                            val snapshot = runCatching { withContext(Dispatchers.IO) {
+                                DebugServerCatalog.fetch(policySellerId = sellerId, force = true) } }.getOrNull()
+                            if (snapshot != null) DebugServerCatalog.apply(snapshot)
+                            else message = "Saved on server, but refresh failed. Retry loading the menu."
+                        }
+                        if (message == null) message = result.message
+                    } finally { saving = false }
                 }
-            }, Modifier.fillMaxWidth().testTag("seller_save_availability"))
+            }, Modifier.fillMaxWidth().testTag("seller_save_availability"), enabled = !saving)
         }
     }
 }
@@ -410,6 +453,10 @@ fun SellerAvailabilityScreen(sellerId: String, itemId: String, userId: String, r
 @Composable
 fun SellerCategoriesScreen(sellerId: String, userId: String, repo: SellerBusinessRepository,
     onBack: () -> Unit) {
+    if (BuildConfig.RIT_CLOUD_DEMO) {
+        BusinessPage("Categories", "seller_categories", onBack) { CloudSellerCategories(sellerId) }
+        return
+    }
     val seller = PreviewCatalog.sellers.find { it.id == sellerId }
     val ids = seller?.categoryIds.orEmpty() + repo.hiddenCategoryIds[sellerId].orEmpty()
     var editingId by remember { mutableStateOf<String?>(null) }
@@ -466,8 +513,8 @@ fun SellerBusinessSettingsScreen(sellerId: String, userId: String, repo: SellerB
             BusinessCard("Holidays & closures", "Special closed dates and reasons", onClosures)
             BusinessCard("Bulk-order minimum", "Combined eligible units from one seller", onMinimum, "seller_settings_minimum")
         }
-        if (!BuildConfig.RIT_CLOUD_DEMO && SellerCapability.EMPLOYEES in caps)
-            BusinessCard("Team & permissions", "Manage delegated debug employees", onEmployees)
+        if (SellerCapability.EMPLOYEES in caps)
+            BusinessCard("Team & permissions", "Manage seller membership access", onEmployees)
         if (!BuildConfig.RIT_CLOUD_DEMO && SellerCapability.PROMOTIONS in caps)
             BusinessCard("Promotions", "Seller-owned demo placements", onPromotions)
         BusinessCard("Notifications", "Preferences are not connected to a delivery service yet.")
@@ -477,12 +524,14 @@ fun SellerBusinessSettingsScreen(sellerId: String, userId: String, repo: SellerB
 
 @Composable
 fun SellerProfileEditorScreen(sellerId: String, userId: String, repo: SellerBusinessRepository, onBack: () -> Unit) {
+    val scope = rememberCoroutineScope()
     val seller = PreviewCatalog.sellers.find { it.id == sellerId }
     var name by remember(sellerId) { mutableStateOf(seller?.name.orEmpty()) }
     var description by remember(sellerId) { mutableStateOf(seller?.description.orEmpty()) }
     var location by remember(sellerId) { mutableStateOf(seller?.location.orEmpty()) }
     var photoUri by remember(sellerId) { mutableStateOf(seller?.localImageUri) }
     var message by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) photoUri = uri.toString()
     }
@@ -491,7 +540,8 @@ fun SellerProfileEditorScreen(sellerId: String, userId: String, repo: SellerBusi
         Spacer(Modifier.height(9.dp))
         RitTextField(description, { description = it }, "Description", "Public description", singleLine = false)
         Spacer(Modifier.height(9.dp))
-        RitTextField(location, { location = it }, "Location", "Public location details")
+        if (!BuildConfig.RIT_CLOUD_DEMO)
+            RitTextField(location, { location = it }, "Location", "Public location details")
         Spacer(Modifier.height(12.dp))
         SellerPhotoContent(seller?.photo, Modifier.fillMaxWidth().height(150.dp), photoUri)
         Spacer(Modifier.height(8.dp))
@@ -503,10 +553,28 @@ fun SellerProfileEditorScreen(sellerId: String, userId: String, repo: SellerBusi
         Spacer(Modifier.height(12.dp))
         BusinessCard("Protected business identity", "Legal identity, payout and merchant verification are not editable here.")
         BusinessMessage(message)
-        RitPrimaryButton("Save public profile", {
-            message = if (repo.saveProfile(userId, sellerId, SellerPublicProfile(name, description, location, photoUri)))
-                "Saved in customer demo profile." else "Name is required or access was denied."
-        }, Modifier.fillMaxWidth().testTag("seller_save_profile"))
+        RitPrimaryButton(if (saving) "Saving…" else "Save public profile", {
+            if (saving) return@RitPrimaryButton
+            if (name.isBlank()) { message = "Name is required."; return@RitPrimaryButton }
+            if (BuildConfig.RIT_CLOUD_DEMO) {
+                saving = true
+                scope.launch {
+                    try {
+                        val result = withContext(Dispatchers.IO) {
+                            DebugSellerCatalogApi.saveProfile(sellerId, name.trim(), description.trim())
+                        }
+                        if (result.success) {
+                            val snapshot = runCatching { withContext(Dispatchers.IO) {
+                                DebugServerCatalog.fetch(policySellerId = sellerId, force = true) } }.getOrNull()
+                            if (snapshot != null) DebugServerCatalog.apply(snapshot)
+                            message = if (snapshot == null) "Saved on server, but catalog refresh failed." else result.message
+                        } else message = result.message
+                    } finally { saving = false }
+                }
+            } else message = if (repo.saveProfile(userId, sellerId,
+                    SellerPublicProfile(name, description, location, photoUri)))
+                "Saved in customer demo profile." else "Access denied or name invalid."
+        }, Modifier.fillMaxWidth().testTag("seller_save_profile"), enabled = !saving)
     }
 }
 
@@ -520,7 +588,7 @@ fun SellerHoursScreen(sellerId: String, userId: String, repo: SellerBusinessRepo
     var selected by remember { mutableStateOf(DayOfWeek.MONDAY) }
     var message by remember { mutableStateOf<String?>(null) }
     BusinessPage("Working hours", "seller_hours", onBack) {
-        RitText("Asia/Kolkata · this is a draft schedule until saved. The backend does not expose a read-back hours endpoint.", RitType.body)
+        RitText("Asia/Kolkata · this is a draft schedule until saved.", RitType.body)
         Spacer(Modifier.height(14.dp))
         DayOfWeek.entries.forEach { day ->
             val windows = hours[day].orEmpty()
@@ -654,7 +722,7 @@ fun SellerBulkMinimumScreen(sellerId: String, userId: String, repo: SellerBusine
                         if (result.success) {
                             DevelopmentSellerBusiness.applyServerPolicy(current.copy(minimumOverride = parsed))
                             val snapshot = runCatching { withContext(Dispatchers.IO) {
-                                DebugServerCatalog.fetch() } }.getOrNull()
+                                DebugServerCatalog.fetch(policySellerId = sellerId, force = true) } }.getOrNull()
                             if (snapshot != null) DebugServerCatalog.apply(snapshot)
                         }
                         message = result.message
@@ -668,6 +736,12 @@ fun SellerBulkMinimumScreen(sellerId: String, userId: String, repo: SellerBusine
 @Composable
 fun SellerEmployeesScreen(sellerId: String, userId: String, repo: SellerBusinessRepository,
     onBack: () -> Unit, onEmployee: (String?) -> Unit) {
+    if (BuildConfig.RIT_CLOUD_DEMO) {
+        BusinessPage("Team members", "seller_employees", onBack) {
+            CloudSellerEmployees(sellerId, onEmployee)
+        }
+        return
+    }
     val own = repo.employees.filter { it.sellerId == sellerId }
     val actor = own.find { it.id == userId }
     BusinessPage("Team members", "seller_employees", onBack) {
@@ -691,6 +765,13 @@ fun SellerEmployeesScreen(sellerId: String, userId: String, repo: SellerBusiness
 @Composable
 fun SellerEmployeeEditorScreen(sellerId: String, userId: String, employeeId: String?,
     repo: SellerBusinessRepository, onBack: () -> Unit, onSaved: () -> Unit) {
+    if (BuildConfig.RIT_CLOUD_DEMO) {
+        BusinessPage(if (employeeId == null) "Add team member" else "Employee permissions",
+            "seller_employee_editor", onBack) {
+            CloudSellerEmployeeEditor(sellerId, employeeId, onSaved)
+        }
+        return
+    }
     val actor = repo.employees.find { it.id == userId && it.sellerId == sellerId }
     val old = repo.employees.find { it.id == employeeId && it.sellerId == sellerId }
     val editable = old?.role != SellerEmployeeRole.OWNER && actor?.id != old?.id &&

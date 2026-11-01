@@ -51,7 +51,7 @@ fun seedCommerceFixtures(context: BackendContext) {
         // Upgrade only pristine 12-item seed rows. Any changed field prevents an update, so seller edits survive.
         db.prepareStatement("""UPDATE menu_items SET category_id=?,name=?,description=?,price_paise=?,kind=?,dietary=?,
             availability=?,published=?,unavailable_visibility=?,image_key=?,updated_at=now()
-            WHERE id=? AND seller_id=? AND category_id=? AND name=? AND description=? AND price_paise=?
+            WHERE version=0 AND archived_at IS NULL AND id=? AND seller_id=? AND category_id=? AND name=? AND description=? AND price_paise=?
               AND kind=? AND dietary=? AND availability=? AND published=? AND unavailable_visibility=? AND image_key=?""").use { sql ->
             items.forEach { current ->
                 val old = legacy[current.id] ?: return@forEach
@@ -77,6 +77,7 @@ fun seedCommerceFixtures(context: BackendContext) {
         val currentMappings = mappings.toSet()
         val legacyMappings = legacy.values.map { it.sellerId to it.categoryId }.distinct()
         db.prepareStatement("""DELETE FROM seller_categories sc WHERE sc.seller_id=? AND sc.category_id=?
+            AND sc.version=0 AND sc.active AND sc.display_name IS NULL AND sc.sort_order=0
             AND NOT EXISTS (SELECT 1 FROM menu_items i WHERE i.seller_id=sc.seller_id AND i.category_id=sc.category_id)""").use { sql ->
             legacyMappings.filter { it !in currentMappings }.forEach { (seller, category) ->
                 sql.setString(1, seller); sql.setString(2, category); sql.addBatch()

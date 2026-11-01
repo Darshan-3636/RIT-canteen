@@ -79,7 +79,7 @@ data class CreateSetupDraftRequest(val proposedSellerId: String, val sellerName:
 @Serializable
 data class SetupDraftDto(
     val id: String, val proposedSellerId: String, val sellerName: String, val notes: String? = null, val status: String,
-    /** Drafts never create sellers or send invitations. */
+    /** Approval links a real seller; no invitation delivery is implied. */
     val sellerCreated: Boolean = false,
     val invitationSent: Boolean = false,
     val createdBy: String, val createdAt: String, val updatedAt: String,
@@ -157,8 +157,10 @@ internal fun Route.registerPlatformRoutes(context: BackendContext, commerce: Com
             val page = call.page()
             val action = call.request.queryParameters["action"]
             val targetType = call.request.queryParameters["targetType"]
-            val filter = "(?::text IS NULL OR action = ?::text) AND (?::text IS NULL OR target_type = ?::text)"
-            val args = arrayOf<Any?>(action, action, targetType, targetType)
+            val sellerId = call.request.queryParameters["sellerId"]
+            val targetId = call.request.queryParameters["targetId"]
+            val filter = "(?::text IS NULL OR action = ?::text) AND (?::text IS NULL OR target_type = ?::text) AND (?::text IS NULL OR seller_id=?::text) AND (?::text IS NULL OR target_id=?::text)"
+            val args = arrayOf<Any?>(action, action, targetType, targetType,sellerId,sellerId,targetId,targetId)
             val result = context.read { db ->
                 val items = db.query(
                     "SELECT * FROM admin_audit_events WHERE $filter ORDER BY occurred_at DESC, id LIMIT ? OFFSET ?",
@@ -227,7 +229,7 @@ internal fun Route.registerPlatformRoutes(context: BackendContext, commerce: Com
             val draft = context.transaction { db ->
                 context.requireAdminInTx(db, principal)
                 val changed = db.update(
-                    "UPDATE admin_setup_drafts SET status = 'ARCHIVED', updated_at = now() WHERE id = ? AND status = 'DRAFT'", id)
+                    "UPDATE admin_setup_drafts SET status = 'ARCHIVED', version=version+1, updated_at = now() WHERE id = ? AND status = 'DRAFT'", id)
                 if (changed == 1) {
                     recordAudit(db, principal.userId, "ADMIN", "admin.setup_draft_archived", "SETUP_DRAFT", id.toString())
                 }
@@ -254,6 +256,7 @@ private fun draftRow(rows: ResultSet) = SetupDraftDto(
     sellerName = rows.getString("seller_name"),
     notes = rows.getString("notes"),
     status = rows.getString("status"),
+    sellerCreated = rows.getString("created_seller_id") != null,
     createdBy = rows.uuid("created_by").toString(),
     createdAt = rows.instant("created_at")!!,
     updatedAt = rows.instant("updated_at")!!,

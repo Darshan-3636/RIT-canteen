@@ -39,7 +39,7 @@ private fun loadCart(db: Connection, user: UUID): IndividualCartDto {
         query.executeQuery().use { rows -> if (rows.next()) rows.getLong(1) else 0L }
     }
     val lines = db.prepareStatement("""SELECT l.item_id,i.name,l.quantity,i.price_paise,
-        (s.active AND i.published AND i.availability='AVAILABLE' AND i.kind='PREPARED' AND s.is_main_canteen)
+        (s.active AND i.published AND i.archived_at IS NULL AND $ACTIVE_CATEGORY_SQL AND i.availability='AVAILABLE' AND i.kind='PREPARED' AND s.is_main_canteen)
         FROM individual_customer_cart_lines l JOIN menu_items i ON i.seller_id=l.seller_id AND i.id=l.item_id
         JOIN sellers s ON s.id=l.seller_id WHERE l.customer_user_id=? ORDER BY l.item_id""").use { query ->
         query.setObject(1, user)
@@ -77,8 +77,8 @@ internal fun replaceIndividualCart(context: BackendContext, principal: Authentic
     if (request.lines.isNotEmpty() && seller == null)
         throw CommerceFault(422, "MAIN_CANTEEN_UNAVAILABLE", "Main Canteen is unavailable")
     request.lines.forEach { line ->
-        val valid = db.prepareStatement("""SELECT 1 FROM menu_items WHERE seller_id=? AND id=?
-            AND kind='PREPARED' AND published AND availability='AVAILABLE' FOR SHARE""").use { query ->
+        val valid = db.prepareStatement("""SELECT 1 FROM menu_items i WHERE i.seller_id=? AND i.id=?
+            AND i.kind='PREPARED' AND i.published AND i.archived_at IS NULL AND $ACTIVE_CATEGORY_SQL AND i.availability='AVAILABLE' FOR SHARE OF i""").use { query ->
             query.setString(1, seller)
             query.setString(2, line.itemId)
             query.executeQuery().use { it.next() }
@@ -148,7 +148,7 @@ internal fun checkoutIndividualCart(context: BackendContext, principal: Authenti
         val locked = cart.lines.map { line ->
             db.prepareStatement("""SELECT i.name,i.price_paise FROM menu_items i JOIN sellers s ON s.id=i.seller_id
                 WHERE i.seller_id=? AND i.id=? AND s.active AND s.is_main_canteen AND
-                i.kind='PREPARED' AND i.published AND i.availability='AVAILABLE' FOR SHARE OF i,s""").use { query ->
+                i.kind='PREPARED' AND i.published AND i.archived_at IS NULL AND $ACTIVE_CATEGORY_SQL AND i.availability='AVAILABLE' FOR SHARE OF i,s""").use { query ->
                 query.setString(1, seller)
                 query.setString(2, line.itemId)
                 query.executeQuery().use { row ->

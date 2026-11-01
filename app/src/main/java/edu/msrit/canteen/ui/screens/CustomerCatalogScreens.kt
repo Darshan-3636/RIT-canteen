@@ -1,5 +1,6 @@
 package edu.msrit.canteen.ui.screens
 
+import edu.msrit.canteen.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -65,16 +66,17 @@ fun CustomerMenuScreen(
     Column(Modifier.fillMaxSize().background(colors.background).testTag("customer_menu")) {
         CatalogHeader(title, onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
-            RitText(seller?.name ?: "Across preview sellers", RitType.heading)
+            RitText(seller?.name ?: if (BuildConfig.RIT_CLOUD_DEMO) "Across campus sellers" else "Across preview sellers", RitType.heading)
             RitText(when {
                 preparedOnly -> "Prepared dishes · individual ordering is not live"
-                seller != null -> "${if (seller.capabilities.futureIndividualPrepared) "Prepared food planned + bulk" else "Bulk orders only"} · illustrative prices"
-                else -> "Category results across sellers · preview data"
+                seller != null -> "${if (seller.capabilities.futureIndividualPrepared) "Prepared food demo + bulk" else "Bulk orders only"} · server catalog"
+                else -> if (BuildConfig.RIT_CLOUD_DEMO) "Category results across server sellers" else "Category results across sellers · preview data"
             }, RitType.body, colors.muted)
             Spacer(Modifier.height(12.dp))
-            RitStatusIndicator("Sample catalog · no orders can be placed")
+            RitStatusIndicator(if (BuildConfig.RIT_CLOUD_DEMO) "Server catalog · demo checkout is not verified payment"
+                else "Sample catalog · no orders can be placed")
             Spacer(Modifier.height(16.dp))
-            RitSearchField(query, { query = it }, hint = "Search these preview items…")
+            RitSearchField(query, { query = it }, hint = "Search these items…")
             Spacer(Modifier.height(14.dp))
         }
         CatalogCategories(categories, selectedCategory) { selectedCategory = it }
@@ -113,11 +115,13 @@ fun ExploreSellersScreen(
         CatalogHeader("Explore Sellers", onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
             RitText("Campus sellers", RitType.heading)
-            RitText("Browse menus from independent preview sellers", RitType.body, colors.muted)
+            RitText(if (BuildConfig.RIT_CLOUD_DEMO) "Browse menus from participating sellers"
+                else "Browse menus from independent preview sellers", RitType.body, colors.muted)
             Spacer(Modifier.height(8.dp))
-            RitStatusIndicator("Seller identities and hours unverified")
+            RitStatusIndicator(if (BuildConfig.RIT_CLOUD_DEMO) "Server listings · availability can change"
+                else "Seller identities and hours unverified")
             Spacer(Modifier.height(14.dp))
-            RitSearchField(query, { query = it }, hint = "Search preview sellers…")
+            RitSearchField(query, { query = it }, hint = "Search sellers…")
             Spacer(Modifier.height(14.dp))
         }
         CatalogCategories(catalog.categories, categoryId) { categoryId = it }

@@ -185,6 +185,11 @@ object DebugCommerceApi {
         bulkMutation("/api/v1/sellers/" + sellerId + "/bulk/requests/" + requestId + "/seller-approval",
             JSONObject().put("expectedVersion", expectedVersion))
 
+    fun sellerReject(sellerId: String, requestId: String, expectedVersion: Int,
+                     reason: String): Result<BulkRequestRecord> =
+        bulkMutation("/api/v1/sellers/" + sellerId + "/bulk/requests/" + requestId + "/reject",
+            JSONObject().put("expectedVersion", expectedVersion).put("reason", reason))
+
     fun specialDecision(sellerId: String, requestId: String, expectedVersion: Int,
                         approved: Boolean): Result<BulkRequestRecord> =
         bulkMutation("/api/v1/sellers/" + sellerId + "/bulk/requests/" + requestId + "/special-pickup-decision",

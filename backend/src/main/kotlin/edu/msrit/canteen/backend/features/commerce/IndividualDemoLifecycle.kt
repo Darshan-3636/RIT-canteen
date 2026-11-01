@@ -7,6 +7,7 @@ import edu.msrit.canteen.backend.core.transaction
 import java.sql.Connection
 import java.sql.Timestamp
 import java.util.UUID
+import edu.msrit.canteen.backend.features.engagement.recordAudit
 
 internal fun loadDemoIndividual(db: Connection, id: UUID): IndividualDemoOrderDto? =
     db.prepareStatement("""SELECT seller_id,status,demo_only,payment_verified,subtotal_paise,created_at,demo_payment_outcome
@@ -104,6 +105,9 @@ internal fun transitionIndividualDemo(context: BackendContext, principal: Authen
             query.setObject(1, id); query.setString(2, sellerId)
             query.executeQuery().use { rows -> if (rows.next()) rows.getString(1) else null }
         } ?: throw CommerceFault(404, "ORDER_NOT_FOUND", "Demo order not found")
+        if(next !in setOf("DEMO_ACCEPTED","DEMO_REJECTED","DEMO_READY","DEMO_COMPLETED"))
+            throw CommerceFault(409,"INVALID_DEMO_TRANSITION","Unknown seller transition")
+        if(current==next) return@transaction loadDemoIndividual(db,id)!!
         val allowed = when (next) {
             "DEMO_ACCEPTED", "DEMO_REJECTED" -> current == "DEMO_PAYMENT_SIMULATED"
             "DEMO_READY" -> current == "DEMO_ACCEPTED"
@@ -115,5 +119,6 @@ internal fun transitionIndividualDemo(context: BackendContext, principal: Authen
             query.setString(1, next); query.setTimestamp(2, Timestamp.from(context.clock.instant()))
             query.setObject(3, id); query.executeUpdate()
         }
+        recordAudit(db,principal.userId,"SELLER","seller.individual.status","INDIVIDUAL_DEMO_ORDER",id.toString(),sellerId,mapOf("status" to next))
         loadDemoIndividual(db, id)!!
     }

@@ -1,5 +1,7 @@
 # Commerce API — Backend 2
 
+Current seller/admin additions (V048), including catalog lifecycle, membership administration and CSV export: [Seller/Admin API](SELLER_ADMIN_API.md).
+
 Originally implemented on `feat/rit-backend-orders-catalog` from foundation `05e55583e38b942b58a208c78dedd0959a101e62`; updated after integration on `feat/rit-verify-complete-backend-integration`.
 
 This module provides the demonstration catalog, commerce request API and customer individual-cart API. Phase B authentication/session issuance is mounted separately; Android debug builds use these HTTP routes. Individual orders have a **demo-only simulated payment and seller status lifecycle**; neither is a verified payment, real kitchen fulfillment or pickup handover. `AGREED_AWAITING_PAYMENT` means only that customer and seller approved the same current bulk quote revision; it is not a paid or fulfilled order.

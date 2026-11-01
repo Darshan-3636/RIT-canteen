@@ -108,15 +108,17 @@ All `GET` lists accept `limit` (1–100, default 25) and `offset` (0–10000); b
 | GET | `/admin/overview` | Live counts from core `users`/`sellers` and the support/draft tables; `source: "CORE_DATABASE"`. |
 | GET | `/admin/sellers?q` | `AdminSellerDto`: id, name, description, active, isMainCanteen, activeMemberCount, createdAt. |
 | GET | `/admin/users?q&status` | `AdminUserDto`: id, email, fullName, affiliation, status, platformAdmin, activeMembershipCount, createdAt. **No** password hash, sessions, department. `q` matches literally (LIKE wildcards escaped). |
-| GET | `/admin/audit?action&targetType` | `AuditEventDto`, newest first. |
-| GET | `/admin/setup-drafts` | Planning drafts. |
+| GET | `/admin/audit?action&targetType&sellerId&targetId` | `AuditEventDto`, newest first. |
+| GET | `/admin/setup-drafts` | Planning/reviewed drafts; `sellerCreated` reflects approval linkage. |
 | POST | `/admin/setup-drafts` `{"proposedSellerId","sellerName","notes"?}` | `201`; `sellerCreated:false`, `invitationSent:false`. `409` if a seller or open draft already uses the ID. |
 | POST | `/admin/setup-drafts/{id}/archive` | `200`, idempotent. |
 | GET | `/admin/analytics/summary?from&to` | Platform-scope `AnalyticsSummaryDto`. |
 
-**Account restriction is read-only here.** Changing `users.status` / `is_platform_admin` is a core-table write owned by Backend 1; it is listed as lead integration work, not implemented.
+Seller onboarding, activation/suspension, account status/admin flags, memberships and global categories are now implemented. See [Seller/Admin API](SELLER_ADMIN_API.md) for mutation bodies, version checks and permissions.
 
 ### Audit scope
+
+Management, seller order decisions and CSV exports also write audit events in their transaction. Management reasons are bounded; credentials and provider secrets are excluded. See [management contracts](SELLER_ADMIN_API.md).
 
 `admin_audit_events` records: `support.reply_posted` (seller/admin), `support.ticket_escalated` (any actor), `support.status_changed` (admin), `admin.setup_draft_created`, `admin.setup_draft_archived`, `report.selection_saved`. Each row has actor ID and role, action, target type/ID, optional seller ID, time, and a `detail` object holding IDs and status wires only. Ticket bodies, tokens and passwords are never written to audit. Customer ticket creation and customer messages are kept in the ticket history rather than the audit log.
 
@@ -126,8 +128,8 @@ All `GET` lists accept `limit` (1–100, default 25) and `offset` (0–10000); b
 | --- | --- | --- | --- |
 | GET | `/sellers/{sellerId}/dashboard-summary` | `analytics.view` | `DashboardSummaryDto` |
 | GET | `/sellers/{sellerId}/analytics/summary?from=YYYY-MM-DD&to=YYYY-MM-DD` | `analytics.view` | `AnalyticsSummaryDto` (range ≤366 days, seller-local dates) |
-| GET/POST | `/sellers/{sellerId}/reports/selections` | `reports.export` | Saved configuration; metrics `DEMO_REQUEST_COUNTS`, `SUPPORT_TICKETS`; `exportAvailable:false` |
-| GET | `/sellers/{sellerId}/reports/export` | `reports.export` | **`501 EXPORT_NOT_IMPLEMENTED`** (no XLSX/CSV generator exists) |
+| GET/POST | `/sellers/{sellerId}/reports/selections` | `reports.export` | Saved configuration; metrics `DEMO_REQUEST_COUNTS`, `SUPPORT_TICKETS`; `exportAvailable:true` |
+| GET | `/sellers/{sellerId}/reports/export` | `reports.export` | `200 text/csv`; optional `selectionId,from,to`, maximum 366 days, last 30 days by default |
 
 ```json
 GET /sellers/main-canteen/analytics/summary?from=2026-10-01&to=2026-10-27
@@ -155,7 +157,7 @@ Foreign keys reference only core `users` and `sellers`; there are none to Commer
 
 ## Error codes added
 
-`INVALID_REQUEST_BODY`, `INVALID_PAGINATION`, `INVALID_DATE`, `INVALID_DATE_RANGE`, `INVALID_FAVORITE_TYPE`, `INVALID_TARGET_ID`, `INVALID_TEMPLATE_NAME`, `INVALID_TEMPLATE_LINES`, `INVALID_SUBJECT`, `INVALID_MESSAGE`, `INVALID_SELLER_ID`, `INVALID_REQUEST_REFERENCE`, `INVALID_CLIENT_ID`, `INVALID_STATUS`, `INVALID_REPORT_NAME`, `INVALID_REPORT_METRICS`, `INVALID_SELLER_NAME`, `INVALID_NOTES` (all 400); `NOT_FOUND` (404); `TEMPLATE_NAME_TAKEN`, `REPORT_NAME_TAKEN`, `TICKET_CLOSED`, `INVALID_TICKET_TRANSITION`, `SELLER_ID_TAKEN`, `DRAFT_EXISTS` (409); `FAVORITES_LIMIT`, `TEMPLATES_LIMIT` (422); `EXPORT_NOT_IMPLEMENTED` (501); `CATALOG_UNAVAILABLE` (503). Auth errors are the foundation's `UNAUTHENTICATED`, `SELLER_CAPABILITY_REQUIRED` and `PLATFORM_ADMIN_REQUIRED`.
+`INVALID_REQUEST_BODY`, `INVALID_PAGINATION`, `INVALID_DATE`, `INVALID_DATE_RANGE`, `INVALID_FAVORITE_TYPE`, `INVALID_TARGET_ID`, `INVALID_TEMPLATE_NAME`, `INVALID_TEMPLATE_LINES`, `INVALID_SUBJECT`, `INVALID_MESSAGE`, `INVALID_SELLER_ID`, `INVALID_REQUEST_REFERENCE`, `INVALID_CLIENT_ID`, `INVALID_STATUS`, `INVALID_REPORT_NAME`, `INVALID_REPORT_METRICS`, `INVALID_SELLER_NAME`, `INVALID_NOTES` (all 400); `NOT_FOUND` (404); `TEMPLATE_NAME_TAKEN`, `REPORT_NAME_TAKEN`, `TICKET_CLOSED`, `INVALID_TICKET_TRANSITION`, `SELLER_ID_TAKEN`, `DRAFT_EXISTS` (409); `FAVORITES_LIMIT`, `TEMPLATES_LIMIT` (422); `CATALOG_UNAVAILABLE` (503). Auth errors are the foundation's `UNAUTHENTICATED`, `SELLER_CAPABILITY_REQUIRED` and `PLATFORM_ADMIN_REQUIRED`.
 
 ## Run and test
 

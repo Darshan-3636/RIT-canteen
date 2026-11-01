@@ -10,6 +10,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONObject
+import org.json.JSONArray
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -27,7 +28,8 @@ internal object DebugBackendApi {
         .build()
     private val jsonType = "application/json; charset=utf-8".toMediaType()
 
-    data class Response(val status: Int, val body: JSONObject?) {
+    data class Response(val status: Int, val body: JSONObject?, val array: JSONArray? = null,
+                        val raw: String? = null) {
         val error: String? get() = body?.optJSONObject("error")?.optString("message")
     }
 
@@ -44,7 +46,9 @@ internal object DebugBackendApi {
         client.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             if (response.code == 401 && token != null) DevelopmentDemoAccounts.invalidateIfCurrent(token)
-            return Response(response.code, raw.takeIf { it.isNotBlank() }?.let(::JSONObject))
+            return Response(response.code,
+                raw.takeIf { it.startsWith('{') }?.let(::JSONObject),
+                raw.takeIf { it.startsWith('[') }?.let(::JSONArray), raw)
         }
     }
 

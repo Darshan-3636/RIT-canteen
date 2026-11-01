@@ -6,28 +6,61 @@ import org.json.JSONObject
 import org.json.JSONArray
 import java.time.LocalDate
 
-/** Existing-item edits only. The backend has no create-item endpoint. Invoke on Dispatchers.IO. */
+/** Seller catalog commands. Invoke on Dispatchers.IO; server permissions and versions are authoritative. */
 object DebugSellerCatalogApi {
     data class Result(val success: Boolean, val message: String)
 
-    fun saveItem(item: MenuItem): Result {
-        val original = PreviewCatalog.items.find { it.id == item.id && it.sellerId == item.sellerId }
-            ?: return Result(false, "Adding new items is not supported by the current backend.")
-        if (item.kind != original.kind || item.categoryId != original.categoryId)
-            return Result(false, "Changing item kind or category is not supported by the current backend.")
+    fun saveProfile(sellerId: String, name: String, description: String): Result {
         val token = DevelopmentDemoAccounts.token() ?: return Result(false, "Sign in again.")
         return try {
+            val path = "/api/v1/sellers/$sellerId/profile"
+            val current = DebugBackendApi.request("GET", path, token = token)
+            if (current.status != 200) return Result(false, current.error ?: "Could not load profile version.")
+            val result = DebugBackendApi.request("PATCH", path, JSONObject().put("name", name)
+                .put("description", description).put("expectedVersion", current.body!!.getLong("version")), token)
+            if (result.status == 200) Result(true, "Public profile saved on server.")
+            else Result(false, result.error ?: "Profile save failed (${result.status}).")
+        } catch (_: Exception) { Result(false, "Server unavailable.") }
+    }
+
+    fun setArchived(sellerId: String, itemId: String, archive: Boolean): Result {
+        val token = DevelopmentDemoAccounts.token() ?: return Result(false, "Sign in again.")
+        return try {
+            val path = "/api/v1/sellers/$sellerId/catalog/items/$itemId"
+            val current = DebugBackendApi.request("GET", path, token = token)
+            if (current.status != 200) return Result(false, current.error ?: "Could not load item version.")
+            val result = DebugBackendApi.request("POST", "$path/${if (archive) "archive" else "restore"}",
+                JSONObject().put("expectedVersion", current.body!!.getLong("version")), token)
+            if (result.status == 200) Result(true, if (archive) "Item archived on server." else "Item restored unpublished.")
+            else Result(false, result.error ?: "Could not change archive state (${result.status}).")
+        } catch (_: Exception) { Result(false, "Server unavailable.") }
+    }
+
+    fun saveItem(item: MenuItem): Result {
+        val original = PreviewCatalog.items.find { it.id == item.id && it.sellerId == item.sellerId }
+        val token = DevelopmentDemoAccounts.token() ?: return Result(false, "Sign in again.")
+        return try {
+            val path = "/api/v1/sellers/${item.sellerId}/catalog/items"
+            val current = if (original == null) null else DebugBackendApi.request("GET", "$path/${item.id}", token = token)
+            if (current != null && current.status != 200)
+                return Result(false, current.error ?: "Could not load the latest item version.")
+            val version = current?.body?.getLong("version")
             val body = JSONObject().put("name", item.name).put("description", item.description)
                 .put("pricePaise", item.price.rupees.toLong() * 100L)
                 .put("published", item.published).put("dietary", item.dietary.name)
                 .put("unavailableVisibility", item.unavailableVisibility.name)
-            val response = DebugBackendApi.request("PATCH",
-                "/api/v1/sellers/" + item.sellerId + "/menu/items/" + item.id, body, token)
-            if (response.status != 200) Result(false, response.error ?: "Item update failed.")
-            else if (item.availability != original.availability) {
+                .put("categoryId", item.categoryId).put("kind", item.kind.name)
+                .put("imageKey", item.id)
+            val response = if (original == null) DebugBackendApi.request("POST", path,
+                body.put("id", item.id).put("availability", item.availability.name), token)
+            else DebugBackendApi.request("PATCH", "/api/v1/sellers/${item.sellerId}/menu/items/${item.id}",
+                body.put("expectedVersion", version), token)
+            if (response.status !in 200..201) Result(false, response.error ?: "Item save failed.")
+            else if (original != null && item.availability != original.availability) {
                 val availability = DebugBackendApi.request("PATCH",
                     "/api/v1/sellers/" + item.sellerId + "/menu/items/" + item.id + "/availability",
-                    JSONObject().put("availability", item.availability.name), token)
+                    JSONObject().put("availability", item.availability.name)
+                        .put("expectedVersion", version!! + 1), token)
                 if (availability.status == 200) Result(true, "Item and availability saved on server.")
                 else Result(false, availability.error ?: "Item details saved, but availability failed. Refresh the menu.")
             } else Result(true, "Item saved on server.")
@@ -39,14 +72,31 @@ object DebugSellerCatalogApi {
         val token = DevelopmentDemoAccounts.token() ?: return Result(false, "Sign in again.")
         return try {
             val path = "/api/v1/sellers/" + sellerId + "/menu/items/" + itemId
-            val state = DebugBackendApi.request("PATCH", path + "/availability",
-                JSONObject().put("availability", if (available) "AVAILABLE" else "UNAVAILABLE"), token)
-            if (state.status != 200) return Result(false, state.error ?: "Availability update failed.")
-            val visibility = DebugBackendApi.request("PATCH", path,
-                JSONObject().put("published", published)
-                    .put("unavailableVisibility", if (showUnavailable) "SHOW" else "HIDE"), token)
-            if (visibility.status == 200) Result(true, "Visibility saved on server.")
-            else Result(false, visibility.error ?: "Visibility update failed; availability may have changed. Refresh the menu.")
+            val current = DebugBackendApi.request("GET", "/api/v1/sellers/$sellerId/catalog/items/$itemId", token = token)
+            if (current.status != 200) return Result(false, current.error ?: "Could not load the latest item version.")
+            val row = current.body!!
+            var version = row.getLong("version")
+            var availabilityChanged = false
+            val desiredAvailability = if (available) "AVAILABLE" else "UNAVAILABLE"
+            val desiredVisibility = if (showUnavailable) "SHOW" else "HIDE"
+            if (row.getString("availability") != desiredAvailability) {
+                val state = DebugBackendApi.request("PATCH", path + "/availability",
+                    JSONObject().put("availability", desiredAvailability)
+                        .put("expectedVersion", version), token)
+                if (state.status != 200) return Result(false, state.error ?: "Availability update failed.")
+                version++
+                availabilityChanged = true
+            }
+            val visibility = if (row.getBoolean("published") != published ||
+                row.getString("unavailableVisibility") != desiredVisibility) {
+                DebugBackendApi.request("PATCH", path,
+                    JSONObject().put("published", published)
+                        .put("unavailableVisibility", desiredVisibility)
+                        .put("expectedVersion", version), token)
+            } else null
+            if (visibility == null || visibility.status == 200) Result(true, "Availability and visibility saved on server.")
+            else Result(false, visibility.error ?: if (availabilityChanged)
+                "Visibility failed; availability changed. Refresh the menu." else "Visibility update failed.")
         } catch (_: Exception) { Result(false, "Server unavailable.") }
     }
 

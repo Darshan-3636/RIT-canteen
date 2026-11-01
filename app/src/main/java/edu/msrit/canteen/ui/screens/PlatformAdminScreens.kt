@@ -91,7 +91,7 @@ private fun AdminPageShell(title: String, tag: String, onBack: () -> Unit, conte
     Column(Modifier.fillMaxSize().background(colors.background).testTag(tag)) {
         CatalogHeader(title, onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
-            AdminDemoBanner()
+            if (!BuildConfig.RIT_CLOUD_DEMO) AdminDemoBanner()
             Spacer(Modifier.height(15.dp)); content(); Spacer(Modifier.height(36.dp))
         }
     }
@@ -299,7 +299,7 @@ fun PlatformAdminScreen(page: AdminPage, identity: AuthorizedIdentity?, sample: 
     AdminPageShell(title, "admin_${page.name.lowercase()}", onBack) {
         if (!PresentationAccess.allows(identity, ProtectedArea.Administrator)) { AdminDeniedState(onBack); return@AdminPageShell }
         if (BuildConfig.RIT_CLOUD_DEMO) {
-            RitEmptyState("Platform console unavailable", "This Android view is not yet connected to the server admin APIs. No sample users, tickets or actions are shown as live data.")
+            CloudAdminContent(page, sellerId, onSeller)
             return@AdminPageShell
         }
         when (page) {

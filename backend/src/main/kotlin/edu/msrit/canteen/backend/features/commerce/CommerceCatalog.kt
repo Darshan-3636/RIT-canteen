@@ -11,7 +11,7 @@ internal fun sellers(connection: Connection): List<SellerDto> = connection.prepa
     buildList {
         while (rows.next()) {
             val id=rows.getString("id"); val main=rows.getBoolean("is_main_canteen")
-            val categories=connection.prepareStatement("SELECT category_id FROM seller_categories WHERE seller_id=? ORDER BY category_id").use { cat ->
+            val categories=connection.prepareStatement("SELECT sc.category_id FROM seller_categories sc JOIN menu_categories mc ON mc.id=sc.category_id WHERE sc.seller_id=? AND sc.active AND mc.active ORDER BY sc.sort_order,mc.sort_order,sc.category_id").use { cat ->
                 cat.setString(1,id); cat.executeQuery().use { result -> buildList { while(result.next()) add(result.getString(1)) } }
             }
             add(SellerDto(id,rows.getString("name"),rows.getString("description"),true,main,
@@ -26,11 +26,11 @@ internal fun menuItems(connection: Connection, sellerId: String, query: String?,
     val sql = """SELECT i.id,i.seller_id,i.name,i.description,i.price_paise,i.kind,i.dietary,i.availability,
                        i.published,i.image_key,i.category_id,s.is_main_canteen
                 FROM menu_items i JOIN sellers s ON s.id=i.seller_id
-                WHERE i.seller_id=? AND s.active AND i.published
+                WHERE i.seller_id=? AND s.active AND i.published AND i.archived_at IS NULL AND $ACTIVE_CATEGORY_SQL
                   AND (i.availability='AVAILABLE' OR i.unavailable_visibility='SHOW')
                   AND (? IS NULL OR i.category_id=?)
                   AND (? IS NULL OR i.name ILIKE ? OR i.description ILIKE ?)
-                ORDER BY i.category_id,i.name"""
+                ORDER BY (SELECT sc.sort_order FROM seller_categories sc WHERE sc.seller_id=i.seller_id AND sc.category_id=i.category_id),(SELECT mc.sort_order FROM menu_categories mc WHERE mc.id=i.category_id),i.category_id,i.name"""
     return connection.prepareStatement(sql).use { statement ->
         statement.setString(1,sellerId); statement.setString(2,categoryId); statement.setString(3,categoryId)
         val term=query?.trim()?.takeIf(String::isNotEmpty)?.let { "%$it%" }
@@ -67,3 +67,6 @@ internal fun menuItem(connection: Connection, sellerId: String, itemId: String):
         }
     }
 }
+
+/** Alias i must be a menu_items row. Shared by selection, drafts and checkout pricing. */
+internal const val ACTIVE_CATEGORY_SQL = "EXISTS (SELECT 1 FROM seller_categories sc JOIN menu_categories mc ON mc.id=sc.category_id WHERE sc.seller_id=i.seller_id AND sc.category_id=i.category_id AND sc.active AND mc.active)"

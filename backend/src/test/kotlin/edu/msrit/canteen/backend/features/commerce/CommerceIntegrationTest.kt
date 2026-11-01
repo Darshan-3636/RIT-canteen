@@ -90,6 +90,7 @@ class CommerceIntegrationTest {
     private fun cleanup(f:Fixture) {
         f.context.dataSource.connection.use { c -> c.autoCommit=false
             listOf(f.customer.user,f.seller.user,f.stranger.user).forEach { user ->
+                c.prepareStatement("DELETE FROM admin_audit_events WHERE actor_user_id=?").use { it.setObject(1,user);it.executeUpdate() }
                 c.prepareStatement("DELETE FROM individual_customer_carts WHERE customer_user_id=?").use { it.setObject(1,user);it.executeUpdate() }
                 c.prepareStatement("DELETE FROM bulk_request_events WHERE request_id IN (SELECT id FROM bulk_requests WHERE customer_user_id=?)").use { it.setObject(1,user);it.executeUpdate() }
                 c.prepareStatement("DELETE FROM bulk_special_pickup_decisions WHERE request_id IN (SELECT id FROM bulk_requests WHERE customer_user_id=?)").use { it.setObject(1,user);it.executeUpdate() }
@@ -364,7 +365,7 @@ class CommerceIntegrationTest {
             assertEquals(HttpStatusCode.OK,otherSellerQueue.status)
             assertFalse(otherSellerQueue.bodyAsText().contains(id))
             assertEquals(HttpStatusCode.OK,move(f.seller.token,"DEMO_ACCEPTED").status)
-            assertEquals(HttpStatusCode.Conflict,move(f.seller.token,"DEMO_ACCEPTED").status)
+            assertEquals(HttpStatusCode.OK,move(f.seller.token,"DEMO_ACCEPTED").status) // Safe retry does not emit another transition.
             assertEquals(HttpStatusCode.OK,move(f.seller.token,"DEMO_READY").status)
             val complete=move(f.seller.token,"DEMO_COMPLETED")
             assertEquals(HttpStatusCode.OK,complete.status)
@@ -424,8 +425,8 @@ class CommerceIntegrationTest {
             val preV046Digest = MessageDigest.getInstance("SHA-256")
                 .digest("north-counter|$pickup||north-lunch:8".toByteArray())
             f.context.dataSource.connection.use { db ->
-                db.prepareStatement("SELECT idempotency_hash FROM bulk_requests WHERE idempotency_key=?").use { query ->
-                    query.setString(1, "pre-v046-replay")
+                db.prepareStatement("SELECT idempotency_hash FROM bulk_requests WHERE idempotency_key=? AND customer_user_id=?").use { query ->
+                    query.setString(1, "pre-v046-replay"); query.setObject(2, f.customer.user)
                     query.executeQuery().use { rows -> assertTrue(rows.next()); assertTrue(preV046Digest.contentEquals(rows.getBytes(1))) }
                 }
             }

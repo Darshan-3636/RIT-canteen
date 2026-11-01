@@ -40,7 +40,6 @@ import edu.msrit.canteen.customer.BulkDraft
 import edu.msrit.canteen.customer.BulkLine
 import edu.msrit.canteen.customer.BulkRequestRecord
 import edu.msrit.canteen.customer.CustomerCatalogSource
-import edu.msrit.canteen.customer.DemoTransitionResult
 import edu.msrit.canteen.customer.DemoOrder
 import edu.msrit.canteen.customer.DemoOrderKind
 import edu.msrit.canteen.customer.DemoOrderState
@@ -63,6 +62,7 @@ import edu.msrit.canteen.ui.components.RitPrimaryButton
 import edu.msrit.canteen.ui.components.RitSecondaryButton
 import edu.msrit.canteen.ui.components.RitStatusIndicator
 import edu.msrit.canteen.ui.components.RitText
+import edu.msrit.canteen.ui.components.RitTextField
 import edu.msrit.canteen.ui.components.SellerBottomItem
 import edu.msrit.canteen.ui.components.SellerBottomNavigation
 import edu.msrit.canteen.ui.screens.displayPaise
@@ -403,10 +403,11 @@ fun SellerDailyRequestDetailPresentation(
     errorMessage: String? = null,
     onRetry: (() -> Unit)? = null,
     onCounteroffer: (() -> Unit)? = null,
-    onReject: (() -> DemoTransitionResult)? = null,
+    onReject: ((String) -> Unit)? = null,
+    actionBusy: Boolean = false,
 ) {
     val colors = RitThemeTokens.colors
-    var actionFeedback by remember(record.reference) { mutableStateOf("") }
+    var rejectionReason by remember(record.reference) { mutableStateOf("") }
     val quoteExpired = isRequestQuoteExpired(record, now)
     val currentState = sellerDetailState(record, now)
     val specialNeedsApproval = record.latest.specialPickup &&
@@ -490,12 +491,12 @@ fun SellerDailyRequestDetailPresentation(
                         Modifier.fillMaxWidth().testTag("seller_daily_counteroffer"))
                 }
                 if (onReject != null) item {
-                    RitSecondaryButton("Reject request", { actionFeedback = onReject().explanation },
-                        Modifier.fillMaxWidth().testTag("seller_daily_reject"))
+                    RitTextField(rejectionReason, { rejectionReason = it }, "Rejection reason",
+                        "Required for the customer", Modifier.fillMaxWidth())
+                    RitSecondaryButton(if (actionBusy) "Rejecting…" else "Reject request",
+                        { onReject(rejectionReason.trim()) }, Modifier.fillMaxWidth().testTag("seller_daily_reject"),
+                        enabled = !actionBusy && rejectionReason.trim().isNotEmpty())
                 }
-            }
-            if (actionFeedback.isNotBlank()) item {
-                RitMessageCard("Local response", actionFeedback)
             }
 
             if (errorMessage != null) {

@@ -7,6 +7,8 @@ import edu.msrit.canteen.backend.core.BackendContext
 import edu.msrit.canteen.backend.core.transaction
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.response.respondText
+import io.ktor.http.ContentType
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
@@ -93,11 +95,45 @@ internal fun Route.registerAnalyticsRoutes(context: BackendContext, commerce: Co
     }
 
     get("/sellers/{sellerId}/reports/export") {
-        val sellerId = call.parameters["sellerId"]!!
-        call.requireSellerCapability(context, sellerId, SellerCapabilities.REPORTS_EXPORT) ?: return@get
-        call.respondApiError(HttpStatusCode.NotImplemented, "EXPORT_NOT_IMPLEMENTED",
-            "No report file generator exists; saved selections are configuration only")
+        call.handled {
+            val sellerId=call.parameters["sellerId"]!!
+            val actor=call.requireSellerCapability(context,sellerId,SellerCapabilities.REPORTS_EXPORT) ?: return@handled
+            val selection=call.request.queryParameters["selectionId"]?.let { raw ->
+                val id=runCatching { UUID.fromString(raw) }.getOrNull() ?: throw badRequest("INVALID_ID","Invalid selectionId")
+                context.read { it.queryOne("SELECT * FROM report_selections WHERE id=? AND seller_id=?",id,sellerId,map=::selectionRow) } ?: throw notFound()
+            }
+            val to=call.optionalDate("to") ?: selection?.to?.let(::parseDate) ?: context.clock.instant().atZone(context.config.sellerZone).toLocalDate()
+            val from=call.optionalDate("from") ?: selection?.from?.let(::parseDate) ?: to.minusDays(29)
+            validateRange(from,to)
+            val metrics=selection?.metrics ?: reportMetrics.toList()
+            val lines=mutableListOf("metric,value,unit,label,from,to")
+            if("DEMO_REQUEST_COUNTS" in metrics) {
+                val counts=commerce.demoRequestCounts(sellerId,from,to)
+                if(counts==null) lines += "bulk_requests,,count,UNAVAILABLE,$from,$to"
+                else {
+                    lines += "bulk_requests,${counts.total},count,DEMO_UNVERIFIED,$from,$to"
+                    counts.byStatus.toSortedMap().forEach { (status,count) ->
+                        // Status originates in checked enums; CSV quoting still handles an injected read port.
+                        val label=status.replace("\"","\"\"").replace("\r","").replace("\n","")
+                        lines += "\"bulk_status_$label\",$count,count,DEMO_UNVERIFIED,$from,$to"
+                    }
+                }
+            }
+            if("SUPPORT_TICKETS" in metrics) context.read { db ->
+                db.query("""SELECT status,count(*) FROM support_tickets WHERE seller_id=?
+                    AND (created_at AT TIME ZONE 'Asia/Kolkata')::date BETWEEN ? AND ? GROUP BY status ORDER BY status""",sellerId,from,to) {
+                    lines += "support_${it.getString(1)},${it.getLong(2)},count,STORED_TICKETS,$from,$to"
+                }
+            }
+            context.transaction { db ->
+                context.requireSellerInTx(db,actor,sellerId,SellerCapabilities.REPORTS_EXPORT)
+                recordAudit(db,actor.userId,"SELLER","report.export","SELLER",sellerId,sellerId)
+            }
+            call.response.headers.append("Content-Disposition","attachment; filename=\"seller-report.csv\"")
+            call.respondText(lines.joinToString("\r\n",postfix="\r\n"),ContentType.Text.CSV)
+        }
     }
+
 }
 
 /** Shared by the seller and platform summaries; [sellerId] null means platform-wide. */

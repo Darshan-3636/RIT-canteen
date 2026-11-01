@@ -21,6 +21,8 @@ object DebugCommerceApi {
     fun submitBulk(draft: BulkDraft, idempotencyKey: String): Result<BulkRequestRecord> = Result()
     fun customerApprove(requestId: String, expectedVersion: Int): Result<BulkRequestRecord> = Result()
     fun sellerApprove(sellerId: String, requestId: String, expectedVersion: Int): Result<BulkRequestRecord> = Result()
+    fun sellerReject(sellerId: String, requestId: String, expectedVersion: Int,
+                     reason: String): Result<BulkRequestRecord> = Result()
     fun specialDecision(sellerId: String, requestId: String, expectedVersion: Int,
                         approved: Boolean): Result<BulkRequestRecord> = Result()
     fun sellerCounteroffer(sellerId: String, requestId: String, expectedVersion: Int,

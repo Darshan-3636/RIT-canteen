@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,21 +71,34 @@ fun RitPrimaryButton(
     trailingIcon: RitIconKind? = null,
 ) {
     val colors = RitThemeTokens.colors
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val background = when {
+        !enabled -> colors.outline
+        pressed -> colors.accent
+        else -> colors.accentSoft
+    }
+    val foreground = when {
+        !enabled -> colors.muted
+        pressed -> colors.onAccent
+        else -> colors.foreground
+    }
     val shape = RoundedCornerShape(RitRadii.pill)
     Row(
         modifier = modifier
             .heightIn(min = 54.dp)
             .clip(shape)
-            .background(if (enabled) colors.accent else colors.outline)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .background(background)
+            .clickable(enabled = enabled, role = Role.Button, interactionSource = interaction,
+                indication = androidx.compose.foundation.LocalIndication.current, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
-        RitText(text, RitType.label, if (enabled) colors.onAccent else colors.muted)
+        RitText(text, RitType.label, foreground)
         if (trailingIcon != null) {
             Spacer(Modifier.width(10.dp))
-            RitIcon(trailingIcon, if (enabled) colors.onAccent else colors.muted, size = 18.dp)
+            RitIcon(trailingIcon, foreground, size = 18.dp)
         }
     }
 }

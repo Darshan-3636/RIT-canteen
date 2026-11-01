@@ -71,7 +71,7 @@ internal fun Route.registerCustomerDataRoutes(context: BackendContext, commerce:
             val principal = call.requireAuthenticatedUser(context) ?: return@put
             val type = favoriteType(call.parameters["type"])
             val targetId = call.parameters["targetId"]!!.also {
-                if (!isSlug(it)) throw badRequest("INVALID_TARGET_ID", "targetId must be a stable lowercase ID")
+                if (!(if(type==FavoriteType.SELLER) isSlug(it) else Regex("[a-z0-9][a-z0-9-]{0,95}").matches(it))) throw badRequest("INVALID_TARGET_ID", "targetId must be a stable lowercase ID")
             }
             val sellerId = when (type) {
                 FavoriteType.SELLER -> targetId
@@ -242,7 +242,7 @@ private fun validTemplateName(raw: String): String = raw.trim().also {
 
 private fun validateLines(lines: List<TemplateLineDto>) {
     if (lines.size !in 1..50) throw badRequest("INVALID_TEMPLATE_LINES", "A template needs 1 to 50 lines")
-    if (lines.any { !isSlug(it.itemId) || it.quantity !in 1..999 }) {
+    if (lines.any { !Regex("[a-z0-9][a-z0-9-]{0,95}").matches(it.itemId) || it.quantity !in 1..999 }) {
         throw badRequest("INVALID_TEMPLATE_LINES", "Each line needs a stable item ID and a quantity of 1 to 999")
     }
     if (lines.map { it.itemId }.toSet().size != lines.size) {

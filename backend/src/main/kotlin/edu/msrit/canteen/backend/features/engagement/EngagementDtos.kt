@@ -170,7 +170,7 @@ data class ReportSelectionDto(
     val metrics: List<String>,
     val from: String? = null,
     val to: String? = null,
-    val exportAvailable: Boolean = false,
+    val exportAvailable: Boolean = true,
     val createdAt: String,
 )
 

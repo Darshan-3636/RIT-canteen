@@ -152,7 +152,7 @@ class EngagementFeatureTest {
             body?.let { contentType(ContentType.Application.Json); setBody(it) }
         }
         val text = response.bodyAsText()
-        return response.status to (if (text.isBlank()) JsonNull else Json.parseToJsonElement(text))
+        return response.status to (if (text.isBlank()) JsonNull else if (response.headers[HttpHeaders.ContentType]?.startsWith("text/csv")==true) kotlinx.serialization.json.JsonPrimitive(text) else Json.parseToJsonElement(text))
     }
 
     private val JsonElement.o: JsonObject get() = jsonObject
@@ -361,7 +361,7 @@ class EngagementFeatureTest {
         assertTrue(audit.all { it.str("actorUserId") == cast.admin.userId.toString() || it.str("targetId") != draft.str("id") })
     }
 
-    @Test fun analyticsNeverInventRevenueOrExports() = scenario { _, cast ->
+    @Test fun analyticsExportsStoredCountsWithoutInventingRevenue() = scenario { _, cast ->
         val (status, dashboard) = api(HttpMethod.Get, "/sellers/main-canteen/dashboard-summary", cast.owner)
         assertEquals(HttpStatusCode.OK, status)
         assertTrue(dashboard.o.getValue("insufficientData").jsonPrimitive.boolean)
@@ -380,12 +380,12 @@ class EngagementFeatureTest {
         assertEquals(HttpStatusCode.Forbidden, api(HttpMethod.Get, "/sellers/main-canteen/analytics/summary", cast.otherOwner).first)
 
         val (export, exportBody) = api(HttpMethod.Get, "/sellers/main-canteen/reports/export", cast.owner)
-        assertEquals(HttpStatusCode.NotImplemented, export)
-        assertEquals("EXPORT_NOT_IMPLEMENTED", exportBody.errorCode())
+        assertEquals(HttpStatusCode.OK, export)
+        assertTrue(exportBody.jsonPrimitive.content.contains("UNAVAILABLE"))
         val selection = api(HttpMethod.Post, "/sellers/main-canteen/reports/selections", cast.owner,
             """{"name":"Weekly","metrics":["SUPPORT_TICKETS"],"from":"2026-10-01","to":"2026-10-07"}""")
         assertEquals(HttpStatusCode.Created, selection.first)
-        assertFalse(selection.second.o.getValue("exportAvailable").jsonPrimitive.boolean)
+        assertTrue(selection.second.o.getValue("exportAvailable").jsonPrimitive.boolean)
         assertEquals(HttpStatusCode.BadRequest, api(HttpMethod.Post, "/sellers/main-canteen/reports/selections", cast.owner,
             """{"name":"Revenue","metrics":["VERIFIED_REVENUE"]}""").first)
         assertEquals(HttpStatusCode.Forbidden, api(HttpMethod.Get, "/sellers/main-canteen/reports/export", cast.manager).first)

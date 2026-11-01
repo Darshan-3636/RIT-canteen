@@ -1,5 +1,7 @@
 # RIT Canteen backend — integrated local-demo API
 
+Current seller/admin additions (V048), including catalog lifecycle, membership administration and CSV export: [Seller/Admin API](../docs/backend/SELLER_ADMIN_API.md).
+
 This is an independent Kotlin/JVM Ktor service. Run Gradle **from this directory**; the Android root Gradle project is not involved. The integrated baseline mounts Phase B auth, Commerce, Engagement and Admin routes. Android networking lives in the app's debug source set.
 
 ## Requirements

@@ -7,6 +7,7 @@ import edu.msrit.canteen.backend.features.engagement.ItemLookup
 import edu.msrit.canteen.backend.features.engagement.SimulatedSales
 import edu.msrit.canteen.backend.core.RuntimeEnvironment
 import java.time.LocalDate
+import edu.msrit.canteen.backend.features.commerce.ACTIVE_CATEGORY_SQL
 
 /** Live read-only Commerce adapter; never infers access from a client-supplied seller ID. */
 class PostgresCommerceReadPort(private val context: BackendContext) : CommerceReadPort {
@@ -40,7 +41,7 @@ class PostgresCommerceReadPort(private val context: BackendContext) : CommerceRe
         }
     override fun lookupItem(itemId: String): ItemLookup = context.dataSource.connection.use { db ->
         db.prepareStatement("""SELECT i.seller_id FROM menu_items i JOIN sellers s ON s.id=i.seller_id
-            WHERE i.id=? AND s.active AND i.published
+            WHERE i.id=? AND s.active AND i.published AND i.archived_at IS NULL AND $ACTIVE_CATEGORY_SQL
               AND (i.availability='AVAILABLE' OR i.unavailable_visibility='SHOW')""").use { sql ->
             sql.setString(1, itemId)
             sql.executeQuery().use { rows -> if (rows.next()) ItemLookup.Found(rows.getString(1)) else ItemLookup.Missing }

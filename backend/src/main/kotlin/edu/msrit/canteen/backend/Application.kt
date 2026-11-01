@@ -25,6 +25,7 @@ import edu.msrit.canteen.backend.features.commerce.PhonePeUatGateway
 import edu.msrit.canteen.backend.features.commerce.SandboxPaymentGateway
 import edu.msrit.canteen.backend.features.commerce.UnavailableSandboxPaymentGateway
 import edu.msrit.canteen.backend.features.engagement.registerEngagementRoutes
+import edu.msrit.canteen.backend.features.management.registerManagementRoutes
 import edu.msrit.canteen.backend.features.integration.PostgresCommerceReadPort
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
@@ -98,6 +99,7 @@ fun Application.backendModule(context: BackendContext, mountContributorRoutes: B
         route("/api/v1") {
             if (mountContributorRoutes) {
                 registerCommerceRoutes(context, sandboxGateway)
+                registerManagementRoutes(context)
                 registerEngagementRoutes(context, PostgresCommerceReadPort(context))
             }
             post("/auth/register") {

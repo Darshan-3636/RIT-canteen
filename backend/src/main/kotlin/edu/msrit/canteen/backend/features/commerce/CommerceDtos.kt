@@ -17,8 +17,9 @@ import kotlinx.serialization.Serializable
 @Serializable data class CatalogItemPatch(
     val name: String? = null, val description: String? = null, val pricePaise: Long? = null,
     val published: Boolean? = null, val dietary: String? = null, val unavailableVisibility: String? = null,
+    val categoryId: String? = null, val kind: String? = null, val imageKey: String? = null, val expectedVersion: Long? = null,
 )
-@Serializable data class AvailabilityPatch(val availability: String)
+@Serializable data class AvailabilityPatch(val availability: String, val expectedVersion: Long? = null)
 @Serializable data class DraftLine(val itemId: String, val quantity: Int)
 @Serializable data class QuoteTermsRequest(
     val expectedVersion: Int? = null, val lines: List<DraftLine>, val pickupAt: String,
@@ -89,3 +90,5 @@ import kotlinx.serialization.Serializable
 )
 @Serializable data class IndividualDemoOrderListDto(val orders: List<IndividualDemoOrderDto>)
 @Serializable data class PickupScheduleDto(val confirmed: List<BulkRequestDto>, val note: String)
+
+@Serializable data class BulkRejectRequest(val expectedVersion: Int, val reason: String)
