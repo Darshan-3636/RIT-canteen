@@ -13,19 +13,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import edu.msrit.canteen.customer.IndividualOrderPreview
 import edu.msrit.canteen.ui.components.CatalogHeader
 import edu.msrit.canteen.ui.components.RitEmptyState
 import edu.msrit.canteen.ui.components.RitPrimaryButton
 import edu.msrit.canteen.ui.components.RitStatusIndicator
 import edu.msrit.canteen.ui.components.RitText
+import edu.msrit.canteen.ui.components.RitTextField
 import edu.msrit.canteen.ui.theme.RitThemeTokens
 import edu.msrit.canteen.ui.theme.RitType
 
 /** Server-owned demo queue. No state here represents verified payment or real fulfillment. */
 @Composable
 fun SellerIndividualBackendScreen(orders: List<IndividualOrderPreview>, canRespond: Boolean,
-                                  onBack: () -> Unit, onTransition: (String, String) -> Unit,
+                                  onBack: () -> Unit, onTransition: (String, String, String?) -> Unit,
                                   feedback: String? = null) {
     val colors = RitThemeTokens.colors
     Column(Modifier.fillMaxSize().background(colors.background).testTag("seller_individual_backend")) {
@@ -37,10 +42,10 @@ fun SellerIndividualBackendScreen(orders: List<IndividualOrderPreview>, canRespo
                     Modifier.padding(vertical = 12.dp).testTag("seller_individual_feedback"))
                 Spacer(Modifier.height(10.dp))
             }
-            if (orders.isEmpty()) item { RitEmptyState("No demo orders", "New Main Canteen demo checkouts appear here after refresh.") }
+            if (orders.isEmpty()) item { RitEmptyState("No demo orders", "New M.S.R.I.T Canteen demo checkouts appear here after refresh.") }
             items(orders, key = { it.id }) { order ->
                 Column(Modifier.fillMaxWidth().padding(bottom = 18.dp).testTag("seller_individual_${order.id}")) {
-                    RitText("#${order.id.take(8)} · ${order.status.removePrefix("DEMO_").replace('_', ' ')}", RitType.title)
+                    RitText("${order.pickupReference} · ${order.status.removePrefix("DEMO_").replace('_', ' ')}", RitType.title)
                     RitText(order.lines.joinToString { "${it.quantity} × ${it.title}" }, RitType.body)
                     RitText("Demo total ${displayPaise(order.totalPaise)} · ${order.demoPaymentOutcome.lowercase()} simulation",
                         RitType.small, colors.muted)
@@ -56,8 +61,14 @@ fun SellerIndividualBackendScreen(orders: List<IndividualOrderPreview>, canRespo
                     }
                     if (canRespond && next != null) {
                         Spacer(Modifier.height(8.dp))
-                        RitPrimaryButton("Demo: ${next.removePrefix("DEMO_").lowercase().replaceFirstChar(Char::uppercase)}",
-                            { onTransition(order.id, next) }, Modifier.fillMaxWidth().testTag("seller_demo_next_${order.id}"))
+                        var code by remember(order.id) { mutableStateOf("") }
+                        if(next=="DEMO_COMPLETED") RitTextField(code,{ code=it.uppercase().take(12) },
+                            "Customer handover code","Ask the customer for their code")
+                        RitPrimaryButton(if(next=="DEMO_COMPLETED") "Confirm demo handover" else
+                            "Demo: ${next.removePrefix("DEMO_").lowercase().replaceFirstChar(Char::uppercase)}",
+                            { onTransition(order.id,next,if(next=="DEMO_COMPLETED") code else null) },
+                            Modifier.fillMaxWidth().testTag("seller_demo_next_${order.id}"),
+                            enabled=next!="DEMO_COMPLETED" || code.length==12)
                     }
                 }
             }

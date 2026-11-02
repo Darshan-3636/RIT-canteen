@@ -14,6 +14,7 @@ object DebugSellerCatalogApi {
                         published: Boolean, showUnavailable: Boolean) =
         Result(false, "Local demo unavailable in release.")
     fun saveMinimum(sellerId: String, minimum: Int) = Result(false, "Local demo unavailable in release.")
+    fun saveIndividualEnabled(sellerId: String, enabled: Boolean) = Result(false, "Local demo unavailable in release.")
     fun saveHours(sellerId: String, policy: SellerBulkPolicy) = Result(false, "Local demo unavailable in release.")
     fun setClosure(sellerId: String, date: LocalDate, reason: String?) =
         Result(false, "Local demo unavailable in release.")

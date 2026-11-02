@@ -60,7 +60,7 @@ fun DemoRoleAccountScreen(account: DemoAccount, appearance: AppearancePreference
             }
             Spacer(Modifier.height(14.dp))
             RitText(account.email, RitType.body, colors.muted)
-            account.sellerId?.let { RitText("Seller: ${if (it == "main-canteen") "Main Canteen" else "North Counter"}",
+            account.sellerId?.let { RitText("Seller: ${if (it == "main-canteen") "M.S.R.I.T Canteen" else "Ramaiah's Cafeteria"}",
                 RitType.body, colors.muted) }
             Spacer(Modifier.height(20.dp))
             RitMessageCard("Demo account", "This is a local testing identity. Seller and platform actions are previews, not server-authorized changes.")

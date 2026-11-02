@@ -119,6 +119,7 @@ import edu.msrit.canteen.ui.screens.SellerEmployeesScreen
 import edu.msrit.canteen.ui.screens.SellerEmployeeEditorScreen
 import edu.msrit.canteen.ui.screens.SellerPromotionsScreen
 import edu.msrit.canteen.ui.screens.SellerPromotionEditorScreen
+import edu.msrit.canteen.ui.screens.SellerInventoryScreen
 import edu.msrit.canteen.ui.screens.SellerInsightPage
 import edu.msrit.canteen.ui.screens.SellerInsightScreen
 import edu.msrit.canteen.ui.screens.AdminPage
@@ -228,6 +229,7 @@ internal object Route {
     const val SellerManageEmployee = "debug/seller/management/employees/{employeeId}"
     const val SellerManagePromotions = "debug/seller/management/promotions"
     const val SellerManagePromotion = "debug/seller/management/promotions/{promotionId}"
+    const val SellerInventory = "debug/seller/management/inventory"
     const val SellerInsights = "debug/seller/insights/{page}/{id}?sample={sample}"
     fun sellerInsight(page: SellerInsightPage, id: String = "none", sample: Boolean = true) =
         "debug/seller/insights/${page.name}/$id?sample=$sample"
@@ -840,7 +842,8 @@ fun RitAppNavigation(appearance: AppearancePreference,
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     CustomerQuickReorderScreen(onBack = { navController.popBackStack() },
                         onFood = { navController.navigate(Route.foodDetails(it)) },
-                        onSeller = { navController.navigate(Route.sellerProfile(it)) })
+                        onSeller = { navController.navigate(Route.sellerProfile(it)) },
+                        liveOrders = DevelopmentIndividualOrders.records)
                 } }
             }
             composable(Route.QuickReorderSample) {
@@ -848,6 +851,7 @@ fun RitAppNavigation(appearance: AppearancePreference,
                     CustomerQuickReorderScreen(onBack = { navController.popBackStack() },
                         onFood = { navController.navigate(Route.foodDetails(it)) },
                         onSeller = { navController.navigate(Route.sellerProfile(it)) },
+                        liveOrders = DevelopmentIndividualOrders.records,
                         history = if (BuildConfig.RIT_CLOUD_DEMO)
                             edu.msrit.canteen.customer.EmptyOrderHistory else DevelopmentSampleHistory)
                 } }
@@ -878,7 +882,7 @@ fun RitAppNavigation(appearance: AppearancePreference,
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     var submitError by remember { mutableStateOf<String?>(null) }
                     var submitting by remember { mutableStateOf(false) }
-                    IndividualReviewScreen(individualCart, { navController.popBackStack() }, {
+                    IndividualReviewScreen(individualCart, { navController.popBackStack() }, { promotionId ->
                         if (submitting) return@IndividualReviewScreen
                         submitError = null
                         submitting = true
@@ -886,7 +890,8 @@ fun RitAppNavigation(appearance: AppearancePreference,
                             val cart = individualCart.serverCart
                             val result = if (cart == null) DebugCommerceApi.Result<edu.msrit.canteen.customer.IndividualOrderPreview>(
                                 error = "Refresh the cart before checkout.") else withContext(Dispatchers.IO) {
-                                DebugCommerceApi.checkoutIndividualCart(cart.version, individualCart.checkoutIdempotencyKey())
+                                val key = individualCart.checkoutIdempotencyKey() + (promotionId?.let { ":$it" } ?: "")
+                                DebugCommerceApi.checkoutIndividualCart(cart.version, key, promotionId)
                             }
                             val order = result.value
                             if (order != null) {
@@ -1229,10 +1234,10 @@ fun RitAppNavigation(appearance: AppearancePreference,
                     SellerIndividualBackendScreen(sellerIndividualOrders,
                         DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "bulk.respond")),
                         onBack = { navController.popBackStack() },
-                        onTransition = { id, next ->
+                        onTransition = { id, next, pickupCode ->
                             scope.launch {
                                 val result = withContext(Dispatchers.IO) {
-                                    DebugCommerceApi.transitionIndividual(sellerId, id, next)
+                                    DebugCommerceApi.transitionIndividual(sellerId, id, next, pickupCode)
                                 }
                                 if (result.value != null) {
                                     refreshSellerIndividual(sellerId)
@@ -1419,7 +1424,8 @@ fun RitAppNavigation(appearance: AppearancePreference,
                         { navController.navigate(Route.SellerInbox) }, { navController.navigate(Route.SellerSchedule) },
                         { navController.navigate(Route.SellerManageMenu) }, { navController.navigate(Route.SellerManageCategories) },
                         { navController.navigate(Route.SellerManagePromotions) }, { navController.navigate(Route.SellerManageEmployees) },
-                        { navController.navigate(Route.SellerManageSettings) })
+                        { navController.navigate(Route.SellerManageSettings) },
+                        { navController.navigate(Route.SellerInventory) })
                 } }
             }
             composable(Route.SellerManageMenu) {
@@ -1463,7 +1469,8 @@ fun RitAppNavigation(appearance: AppearancePreference,
                         DevelopmentSellerBusiness, { navController.popBackStack() },
                         { navController.navigate(Route.SellerManageProfile) }, { navController.navigate(Route.SellerManageHours) },
                         { navController.navigate(Route.SellerManageClosures) }, { navController.navigate(Route.SellerManageMinimum) },
-                        { navController.navigate(Route.SellerManageEmployees) }, { navController.navigate(Route.SellerManagePromotions) })
+                        { navController.navigate(Route.SellerManageEmployees) }, { navController.navigate(Route.SellerManagePromotions) },
+                        { navController.navigate(Route.sellerInsight(SellerInsightPage.NOTIFICATIONS)) })
                 } }
             }
             composable(Route.SellerManageProfile) {
@@ -1518,6 +1525,14 @@ fun RitAppNavigation(appearance: AppearancePreference,
                         { navController.navigate(Route.managePromotion(it)) })
                 } }
             }
+            composable(Route.SellerInventory) {
+                val sellerId = activeSellerId() ?: ""
+                InsetScreen { DebugSellerGate(sellerId, "inventory.view", { returnToAuthorizedHome() }) {
+                    SellerInventoryScreen(sellerId, { navController.popBackStack() },
+                        canManage = DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId,"inventory.manage")),
+                        canAdjust = DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId,"inventory.adjust")))
+                } }
+            }
             composable(Route.SellerManagePromotion, arguments = listOf(navArgument("promotionId") { type = NavType.StringType })) { entry ->
                 val sellerId = activeSellerId() ?: ""
                 InsetScreen { DebugSellerGate(sellerId, "promotions.manage", { returnToAuthorizedHome() }) {
@@ -1545,7 +1560,8 @@ fun RitAppNavigation(appearance: AppearancePreference,
                         entry.arguments?.getString("id")?.takeUnless { it == "none" },
                         onBack = { navController.popBackStack() },
                         onNavigate = { navController.navigate(Route.sellerInsight(it)) },
-                        onTicket = { navController.navigate(Route.sellerInsight(SellerInsightPage.TICKET_DETAIL, it)) })
+                        onTicket = { navController.navigate(Route.sellerInsight(SellerInsightPage.TICKET_DETAIL, it)) },
+                        canRespond = DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId,"bulk.respond")))
                     }
                 } }
             }

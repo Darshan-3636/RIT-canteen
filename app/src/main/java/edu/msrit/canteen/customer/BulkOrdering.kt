@@ -86,6 +86,7 @@ data class SellerBulkPolicy(
     val holidays: Set<LocalDate> = emptySet(),
     val temporaryClosures: Set<LocalDate> = emptySet(),
     val specialPickupEnabled: Boolean = true,
+    val individualEnabled: Boolean = false,
 ) {
     init { require(minimumOverride == null || minimumOverride > 0) }
     val minimum: Int get() = minimumOverride ?: DEFAULT_BULK_MINIMUM
@@ -142,7 +143,7 @@ fun checkBulkDraft(
     for (line in draft.lines) {
         val item = catalog.items.find { it.id == line.itemId }
         if (item == null || item.sellerId != draft.sellerId) { issues += BulkDraftIssue.CROSS_SELLER_ITEM; continue }
-        if (seller == null || itemEligibility(seller, item) == ItemEligibility.UNAVAILABLE) issues += BulkDraftIssue.ITEM_UNAVAILABLE
+        if (seller == null || itemEligibility(seller, item) !in setOf(ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK, ItemEligibility.BULK_ONLY)) issues += BulkDraftIssue.ITEM_UNAVAILABLE
         estimate += item.price.rupees.toLong() * line.quantity * 100L
     }
     val minimum = policy?.minimum ?: DEFAULT_BULK_MINIMUM

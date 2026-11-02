@@ -44,7 +44,8 @@ object DebugServerCatalog {
     }
 
     private fun fetchPublic(): Snapshot {
-        val response = DebugBackendApi.request("GET", "/api/v1/sellers")
+        val snapshot = DebugBackendApi.request("GET", "/api/v1/catalog/snapshot")
+        val response = if (snapshot.status == 404) DebugBackendApi.request("GET", "/api/v1/sellers") else snapshot
         check(response.status == 200) { response.error ?: "Could not load sellers" }
         val sellersJson = response.body!!.getJSONArray("sellers")
         val sellers = (0 until sellersJson.length()).map { index ->
@@ -61,13 +62,17 @@ object DebugServerCatalog {
                 categoryIds = (0 until categories.length()).map(categories::getString).toSet(),
                 availability = when (row.optString("openStatus")) {
                     "OPEN" -> SellerAvailability.AVAILABLE
-                    "CLOSED" -> SellerAvailability.UNAVAILABLE
+                    // Closed now still permits a future bulk pickup; the backend lists only active sellers.
+                    "CLOSED" -> SellerAvailability.UNKNOWN
                     else -> SellerAvailability.UNKNOWN
                 }, photo = CatalogArtwork.sellerPhoto(id),
                 isMainCanteen = row.optBoolean("isMainCanteen"),
                 bulkMinimumUnits = row.getInt("bulkMinimumUnits"))
         }
-        val items = sellers.flatMap { seller ->
+        val items = if (snapshot.status == 200) {
+            val rows=snapshot.body!!.getJSONArray("items")
+            (0 until rows.length()).map { index -> toMenuItem(rows.getJSONObject(index)) }
+        } else sellers.flatMap { seller ->
             val menu = DebugBackendApi.request("GET", "/api/v1/sellers/" + seller.id + "/menu")
             check(menu.status == 200) { menu.error ?: "Could not load menu" }
             val rows = menu.body!!.getJSONArray("items")
@@ -95,7 +100,8 @@ object DebugServerCatalog {
         }
         return SellerBulkPolicy(sellerId, row.getInt("minimumUnits"), weekly,
             temporaryClosures = closures.map { it.date }.toSet(),
-            specialPickupEnabled = row.getBoolean("specialPickupEnabled")) to closures
+            specialPickupEnabled = row.getBoolean("specialPickupEnabled"),
+            individualEnabled = row.optBoolean("individualEnabled")) to closures
     }
 
     fun apply(snapshot: Snapshot) {
@@ -121,6 +127,7 @@ object DebugServerCatalog {
             kind = FoodKind.valueOf(row.getString("kind")),
             dietary = Dietary.valueOf(row.getString("dietary")),
             availability = ItemAvailability.valueOf(row.getString("availability")),
-            published = row.getBoolean("published"), photo = CatalogArtwork.itemPhoto(row.getString("imageKey")))
+            published = row.getBoolean("published"), photo = CatalogArtwork.itemPhoto(row.getString("imageKey")),
+            orderEligibility = OrderEligibility.valueOf(row.optString("orderEligibility", "BULK_ONLY")))
     }
 }

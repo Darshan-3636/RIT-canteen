@@ -223,7 +223,8 @@ fun CatalogPill(label: String, modifier: Modifier = Modifier) {
 fun eligibilityLabel(seller: Seller, item: MenuItem): String = when (itemEligibility(seller, item)) {
     ItemEligibility.UNAVAILABLE -> "Unavailable"
     ItemEligibility.BULK_ONLY -> if (item.kind == FoodKind.PACKAGED) "Packaged · bulk only" else "Bulk only"
-    ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK -> "Individual planned · bulk"
+    ItemEligibility.INDIVIDUAL_ONLY -> "Individual only"
+    ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK -> "Individual or bulk"
 }
 
 fun dietaryLabel(item: MenuItem): String = when (item.dietary) {
@@ -233,7 +234,7 @@ fun dietaryLabel(item: MenuItem): String = when (item.dietary) {
 }
 
 fun sellerOrderingBadge(seller: Seller): String =
-    if (seller.isMainCanteen && seller.capabilities.futureIndividualPrepared) "Individual & Bulk" else "Bulk Only"
+    if (seller.capabilities.futureIndividualPrepared) "Individual & Bulk" else "Bulk Only"
 
 @Composable
 fun CatalogFavoriteButton(name: String, selected: Boolean, onClick: () -> Unit, tag: String) {
@@ -288,7 +289,7 @@ fun CatalogSellerCard(seller: Seller, categoryNames: String, onClick: () -> Unit
         .background(colors.card).clickable(role = Role.Button, onClick = onClick).then(modifier)) {
         Box(Modifier.fillMaxWidth().height(158.dp)) {
             SellerPhotoContent(seller.photo, Modifier.fillMaxSize(), seller.localImageUri)
-            CatalogPill(if (seller.isMainCanteen) "Main Canteen" else "Campus seller",
+            CatalogPill(if (seller.isMainCanteen) "M.S.R.I.T Canteen" else "Campus seller",
                 Modifier.align(Alignment.BottomStart).padding(10.dp))
         }
         Column(Modifier.padding(14.dp)) {

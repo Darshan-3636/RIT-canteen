@@ -22,6 +22,19 @@ class CustomerCatalogTest {
         }
     }
 
+    @Test fun sellerItemModesDetermineWhichOrderTypeCustomerCanChoose() {
+        val item = catalog.items.first { it.id == "masala-dosa" }
+        assertEquals(ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK,
+            itemEligibility(main, item.copy(orderEligibility = OrderEligibility.BOTH)))
+        assertEquals(ItemEligibility.INDIVIDUAL_ONLY,
+            itemEligibility(main, item.copy(orderEligibility = OrderEligibility.INDIVIDUAL_ONLY)))
+        assertEquals(ItemEligibility.BULK_ONLY,
+            itemEligibility(main, item.copy(orderEligibility = OrderEligibility.BULK_ONLY)))
+        val bulkOnlySeller = main.copy(capabilities = main.capabilities.copy(futureIndividualPrepared = false))
+        assertEquals(ItemEligibility.BULK_ONLY,
+            itemEligibility(bulkOnlySeller, item.copy(orderEligibility = OrderEligibility.BOTH)))
+    }
+
     @Test fun categoryFilterIsScopedToSellerAndSupportsEmptyResults() {
         assertTrue(catalog.visibleItems(PreviewCatalog.MAIN_ID, "dosa").all { it.sellerId == PreviewCatalog.MAIN_ID && it.categoryId == "dosa" })
         assertTrue(catalog.visibleItems("campus-pantry", "dosa").isEmpty())
@@ -52,7 +65,7 @@ class CustomerCatalogTest {
     }
 
     @Test fun sellerSearchAndCategorySelectionUseFixtureData() {
-        assertEquals(listOf(PreviewCatalog.MAIN_ID), catalog.visibleSellers("Main Canteen").map { it.id })
+        assertEquals(listOf(PreviewCatalog.MAIN_ID), catalog.visibleSellers("M.S.R.I.T Canteen").map { it.id })
         assertTrue(catalog.visibleSellers(categoryId = "dosa").all { "dosa" in it.categoryIds })
         assertTrue(catalog.visibleSellers("does not exist").isEmpty())
     }

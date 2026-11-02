@@ -55,7 +55,7 @@ internal fun replaceBulkDraft(context: BackendContext, principal: AuthenticatedP
         if (!active) throw CommerceFault(422, "SELLER_UNAVAILABLE", "Seller is unavailable")
     }
     request.lines.forEach { line ->
-        val belongs = db.prepareStatement("SELECT 1 FROM menu_items WHERE seller_id=? AND id=? FOR SHARE").use { query ->
+        val belongs = db.prepareStatement("SELECT 1 FROM menu_items WHERE seller_id=? AND id=? AND order_eligibility IN ('BULK_ONLY','BOTH') FOR SHARE").use { query ->
             query.setString(1, sellerId)
             query.setString(2, line.itemId)
             query.executeQuery().use { it.next() }
@@ -110,7 +110,8 @@ private fun loadBulkDraft(db: Connection, user: UUID): BulkDraftDto {
             rows.getTimestamp(3)?.toInstant()?.toString(), rows.getBoolean(4), rows.getString(5), rows.getString(6)) else null }
     } ?: return BulkDraftDto(0, null, null, false, "", "", 0, emptyList())
     val lines = db.prepareStatement("""SELECT l.item_id,i.name,l.quantity,i.price_paise,
-        (s.active AND i.published AND i.archived_at IS NULL AND $ACTIVE_CATEGORY_SQL AND i.availability='AVAILABLE') FROM bulk_customer_draft_lines l
+        (s.active AND i.published AND i.archived_at IS NULL AND $ACTIVE_CATEGORY_SQL AND i.availability='AVAILABLE'
+         AND i.order_eligibility IN ('BULK_ONLY','BOTH')) FROM bulk_customer_draft_lines l
         JOIN menu_items i ON i.seller_id=l.seller_id AND i.id=l.item_id
         JOIN sellers s ON s.id=l.seller_id WHERE l.customer_user_id=? ORDER BY l.item_id""").use {
         it.setObject(1, user)

@@ -90,20 +90,20 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                 item { RitText("Individual food", RitType.title); Spacer(Modifier.height(7.dp)) }
                 items(demoOrders.filter { it.customerId == customerUserId && it.kind == DemoOrderKind.INDIVIDUAL },
                     key = { "demo_${it.reference}" }) { order ->
-                    OrderCard("Individual · Main Canteen", order.state.name.lowercase().replace('_', ' '),
+                    OrderCard("Individual · ${PreviewCatalog.sellers.find { it.id == order.sellerId }?.name ?: "Seller"}", order.state.name.lowercase().replace('_', ' '),
                         order.lines.joinToString { "${it.quantity}× ${it.title}" },
                         "${order.reference} · ${displayPaise(order.totalPaise)} · local simulation",
                         { onDemoOrder(order.reference) }, "orders_demo_${order.reference}", order.lines.firstOrNull()?.itemId)
                 }
                 if (individual.isEmpty() && demoOrders.none {
                         it.customerId == customerUserId && it.kind == DemoOrderKind.INDIVIDUAL })
-                    item { RitEmptyState("No individual previews", "Select prepared food from Main Canteen to build a demo order.") }
+                    item { RitEmptyState("No individual orders", "Choose an item eligible for individual ordering.") }
                 items(individual, key = { it.id }) { record ->
-                    OrderCard("Individual · Main Canteen", if (record.locallySaved)
+                    OrderCard("Individual · ${PreviewCatalog.sellers.find { seller -> seller.id == PreviewCatalog.items.find { it.id == record.lines.firstOrNull()?.itemId }?.sellerId }?.name ?: "Seller"}", if (record.locallySaved)
                         record.status.removePrefix("DEMO_").lowercase().replace('_', ' ') + " · demo only"
                         else "Sample history · not a real purchase",
                         record.lines.joinToString { "${it.quantity}× ${it.title}" },
-                        "${record.placedAt.format(orderDate)} · ${displayPaise(record.totalPaise)}",
+                        "${record.pickupReference.ifBlank { record.placedAt.format(orderDate) }} · ${displayPaise(record.totalPaise)}",
                         { onIndividual(record.id) }, "orders_individual_${record.id}", record.lines.firstOrNull()?.itemId)
                 }
             }
@@ -170,7 +170,12 @@ fun IndividualOrderDetailScreen(record: IndividualOrderPreview?, onBack: () -> U
         else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
             RitText(if (record.locallySaved) "Demo order · ${record.status.removePrefix("DEMO_").replace('_', ' ')}" else "Sample history", RitType.heading,
                 modifier = Modifier.testTag("individual_order_status"))
-            RitText("Backend ID: ${record.id}", RitType.small, colors.muted)
+            if(record.pickupReference.isNotBlank()) RitText("Pickup reference: ${record.pickupReference}",
+                RitType.title, modifier=Modifier.testTag("individual_pickup_reference"))
+            if(record.pickupCode!=null && record.status in setOf("DEMO_READY","DEMO_COMPLETED"))
+                RitText("Show this handover code to the seller: ${record.pickupCode}", RitType.body,
+                    colors.accent,Modifier.testTag("individual_pickup_code"))
+            record.handedOverAt?.let { RitText("Demo handover recorded at $it",RitType.small,colors.muted) }
             RitText("Demo only · no money charged or verified payment. Seller actions are simulated.", RitType.body, colors.muted)
             record.sandboxPaymentStatus?.let { status ->
                 RitText("PhonePe UAT: $status · DEMO PAYMENT — NO REAL MONEY TRANSFERRED", RitType.body, colors.muted,

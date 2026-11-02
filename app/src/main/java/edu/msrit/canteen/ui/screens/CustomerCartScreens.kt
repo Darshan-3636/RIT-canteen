@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,8 +37,11 @@ import edu.msrit.canteen.customer.BulkDraftSession
 import edu.msrit.canteen.customer.BulkPolicySource
 import edu.msrit.canteen.customer.CartMode
 import edu.msrit.canteen.customer.CustomerCatalogSource
+import edu.msrit.canteen.customer.DebugPromotionsApi
 import edu.msrit.canteen.customer.IndividualCartSession
 import edu.msrit.canteen.customer.PreviewCatalog
+import edu.msrit.canteen.customer.Promotion
+import edu.msrit.canteen.customer.PromotionKind
 import edu.msrit.canteen.customer.RIT_TIME_ZONE
 import edu.msrit.canteen.customer.checkBulkDraft
 import edu.msrit.canteen.customer.checkIndividualCart
@@ -54,6 +58,8 @@ import edu.msrit.canteen.ui.theme.RitRadii
 import edu.msrit.canteen.ui.theme.RitThemeTokens
 import edu.msrit.canteen.ui.theme.RitType
 import java.time.LocalDateTime
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun RitConfirmDialog(title: String, body: String, onDismiss: () -> Unit, onConfirm: () -> Unit,
@@ -111,6 +117,9 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
     var mode by remember(initialMode) { mutableStateOf(initialMode) }
     var clearMode by remember { mutableStateOf<CartMode?>(null) }
     val individualCheck = checkIndividualCart(individual.draft, catalog)
+    val individualSellerId = individual.serverCart?.sellerId ?: individual.draft.lines.firstOrNull()?.let { line ->
+        catalog.items.find { it.id == line.itemId }?.sellerId }
+    val individualSellerName = catalog.sellers.find { it.id == individualSellerId }?.name ?: "Selected seller"
     val bulkCheck = checkBulkDraft(bulk.draft, catalog, policies, LocalDateTime.now(RIT_TIME_ZONE))
     val bulkSeller = catalog.sellers.find { it.id == bulk.draft.sellerId }
     Column(Modifier.fillMaxSize().background(colors.background).testTag("customer_cart")) {
@@ -124,13 +133,13 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
         LazyColumn(Modifier.weight(1f).testTag("cart_items"), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp)) {
             if (mode == CartMode.INDIVIDUAL) {
                 item {
-                    RitText("Main Canteen", RitType.title)
-                    RitText("Prepared food only · demo selection, not a placed order", RitType.small, colors.muted)
+                    RitText(individualSellerName, RitType.title)
+                    RitText("One seller per individual cart · no payment or kitchen dispatch yet", RitType.small, colors.muted)
                     Spacer(Modifier.height(12.dp))
                 }
                 if (individual.draft.lines.isEmpty()) item {
-                    RitEmptyState("Your individual cart is empty", "Add a dosa, coffee or another prepared item from Main Canteen.")
-                    RitSecondaryButton("Browse prepared food", onBrowse, Modifier.fillMaxWidth())
+                    RitEmptyState("Your individual cart is empty", "Choose an item eligible for individual ordering.")
+                    RitSecondaryButton("Browse menu", onBrowse, Modifier.fillMaxWidth())
                 }
                 if (individualError != null) item {
                     RitText(individualError, RitType.small, colors.accent, Modifier.testTag("individual_cart_error"))
@@ -237,15 +246,47 @@ private fun CartLine(name: String, price: String, photo: edu.msrit.canteen.custo
 
 @Composable
 fun IndividualReviewScreen(individual: IndividualCartSession, onBack: () -> Unit,
-                           onSaveDemo: () -> Unit, catalog: CustomerCatalogSource = PreviewCatalog,
+                           onSaveDemo: (String?) -> Unit, catalog: CustomerCatalogSource = PreviewCatalog,
                            errorMessage: String? = null, saving: Boolean = false) {
     val colors = RitThemeTokens.colors
     val check = checkIndividualCart(individual.draft, catalog)
+    val selectedSellerId = individual.serverCart?.sellerId ?: individual.draft.lines.firstOrNull()?.let { line ->
+        catalog.items.find { it.id == line.itemId }?.sellerId }
+    val selectedSellerName = catalog.sellers.find { it.id == selectedSellerId }?.name ?: "Selected seller"
+    var offers by remember(selectedSellerId) { mutableStateOf<List<Promotion>>(emptyList()) }
+    var selectedOfferId by remember(selectedSellerId) { mutableStateOf<String?>(null) }
+    var quote by remember(selectedSellerId) { mutableStateOf<DebugPromotionsApi.OfferQuote?>(null) }
+    var offerError by remember(selectedSellerId) { mutableStateOf<String?>(null) }
+    var loadingOffers by remember(selectedSellerId) { mutableStateOf(selectedSellerId != null) }
+    var quoting by remember(selectedSellerId) { mutableStateOf(false) }
+    LaunchedEffect(selectedSellerId) {
+        if (selectedSellerId != null) {
+            val result = withContext(Dispatchers.IO) { DebugPromotionsApi.customerOffers(selectedSellerId) }
+            offers = result.value.orEmpty().filter { offer ->
+                offer.kind in setOf(PromotionKind.PERCENT_DISCOUNT,PromotionKind.FIXED_DISCOUNT) &&
+                    (offer.itemIds.isEmpty() && offer.categoryIds.isEmpty() ||
+                        check.lines.any { (item,_) -> item.id in offer.itemIds || item.categoryId in offer.categoryIds })
+            }
+            offerError = result.error
+            loadingOffers = false
+        }
+    }
+    LaunchedEffect(selectedOfferId,individual.serverCart?.version) {
+        quote = null
+        val id = selectedOfferId
+        if (id != null) {
+            quoting = true
+            val result = withContext(Dispatchers.IO) { DebugPromotionsApi.quote(id) }
+            quote = result.value
+            offerError = result.error
+            quoting = false
+        }
+    }
     Column(Modifier.fillMaxSize().background(colors.background).testTag("individual_review")) {
         CatalogHeader("Review Order", onBack)
         Column(Modifier.weight(1f).padding(20.dp)) {
-            RitText("Main Canteen", RitType.heading)
-            RitText("Individual prepared-food selection", RitType.body, colors.muted)
+            RitText(selectedSellerName, RitType.heading)
+            RitText("Individual order selection", RitType.body, colors.muted)
             Spacer(Modifier.height(20.dp))
             check.lines.forEach { (item, quantity) ->
                 val unit = individual.serverCart?.lines?.find { it.itemId == item.id }?.unitPricePaise
@@ -257,6 +298,21 @@ fun IndividualReviewScreen(individual: IndividualCartSession, onBack: () -> Unit
             }
             Spacer(Modifier.height(14.dp))
             RitText("Subtotal  ${displayPaise(individual.serverCart?.subtotalPaise ?: check.subtotalPaise)}", RitType.title)
+            if (loadingOffers) RitText("Loading offers…", RitType.small, colors.muted)
+            if (offers.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                RitText("Apply an offer", RitType.label)
+                RitChip("No offer",selectedOfferId==null,{ selectedOfferId=null })
+                offers.forEach { offer ->
+                    RitChip(offer.title,selectedOfferId==offer.id,{ selectedOfferId=offer.id })
+                }
+            }
+            if (quoting) RitText("Checking offer…", RitType.small, colors.muted)
+            quote?.let {
+                RitText("Offer discount  −${displayPaise(it.discountPaise)}", RitType.body, colors.accent)
+                RitText("Total  ${displayPaise(it.totalPaise)}", RitType.title)
+            }
+            if (offerError != null) RitText(offerError!!, RitType.small, colors.accent)
             Spacer(Modifier.height(15.dp))
             BulkInfoCard("Saved demo history only", "This is stored by the backend. It is not a kitchen request, payment, reservation or pickup promise.")
             if (errorMessage != null) {
@@ -264,8 +320,9 @@ fun IndividualReviewScreen(individual: IndividualCartSession, onBack: () -> Unit
                 RitText(errorMessage, RitType.body, colors.accent)
             }
         }
-        RitPrimaryButton(if (saving) "Saving…" else "Save demo order", onSaveDemo,
+        RitPrimaryButton(if (saving) "Saving…" else "Save demo order", { onSaveDemo(selectedOfferId) },
             Modifier.fillMaxWidth().padding(20.dp).testTag("individual_save_demo"),
-            enabled = !saving && (individual.serverCart?.readyForCheckout ?: check.readyForReview))
+            enabled = !saving && !quoting && (selectedOfferId == null || quote != null) &&
+                (individual.serverCart?.readyForCheckout ?: check.readyForReview))
     }
 }

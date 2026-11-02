@@ -20,16 +20,17 @@ internal class CatalogService(private val context: BackendContext) {
     fun create(actor: AuthenticatedPrincipal, seller: String, request: ItemCreate): ManagedItem {
         if (!Regex("[a-z0-9][a-z0-9-]{0,95}").matches(request.id)) throw badRequest("INVALID_ITEM_ID", "Invalid item ID")
         val name = text(request.name, 120, "name")
-        validate(request.description, request.pricePaise, request.dietary, request.unavailableVisibility)
+        validate(request.description, request.pricePaise, request.dietary, request.unavailableVisibility, request.orderEligibility)
         if (request.kind !in setOf("PREPARED", "PACKAGED") || request.availability !in setOf("AVAILABLE", "UNAVAILABLE"))
             throw badRequest("INVALID_ITEM", "Unknown item kind or availability")
         val image = text(request.imageKey, 120, "imageKey")
         return tx.write(actor, seller, "catalog.edit") { db ->
             db.category(seller, request.categoryId)
             db.update("""INSERT INTO menu_items(id,seller_id,category_id,name,description,price_paise,kind,dietary,
-                availability,published,unavailable_visibility,image_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                availability,published,unavailable_visibility,image_key,order_eligibility) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 request.id, seller, request.categoryId, name, request.description, request.pricePaise, request.kind,
-                request.dietary, request.availability, request.published, request.unavailableVisibility, image)
+                request.dietary, request.availability, request.published, request.unavailableVisibility, image,
+                request.orderEligibility)
             audit(db, actor, false, "seller.catalog.create", "MENU_ITEM", request.id, seller)
             db.item(seller, request.id)
         }
@@ -37,11 +38,12 @@ internal class CatalogService(private val context: BackendContext) {
 
     fun update(actor: AuthenticatedPrincipal, seller: String, id: String, request: CatalogItemPatch): ManagedItem {
         if (listOf(request.name,request.description,request.pricePaise,request.published,request.dietary,
-                request.unavailableVisibility,request.categoryId,request.kind,request.imageKey).all { it == null })
+                request.unavailableVisibility,request.categoryId,request.kind,request.imageKey,
+                request.orderEligibility).all { it == null })
             throw badRequest("EMPTY_PATCH", "Provide at least one catalog field")
         val name = request.name?.let { text(it, 120, "name") }
         val image = request.imageKey?.let { text(it, 120, "imageKey") }
-        validate(request.description, request.pricePaise, request.dietary, request.unavailableVisibility)
+        validate(request.description, request.pricePaise, request.dietary, request.unavailableVisibility, request.orderEligibility)
         if (request.kind != null && request.kind !in setOf("PREPARED", "PACKAGED")) throw badRequest("INVALID_KIND", "Unknown kind")
         return tx.write(actor, seller, "catalog.edit") { db ->
             val old = db.item(seller, id, true)
@@ -55,9 +57,11 @@ internal class CatalogService(private val context: BackendContext) {
             db.update("""UPDATE menu_items SET name=COALESCE(?,name),description=COALESCE(?,description),
                 price_paise=COALESCE(?,price_paise),published=COALESCE(?,published),dietary=COALESCE(?,dietary),
                 unavailable_visibility=COALESCE(?,unavailable_visibility),category_id=COALESCE(?,category_id),
-                kind=COALESCE(?,kind),image_key=COALESCE(?,image_key),version=version+1,updated_at=now()
+                kind=COALESCE(?,kind),image_key=COALESCE(?,image_key),
+                order_eligibility=COALESCE(?,order_eligibility),version=version+1,updated_at=now()
                 WHERE seller_id=? AND id=?""", name,request.description,request.pricePaise,request.published,
-                request.dietary,request.unavailableVisibility,request.categoryId,request.kind,image,seller,id)
+                request.dietary,request.unavailableVisibility,request.categoryId,request.kind,image,
+                request.orderEligibility,seller,id)
             audit(db,actor,false,"seller.catalog.update","MENU_ITEM",id,seller)
             db.item(seller,id)
         }
@@ -128,11 +132,13 @@ internal class CatalogService(private val context: BackendContext) {
         }
     }
 
-    private fun validate(description: String?, price: Long?, dietary: String?, visibility: String?) {
+    private fun validate(description: String?, price: Long?, dietary: String?, visibility: String?, eligibility: String?) {
         if(description != null && description.length>1200) throw badRequest("INVALID_DESCRIPTION","Description is too long")
         if(price != null && price<0) throw badRequest("INVALID_PRICE","pricePaise cannot be negative")
         if(dietary != null && dietary !in setOf("VEGETARIAN","NON_VEGETARIAN","NOT_SPECIFIED")) throw badRequest("INVALID_DIETARY","Unknown dietary value")
         if(visibility != null && visibility !in setOf("SHOW","HIDE")) throw badRequest("INVALID_VISIBILITY","Unknown visibility")
+        if(eligibility != null && eligibility !in setOf("INDIVIDUAL_ONLY","BULK_ONLY","BOTH"))
+            throw badRequest("INVALID_ELIGIBILITY","Unknown order eligibility")
     }
     private fun Connection.category(seller: String,id: String) {
         queryOne("""SELECT c.id FROM seller_categories s JOIN menu_categories c ON c.id=s.category_id
@@ -144,5 +150,5 @@ internal class CatalogService(private val context: BackendContext) {
     private fun itemRow(r: ResultSet)=ManagedItem(r.getString("id"),r.getString("seller_id"),r.getString("category_id"),
         r.getString("name"),r.getString("description"),r.getLong("price_paise"),r.getString("kind"),r.getString("dietary"),
         r.getString("availability"),r.getBoolean("published"),r.getString("unavailable_visibility"),r.getString("image_key"),
-        r.instant("archived_at"),r.getLong("version"))
+        r.instant("archived_at"),r.getLong("version"),r.getString("order_eligibility"))
 }

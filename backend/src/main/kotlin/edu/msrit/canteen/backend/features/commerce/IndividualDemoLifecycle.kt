@@ -6,11 +6,13 @@ import edu.msrit.canteen.backend.core.RuntimeEnvironment
 import edu.msrit.canteen.backend.core.transaction
 import java.sql.Connection
 import java.sql.Timestamp
+import java.security.MessageDigest
 import java.util.UUID
 import edu.msrit.canteen.backend.features.engagement.recordAudit
 
-internal fun loadDemoIndividual(db: Connection, id: UUID): IndividualDemoOrderDto? =
-    db.prepareStatement("""SELECT seller_id,status,demo_only,payment_verified,subtotal_paise,created_at,demo_payment_outcome
+internal fun loadDemoIndividual(db: Connection, id: UUID, includePickupCode: Boolean = false): IndividualDemoOrderDto? =
+    db.prepareStatement("""SELECT seller_id,status,demo_only,payment_verified,subtotal_paise,created_at,demo_payment_outcome,
+        discount_paise,promotion_id,pickup_reference,pickup_code,handed_over_at
         FROM individual_demo_orders WHERE id=?""").use { query ->
         query.setObject(1, id)
         query.executeQuery().use { row ->
@@ -30,7 +32,10 @@ internal fun loadDemoIndividual(db: Connection, id: UUID): IndividualDemoOrderDt
             }
             IndividualDemoOrderDto(id.toString(), row.getString(1), row.getString(2), row.getBoolean(3),
                 row.getBoolean(4), row.getLong(5), row.getTimestamp(6).toInstant().toString(), lines,
-                row.getString(7), sandboxStatus)
+                row.getString(7), sandboxStatus, row.getLong(8), row.getLong(5)-row.getLong(8),
+                row.getObject(9,UUID::class.java)?.toString(),row.getString(10),
+                if(includePickupCode) row.getString(11) else null,
+                row.getTimestamp(12)?.toInstant()?.toString())
         }
     }
 
@@ -72,10 +77,10 @@ internal fun simulateIndividualPayment(context: BackendContext, principal: Authe
             "SUCCESS" -> "DEMO_PAYMENT_SIMULATED"
             "FAILURE" -> "DEMO_PAYMENT_FAILED"
             else -> "DEMO_PAYMENT_PENDING"
-        }) return@transaction loadDemoIndividual(db, id)!!
+        }) return@transaction loadDemoIndividual(db, id, true)!!
     if (outcome == "SUCCESS" && recordedOutcome == "SUCCESS" &&
         status in setOf("DEMO_ACCEPTED", "DEMO_REJECTED", "DEMO_READY", "DEMO_COMPLETED"))
-        return@transaction loadDemoIndividual(db, id)!!
+        return@transaction loadDemoIndividual(db, id, true)!!
     if (status !in setOf("DEMO_SAVED", "DEMO_PAYMENT_PENDING", "DEMO_PAYMENT_FAILED"))
         throw CommerceFault(409, "INVALID_DEMO_TRANSITION", "Demo payment cannot be changed in this state")
     val next = when (outcome) {
@@ -89,22 +94,25 @@ internal fun simulateIndividualPayment(context: BackendContext, principal: Authe
         query.setTimestamp(3, Timestamp.from(context.clock.instant())); query.setObject(4, id)
         query.executeUpdate()
     }
-    loadDemoIndividual(db, id)!!
+    notifyIndividualEvent(db, id, next)
+    loadDemoIndividual(db, id, true)!!
 }
 
 /** Demo seller processing has no real fulfillment or financial consequence. */
 internal fun transitionIndividualDemo(context: BackendContext, principal: AuthenticatedPrincipal,
-                                      sellerId: String, id: UUID, next: String): IndividualDemoOrderDto =
+                                      sellerId: String, id: UUID, next: String,
+                                      pickupCode: String?): IndividualDemoOrderDto =
     context.transaction { db ->
         if (context.config.environment !in setOf(RuntimeEnvironment.LOCAL, RuntimeEnvironment.CLOUD_DEMO))
             throw CommerceFault(404, "DEMO_ONLY", "Demo fulfillment simulation is unavailable")
         if (!context.authorization.hasSellerCapability(db, principal, sellerId, "bulk.respond"))
             throw CommerceFault(403, "SELLER_CAPABILITY_REQUIRED", "This seller action is not permitted")
-        val current = db.prepareStatement("""SELECT status FROM individual_demo_orders
+        val state = db.prepareStatement("""SELECT status,pickup_code FROM individual_demo_orders
             WHERE id=? AND seller_id=? FOR UPDATE""").use { query ->
             query.setObject(1, id); query.setString(2, sellerId)
-            query.executeQuery().use { rows -> if (rows.next()) rows.getString(1) else null }
+            query.executeQuery().use { rows -> if (rows.next()) rows.getString(1) to rows.getString(2) else null }
         } ?: throw CommerceFault(404, "ORDER_NOT_FOUND", "Demo order not found")
+        val current=state.first
         if(next !in setOf("DEMO_ACCEPTED","DEMO_REJECTED","DEMO_READY","DEMO_COMPLETED"))
             throw CommerceFault(409,"INVALID_DEMO_TRANSITION","Unknown seller transition")
         if(current==next) return@transaction loadDemoIndividual(db,id)!!
@@ -115,10 +123,20 @@ internal fun transitionIndividualDemo(context: BackendContext, principal: Authen
             else -> false
         }
         if (!allowed) throw CommerceFault(409, "INVALID_DEMO_TRANSITION", "Demo order cannot move to $next")
-        db.prepareStatement("UPDATE individual_demo_orders SET status=?,updated_at=? WHERE id=?").use { query ->
+        if(next=="DEMO_COMPLETED" && !MessageDigest.isEqual(
+                state.second.toByteArray(Charsets.US_ASCII),
+                pickupCode?.trim()?.uppercase()?.toByteArray(Charsets.US_ASCII) ?: byteArrayOf()))
+            throw CommerceFault(422,"INVALID_PICKUP_CODE","Ask the customer for their pickup code before confirming handover")
+        if(next=="DEMO_COMPLETED") db.prepareStatement("""UPDATE individual_demo_orders SET
+            status=?,updated_at=?,handed_over_at=?,handed_over_by=? WHERE id=?""").use { query ->
+            val now=Timestamp.from(context.clock.instant())
+            query.setString(1,next);query.setTimestamp(2,now);query.setTimestamp(3,now)
+            query.setObject(4,principal.userId);query.setObject(5,id);query.executeUpdate()
+        } else db.prepareStatement("UPDATE individual_demo_orders SET status=?,updated_at=? WHERE id=?").use { query ->
             query.setString(1, next); query.setTimestamp(2, Timestamp.from(context.clock.instant()))
             query.setObject(3, id); query.executeUpdate()
         }
+        notifyIndividualEvent(db, id, next)
         recordAudit(db,principal.userId,"SELLER","seller.individual.status","INDIVIDUAL_DEMO_ORDER",id.toString(),sellerId,mapOf("status" to next))
         loadDemoIndividual(db, id)!!
     }

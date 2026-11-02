@@ -51,6 +51,7 @@ object DebugSellerCatalogApi {
                 .put("unavailableVisibility", item.unavailableVisibility.name)
                 .put("categoryId", item.categoryId).put("kind", item.kind.name)
                 .put("imageKey", item.id)
+                .put("orderEligibility", item.orderEligibility?.name ?: "BULK_ONLY")
             val response = if (original == null) DebugBackendApi.request("POST", path,
                 body.put("id", item.id).put("availability", item.availability.name), token)
             else DebugBackendApi.request("PATCH", "/api/v1/sellers/${item.sellerId}/menu/items/${item.id}",
@@ -107,6 +108,16 @@ object DebugSellerCatalogApi {
                 JSONObject().put("minimumUnits", minimum), token)
             if (response.status == 200) Result(true, "Minimum saved on server.")
             else Result(false, response.error ?: "Minimum update failed.")
+        } catch (_: Exception) { Result(false, "Server unavailable.") }
+    }
+
+    fun saveIndividualEnabled(sellerId: String, enabled: Boolean): Result {
+        val token = DevelopmentDemoAccounts.token() ?: return Result(false, "Sign in again.")
+        return try {
+            val response = DebugBackendApi.request("PATCH", "/api/v1/sellers/$sellerId/bulk-policy",
+                JSONObject().put("individualEnabled", enabled), token)
+            if (response.status == 200) Result(true, "Individual ordering policy saved on server.")
+            else Result(false, response.error ?: "Ordering policy update failed.")
         } catch (_: Exception) { Result(false, "Server unavailable.") }
     }
 

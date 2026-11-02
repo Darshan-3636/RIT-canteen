@@ -89,18 +89,17 @@ fun DemoLoginScreen(onBack: () -> Unit, onCreateAccount: () -> Unit,
             error?.let { RitText(it, RitType.body, colors.accent,
                 Modifier.padding(vertical = 10.dp).testTag("demo_login_error")) }
             Spacer(Modifier.height(16.dp))
-            RitPrimaryButton(if (busy) "Connecting…" else "Sign In", {
+            RitPrimaryButton(if (busy) "Signing you in…" else "Sign In", {
                 if (!busy) {
                     val submittedEmail = email
                     val submittedPassword = password
-                    password = ""
                     busy = true
                     scope.launch {
                         val result = withContext(Dispatchers.IO) {
                             DevelopmentDemoAccounts.signIn(submittedEmail, submittedPassword)
                         }
                         busy = false
-                        if (result.account != null) onAuthenticated(result.account)
+                        if (result.account != null) { password = ""; onAuthenticated(result.account) }
                         else error = result.error ?: "Could not sign in."
                     }
                 }

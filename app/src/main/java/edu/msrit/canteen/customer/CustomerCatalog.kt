@@ -146,9 +146,11 @@ data class MenuItem(
     /** Transient content URI selected in the debug photo picker; never an uploaded asset. */
     val localImageUri: String? = null,
     val tags: Set<String> = emptySet(),
+    val orderEligibility: OrderEligibility? = null,
 )
 
-enum class ItemEligibility { FUTURE_INDIVIDUAL_AND_BULK, BULK_ONLY, UNAVAILABLE }
+enum class OrderEligibility { INDIVIDUAL_ONLY, BULK_ONLY, BOTH }
+enum class ItemEligibility { FUTURE_INDIVIDUAL_AND_BULK, INDIVIDUAL_ONLY, BULK_ONLY, UNAVAILABLE }
 
 data class OrderingAction(val label: String, val enabled: Boolean)
 
@@ -162,9 +164,16 @@ fun itemEligibility(seller: Seller, item: MenuItem): ItemEligibility {
     if (seller.id != item.sellerId || seller.availability == SellerAvailability.UNAVAILABLE ||
         item.availability == ItemAvailability.UNAVAILABLE || !item.published || item.categoryId !in seller.categoryIds
     ) return ItemEligibility.UNAVAILABLE
-    return if (seller.isMainCanteen && seller.capabilities.futureIndividualPrepared && item.kind == FoodKind.PREPARED) {
-        ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK
-    } else ItemEligibility.BULK_ONLY
+    val configured = item.orderEligibility ?: if (seller.isMainCanteen && item.kind == FoodKind.PREPARED)
+        OrderEligibility.BOTH else OrderEligibility.BULK_ONLY
+    val individual = seller.capabilities.futureIndividualPrepared && configured != OrderEligibility.BULK_ONLY
+    val bulk = seller.capabilities.bulk && configured != OrderEligibility.INDIVIDUAL_ONLY
+    return when {
+        individual && bulk -> ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK
+        individual -> ItemEligibility.INDIVIDUAL_ONLY
+        bulk -> ItemEligibility.BULK_ONLY
+        else -> ItemEligibility.UNAVAILABLE
+    }
 }
 
 fun CustomerCatalogSource.visibleItems(sellerId: String? = null, categoryId: String? = null, query: String = ""): List<MenuItem> =
@@ -209,10 +218,10 @@ object PreviewCatalog : CustomerCatalogSource {
         MenuCategory("packs", "Packaged Snacks"),
     )
     private val initialSellers = listOf(
-        Seller(MAIN_ID, "Main Canteen", "Campus South Indian breakfasts, rice and cooked meals · demo menu.", "RIT campus · exact location to be confirmed", OrderingCapabilities(true, true), linkedSetOf("dosa", "breakfast", "rice", "meals", "drinks"), isMainCanteen = true),
-        Seller("north-counter", "North Counter · demo", "Savoury snacks, chaat and quick bites for group requests.", null, OrderingCapabilities(false, true), linkedSetOf("snacks", "chaat", "rolls", "sandwiches", "combos")),
-        Seller("coffee-corner", "Coffee Corner · Bakery · demo", "Bakery puffs, buns, pastries and coffee for group requests.", null, OrderingCapabilities(false, true), linkedSetOf("puffs", "breads", "cakes", "cookies", "drinks")),
-        Seller("campus-pantry", "Campus Pantry · demo", "Sealed drinks and grab-and-go packaged snacks.", null, OrderingCapabilities(false, true), linkedSetOf("drinks", "packs")),
+        Seller(MAIN_ID, "M.S.R.I.T Canteen", "Campus South Indian breakfasts, rice and cooked meals · demo menu.", "RIT campus · exact location to be confirmed", OrderingCapabilities(true, true), linkedSetOf("dosa", "breakfast", "rice", "meals", "drinks"), isMainCanteen = true),
+        Seller("north-counter", "Ramaiah's Cafeteria · demo", "Savoury snacks, chaat and quick bites for group requests.", null, OrderingCapabilities(false, true), linkedSetOf("snacks", "chaat", "rolls", "sandwiches", "combos")),
+        Seller("coffee-corner", "Cafe Da Costa · Bakery · demo", "Bakery puffs, buns, pastries and coffee for group requests.", null, OrderingCapabilities(false, true), linkedSetOf("puffs", "breads", "cakes", "cookies", "drinks")),
+        Seller("campus-pantry", "M.S.R.I.T Condiments · demo", "Sealed drinks and grab-and-go packaged snacks.", null, OrderingCapabilities(false, true), linkedSetOf("drinks", "packs")),
     ).map { it.copy(photo = CatalogArtwork.sellerPhoto(it.id)) }
     private val initialItems = listOf(
         MenuItem("masala-dosa", MAIN_ID, "dosa", "Masala Dosa", "Crisp dosa with spiced potato filling, sambar and chutney.", Price(50), FoodKind.PREPARED, Dietary.VEGETARIAN, featured = true),
@@ -233,7 +242,7 @@ object PreviewCatalog : CustomerCatalogSource {
         MenuItem("chapati-meal", MAIN_ID, "meals", "Chapati Meal", "Chapatis with a vegetable curry, dal and simple sides.", Price(80), FoodKind.PREPARED, Dietary.VEGETARIAN),
         MenuItem("veg-thali", MAIN_ID, "meals", "Veg Thali", "Rice, chapati and a selection of small vegetarian curries and sides.", Price(110), FoodKind.PREPARED, Dietary.VEGETARIAN),
         MenuItem("tomato-rice", MAIN_ID, "rice", "Tomato Rice", "Tangy tomato rice tempered with curry leaves and mustard.", Price(50), FoodKind.PREPARED, Dietary.VEGETARIAN),
-        MenuItem("north-lunch", "north-counter", "combos", "North Counter Lunch Combo", "A sample quick lunch combo with savoury North Counter bites.", Price(90), FoodKind.PREPARED, Dietary.NOT_SPECIFIED),
+        MenuItem("north-lunch", "north-counter", "combos", "Ramaiah's Cafeteria Lunch Combo", "A sample quick lunch combo with savoury Ramaiah's Cafeteria bites.", Price(90), FoodKind.PREPARED, Dietary.NOT_SPECIFIED),
         MenuItem("north-snack", "north-counter", "snacks", "Assorted Savoury Snack Box", "Assorted prepared savoury snacks for sharing.", Price(65), FoodKind.PREPARED, Dietary.NOT_SPECIFIED),
         MenuItem("veg-samosa", "north-counter", "snacks", "Veg Samosa", "Crisp pastry filled with spiced potato and peas.", Price(25), FoodKind.PREPARED, Dietary.VEGETARIAN),
         MenuItem("khasta-kachori", "north-counter", "snacks", "Khasta Kachori", "Flaky kachori with a spiced savoury filling.", Price(30), FoodKind.PREPARED, Dietary.NOT_SPECIFIED),

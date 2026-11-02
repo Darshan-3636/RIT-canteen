@@ -34,7 +34,7 @@ class ManagementIntegrationTest {
         val staffId=UUID.randomUUID()
         init {
             sql("INSERT INTO sellers(id,name,description,is_main_canteen) VALUES ('main-canteen','Main','test',true),('other-counter','Other','test',false)")
-            sql("INSERT INTO seller_ordering_policies(seller_id) VALUES ('main-canteen'),('other-counter')")
+            sql("INSERT INTO seller_ordering_policies(seller_id,individual_enabled) VALUES ('main-canteen',true),('other-counter',false)")
             sql("INSERT INTO menu_categories(id,name) VALUES ('meals','Meals')")
             sql("INSERT INTO seller_categories(seller_id,category_id) VALUES ('main-canteen','meals'),('other-counter','meals')")
             sql("INSERT INTO seller_memberships(id,user_id,seller_id,role) VALUES (?,?,'main-canteen','OWNER')",ownerId,owner.id)
@@ -99,7 +99,7 @@ class ManagementIntegrationTest {
     private fun JsonObject.str(key: String)=getValue(key).jsonPrimitive.content
     private suspend fun ApplicationTestBuilder.createItem(f: Fixture,id: String="managed-meal"): HttpResponse =
         api(HttpMethod.Post,"/sellers/main-canteen/catalog/items",f.owner,
-            """{"id":"$id","categoryId":"meals","name":"Meal","pricePaise":100,"kind":"PREPARED","imageKey":"meal","published":true}""")
+            """{"id":"$id","categoryId":"meals","name":"Meal","pricePaise":100,"kind":"PREPARED","imageKey":"meal","published":true,"orderEligibility":"BOTH"}""")
 
     @Test fun sellerProfileReadProvidesVersionForAndroidEdits()=scenario { f ->
         val path="/sellers/main-canteen/profile"
@@ -133,6 +133,30 @@ class ManagementIntegrationTest {
         assertEquals(HttpStatusCode.NotFound,api(HttpMethod.Get,"/sellers/main-canteen/menu/managed-meal",null).status)
         assertFalse(api(HttpMethod.Get,"/me/cart/individual",f.customer).obj().getValue("readyForCheckout").jsonPrimitive.boolean)
         assertEquals(1L,f.count("SELECT count(*) FROM menu_items WHERE id='managed-meal'"))
+    }
+
+    @Test fun itemAndSellerEligibilityAreEnforcedInBothCarts()=scenario { f ->
+        assertEquals(HttpStatusCode.Created,createItem(f).status)
+        val individual = """{"expectedVersion":0,"lines":[{"itemId":"managed-meal","quantity":1}]}"""
+        assertEquals(HttpStatusCode.OK,api(HttpMethod.Put,"/me/cart/individual",f.customer,individual).status)
+        assertEquals(HttpStatusCode.OK,api(HttpMethod.Patch,"/sellers/main-canteen/menu/items/managed-meal",f.owner,
+            """{"orderEligibility":"BULK_ONLY","expectedVersion":0}""").status)
+        assertFalse(api(HttpMethod.Get,"/me/cart/individual",f.customer).obj().getValue("readyForCheckout").jsonPrimitive.boolean)
+        assertEquals(HttpStatusCode.UnprocessableEntity,api(HttpMethod.Put,"/me/cart/individual",f.customer,
+            """{"expectedVersion":1,"lines":[{"itemId":"managed-meal","quantity":1}]}""").status)
+        assertEquals(HttpStatusCode.OK,api(HttpMethod.Put,"/me/draft/bulk",f.customer,
+            """{"expectedVersion":0,"sellerId":"main-canteen","lines":[{"itemId":"managed-meal","quantity":1}]}""").status)
+        assertEquals(HttpStatusCode.OK,api(HttpMethod.Patch,"/sellers/main-canteen/menu/items/managed-meal",f.owner,
+            """{"orderEligibility":"INDIVIDUAL_ONLY","expectedVersion":1}""").status)
+        assertFalse(api(HttpMethod.Get,"/me/draft/bulk",f.customer).obj().getValue("lines").jsonArray[0]
+            .jsonObject.getValue("available").jsonPrimitive.boolean)
+        assertEquals(HttpStatusCode.UnprocessableEntity,api(HttpMethod.Put,"/me/draft/bulk",f.customer,
+            """{"expectedVersion":1,"sellerId":"main-canteen","lines":[{"itemId":"managed-meal","quantity":1}]}""").status)
+        assertEquals(HttpStatusCode.OK,api(HttpMethod.Put,"/me/cart/individual",f.customer,
+            """{"expectedVersion":1,"lines":[{"itemId":"managed-meal","quantity":1}]}""").status)
+        assertEquals(HttpStatusCode.OK,api(HttpMethod.Patch,"/sellers/main-canteen/bulk-policy",f.owner,
+            """{"individualEnabled":false}""").status)
+        assertFalse(api(HttpMethod.Get,"/me/cart/individual",f.customer).obj().getValue("readyForCheckout").jsonPrimitive.boolean)
     }
 
     @Test fun membershipDelegationCannotEscalateOrCrossSellerAndRevocationIsLive()=scenario { f ->
@@ -218,8 +242,20 @@ class ManagementIntegrationTest {
         f.sql("INSERT INTO individual_demo_orders(id,customer_user_id,seller_id,subtotal_paise,status,demo_payment_outcome) VALUES (?,?,'main-canteen',100,'DEMO_PAYMENT_SIMULATED','SUCCESS')",order,f.customer.id)
         val path="/sellers/main-canteen/individual-demo-orders/$order/demo-status"
         assertEquals(HttpStatusCode.Conflict,api(HttpMethod.Post,path,f.owner,"""{"status":"DEMO_COMPLETED"}""").status)
-        for(state in listOf("DEMO_ACCEPTED","DEMO_ACCEPTED","DEMO_READY","DEMO_COMPLETED"))
+        for(state in listOf("DEMO_ACCEPTED","DEMO_ACCEPTED","DEMO_READY"))
             assertEquals(HttpStatusCode.OK,api(HttpMethod.Post,path,f.owner,"""{"status":"$state"}""").status)
+        val customerOrder=api(HttpMethod.Get,"/me/individual-demo-orders",f.customer).obj()
+            .getValue("orders").jsonArray.first().jsonObject
+        val code=customerOrder.str("pickupCode")
+        assertTrue(customerOrder.str("pickupReference").startsWith("RIT-"))
+        assertFalse(api(HttpMethod.Get,"/sellers/main-canteen/individual-demo-orders",f.owner)
+            .bodyAsText().contains(code))
+        assertEquals(HttpStatusCode.UnprocessableEntity,api(HttpMethod.Post,path,f.owner,
+            """{"status":"DEMO_COMPLETED","pickupCode":"WRONG-CODE12"}""").status)
+        assertEquals(HttpStatusCode.OK,api(HttpMethod.Post,path,f.owner,
+            """{"status":"DEMO_COMPLETED","pickupCode":"$code"}""").status)
+        assertEquals(HttpStatusCode.OK,api(HttpMethod.Post,path,f.owner,
+            """{"status":"DEMO_COMPLETED","pickupCode":"$code"}""").status)
         assertEquals(1L,f.count("SELECT count(*) FROM individual_demo_orders WHERE id=? AND NOT payment_verified AND demo_only",order))
         assertEquals(3L,f.count("SELECT count(*) FROM admin_audit_events WHERE action='seller.individual.status' AND target_id=?",order.toString()))
     }
@@ -234,6 +270,12 @@ class ManagementIntegrationTest {
         val selection=api(HttpMethod.Post,"/sellers/other-counter/reports/selections",f.other,"""{"name":"Other","metrics":["SUPPORT_TICKETS"]}""").obj().str("id")
         assertEquals(HttpStatusCode.NotFound,api(HttpMethod.Get,"/sellers/main-canteen/reports/export?selectionId=$selection",f.owner).status)
         assertEquals(HttpStatusCode.Forbidden,api(HttpMethod.Get,"/sellers/main-canteen/reports/export",f.manager).status)
+        assertEquals(HttpStatusCode.Forbidden,api(HttpMethod.Get,"/admin/reports/export",f.owner).status)
+        val platform=api(HttpMethod.Get,"/admin/reports/export",f.admin)
+        assertEquals(HttpStatusCode.OK,platform.status)
+        assertTrue(platform.headers[HttpHeaders.ContentType]!!.contains("text/csv"))
+        assertTrue(platform.bodyAsText().contains("STORED_OPERATIONS_DEMO_ORDERS_UNVERIFIED"))
+        assertEquals(1L,f.count("SELECT count(*) FROM admin_audit_events WHERE action='admin.report.export'"))
     }
 
     @Test fun concurrentCatalogVersionsAndLastOwnerRemovalAllowOnlyOneWinner()=scenario { f ->
@@ -320,6 +362,128 @@ class ManagementIntegrationTest {
         } finally { restarted.close() }
     }
 
+    @Test fun individualNoticesStayScopedAndDoNotDuplicateOnStatusRetry()=scenario { f ->
+        createItem(f)
+        val created=api(HttpMethod.Post,"/me/individual-demo-orders",f.customer,
+            """{"lines":[{"itemId":"managed-meal","quantity":1}]}""")
+        assertEquals(HttpStatusCode.Created,created.status)
+        val orderId=created.obj().str("id")
+        assertEquals(1L,f.count("SELECT count(*) FROM notification_inbox WHERE user_id=? AND event_type='INDIVIDUAL_ORDER_UPDATE'",f.owner.id))
+        assertEquals(0L,f.count("SELECT count(*) FROM notification_inbox WHERE user_id=?",f.other.id))
+        f.sql("UPDATE individual_demo_orders SET status='DEMO_PAYMENT_SIMULATED',demo_payment_outcome='SUCCESS' WHERE id=?",UUID.fromString(orderId))
+        val path="/sellers/main-canteen/individual-demo-orders/$orderId/demo-status"
+        assertEquals(HttpStatusCode.OK,api(HttpMethod.Post,path,f.owner,"""{"status":"DEMO_ACCEPTED"}""").status)
+        assertEquals(HttpStatusCode.OK,api(HttpMethod.Post,path,f.owner,"""{"status":"DEMO_ACCEPTED"}""").status)
+        assertEquals(1L,f.count("SELECT count(*) FROM notification_inbox WHERE user_id=? AND event_key=?",
+            f.customer.id,"individual:$orderId:DEMO_ACCEPTED"))
+        assertEquals(0L,f.count("SELECT count(*) FROM notification_inbox WHERE user_id=?",f.other.id))
+    }
+
+    @Test fun promotionDiscountIsScopedQuotedAndSnapshottedInPaise()=scenario { f ->
+        createItem(f)
+        val start=Instant.now().minusSeconds(60).toString()
+        val end=Instant.now().plusSeconds(3600).toString()
+        val body="""{"title":"Lunch offer","kind":"PERCENT_DISCOUNT","discountPercent":25,
+            "startsAt":"$start","endsAt":"$end","published":true,"itemIds":["managed-meal"]}"""
+        val path="/sellers/main-canteen/promotions"
+        assertEquals(HttpStatusCode.Forbidden,api(HttpMethod.Post,path,f.customer,body).status)
+        assertEquals(HttpStatusCode.BadRequest,api(HttpMethod.Post,"/sellers/other-counter/promotions",f.other,body).status)
+        val created=api(HttpMethod.Post,path,f.owner,body)
+        assertEquals(HttpStatusCode.Created,created.status)
+        val id=created.obj().str("id")
+        assertEquals(1,f.count("SELECT count(*) FROM promotions WHERE id=? AND seller_id='main-canteen'",UUID.fromString(id)).toInt())
+        assertEquals(1,api(HttpMethod.Get,"/me/offers?sellerId=main-canteen",f.customer).obj()
+            .getValue("items").jsonArray.size)
+        val cart=api(HttpMethod.Put,"/me/cart/individual",f.customer,
+            """{"expectedVersion":0,"lines":[{"itemId":"managed-meal","quantity":2}]}""")
+        assertEquals(HttpStatusCode.OK,cart.status)
+        val quote=api(HttpMethod.Post,"/me/cart/individual/offer-quote",f.customer,"""{"promotionId":"$id"}""")
+        assertEquals(HttpStatusCode.OK,quote.status)
+        assertEquals("50",quote.obj().str("discountPaise"))
+        val checkoutBody="""{"expectedVersion":1,"promotionId":"$id"}"""
+        val order=api(HttpMethod.Post,"/me/cart/individual/checkout",f.customer,checkoutBody,match=null)
+        // This helper does not send Idempotency-Key; use the client request below.
+        assertEquals(HttpStatusCode.BadRequest,order.status)
+        val saved=client.post("/api/v1/me/cart/individual/checkout") {
+            bearerAuth(f.customer.token);contentType(ContentType.Application.Json)
+            header("Idempotency-Key","promotion-${UUID.randomUUID()}")
+            setBody(checkoutBody)
+        }
+        assertEquals(HttpStatusCode.Created,saved.status)
+        val savedId=saved.obj().str("id")
+        assertEquals("200",saved.obj().str("subtotalPaise"))
+        assertEquals("50",saved.obj().str("discountPaise"))
+        assertEquals("150",saved.obj().str("totalPaise"))
+        assertEquals(150L,f.context.read { db -> db.queryOne(
+            "SELECT subtotal_paise-discount_paise FROM individual_demo_orders WHERE id=?",UUID.fromString(savedId)) { it.getLong(1) }!! })
+        val crossSellerUpdate="""{"title":"Lunch offer","kind":"PERCENT_DISCOUNT","discountPercent":25,
+            "startsAt":"$start","endsAt":"$end","published":true,"itemIds":["managed-meal"],"expectedVersion":0}"""
+        assertEquals(HttpStatusCode.NotFound,api(HttpMethod.Put,"/sellers/other-counter/promotions/$id",f.other,
+            crossSellerUpdate).status)
+    }
+
+    @Test fun inventoryLedgerIsSellerScopedIdempotentAndNeverNegative()=scenario { f ->
+        assertEquals(HttpStatusCode.Forbidden,api(HttpMethod.Get,"/sellers/main-canteen/inventory/overview",f.other).status)
+        assertEquals(HttpStatusCode.Forbidden,api(HttpMethod.Get,"/sellers/main-canteen/inventory/overview",f.staff).status)
+        val base="/sellers/main-canteen/inventory"
+        val category=api(HttpMethod.Post,"$base/categories",f.owner,"""{"name":"Kitchen"}""")
+        assertEquals(HttpStatusCode.Created,category.status)
+        val categoryId=category.obj().str("id")
+        val material=api(HttpMethod.Post,"$base/materials",f.owner,
+            """{"categoryId":"$categoryId","name":"Rice","baseUnitCode":"g"}""")
+        assertEquals(HttpStatusCode.Created,material.status)
+        val materialId=material.obj().str("id")
+        val supplier=api(HttpMethod.Post,"$base/suppliers",f.owner,"""{"name":"Local supplier"}""")
+        assertEquals(HttpStatusCode.Created,supplier.status)
+        val supplierId=supplier.obj().str("id")
+        val po=api(HttpMethod.Post,"$base/purchase-orders",f.owner,
+            """{"supplierId":"$supplierId","lines":[{"materialId":"$materialId","unitCode":"kg","quantity":"2","unitPricePaise":10000}]}""")
+        assertEquals(HttpStatusCode.Created,po.status)
+        val poId=po.obj().str("id")
+        assertEquals(HttpStatusCode.OK,api(HttpMethod.Post,"$base/purchase-orders/$poId/placed",f.owner,
+            """{"expectedVersion":0}""").status)
+        val receiptId=UUID.randomUUID()
+        val receiptBody="""{"requestId":"$receiptId","purchaseOrderId":"$poId","lines":[{"materialId":"$materialId",
+            "unitCode":"kg","quantity":"1","batchCode":"RICE-1","purchaseOrderLineNo":1}]}"""
+        val concurrentReceipts=coroutineScope { List(2) { async {
+            api(HttpMethod.Post,"$base/receipts",f.owner,receiptBody)
+        } }.map { it.await() } }
+        assertTrue(concurrentReceipts.all { it.status==HttpStatusCode.Created })
+        val first=concurrentReceipts.first()
+        val batchId=first.obj().getValue("lines").jsonArray.first().jsonObject.str("batchId")
+        assertEquals(HttpStatusCode.Created,api(HttpMethod.Post,"$base/receipts",f.owner,receiptBody).status)
+        assertEquals(1L,f.count("SELECT count(*) FROM inventory_stock_transactions WHERE seller_id='main-canteen' AND source_kind='RECEIPT'"))
+        assertEquals(0L,f.count("SELECT count(*) FROM inventory_stock_transactions WHERE seller_id='other-counter'"))
+        val wasteId=UUID.randomUUID()
+        val waste="""{"requestId":"$wasteId","materialId":"$materialId","batchId":"$batchId","quantityBase":"100","reason":"Spoiled"}"""
+        assertEquals(HttpStatusCode.Created,api(HttpMethod.Post,"$base/wastage",f.owner,waste).status)
+        assertEquals(HttpStatusCode.Created,api(HttpMethod.Post,"$base/wastage",f.owner,waste).status)
+        assertEquals(1L,f.count("SELECT count(*) FROM inventory_stock_transactions WHERE seller_id='main-canteen' AND source_kind='WASTAGE'"))
+        assertEquals(HttpStatusCode.Conflict,api(HttpMethod.Post,"$base/adjustments",f.owner,
+            """{"requestId":"${UUID.randomUUID()}","materialId":"$materialId","batchId":"$batchId","deltaBase":"-1000","reason":"Count"}""").status)
+        assertEquals("900.000000",f.context.read { db -> db.queryOne("SELECT on_hand_base FROM inventory_materials WHERE id=?",
+            UUID.fromString(materialId)) { it.getBigDecimal(1).toPlainString() }!! })
+        assertEquals(HttpStatusCode.OK,api(HttpMethod.Put,"$base/reorder-rules/$materialId",f.owner,
+            """{"thresholdBase":"1000","targetBase":"2000"}""").status)
+        val overview=api(HttpMethod.Get,"$base/overview",f.owner)
+        assertEquals(HttpStatusCode.OK,overview.status)
+        assertEquals("LOW_STOCK",overview.obj().getValue("alerts").jsonArray.first().jsonObject.str("kind"))
+        f.context.transaction { db -> db.update("UPDATE inventory_stock_batches SET expires_on=CURRENT_DATE+3 WHERE id=?",
+            UUID.fromString(batchId)) }
+        val expiring=api(HttpMethod.Get,"$base/alerts",f.owner)
+        assertEquals(HttpStatusCode.OK,expiring.status)
+        assertTrue(Json.parseToJsonElement(expiring.bodyAsText()).jsonArray.any {
+            it.jsonObject.str("kind")=="EXPIRY" })
+        assertEquals(HttpStatusCode.Forbidden,api(HttpMethod.Get,"$base/report.csv",f.other).status)
+        val report=api(HttpMethod.Get,"$base/report.csv",f.owner)
+        assertEquals(HttpStatusCode.OK,report.status)
+        assertTrue(report.bodyAsText().contains("\"Rice\",\"Kitchen\",\"g\",\"900.000000\""))
+        createItem(f)
+        assertEquals(HttpStatusCode.OK,api(HttpMethod.Put,"$base/recipes/managed-meal",f.owner,
+            """{"ingredients":[{"materialId":"$materialId","quantityBase":"50"}]}""").status)
+        assertEquals(HttpStatusCode.OK,api(HttpMethod.Get,"$base/recipes/managed-meal",f.owner).status)
+    }
+
     @Test fun v047UpgradePreservesIdentitiesOrdersAndUatAttempts()=isolated { url,user,password ->
         fun migration()=Flyway.configure().dataSource(url,user,password).locations("classpath:db/migration")
         migration().target("047").load().migrate()
@@ -335,7 +499,7 @@ class ManagementIntegrationTest {
             assertEquals(before,db.queryOne("SELECT row_to_json(p)::text FROM sandbox_payment_attempts p WHERE id=?",payment) { it.getString(1) })
             assertEquals("historical-password-hash",db.queryOne("SELECT password_hash FROM users WHERE id=?",customer) { it.getString(1) })
             assertEquals(1200L,db.queryOne("SELECT subtotal_paise FROM individual_demo_orders WHERE id=?",order) { it.getLong(1) })
-            assertEquals(17L,db.count("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL"))
+            assertEquals(22L,db.count("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL"))
         }
     }
 }

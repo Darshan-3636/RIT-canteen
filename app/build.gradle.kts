@@ -6,6 +6,10 @@ plugins {
 }
 
 val cloudDemoRequested = providers.gradleProperty("ritCloudDemo").orNull?.toBooleanStrictOrNull() ?: false
+val sideBySideCloudInstall = providers.gradleProperty("ritSideBySideCloudInstall").orNull?.toBooleanStrictOrNull() ?: false
+require(!sideBySideCloudInstall || cloudDemoRequested) {
+    "Side-by-side cloud install requires -PritCloudDemo=true"
+}
 val configuredApiBaseUrl = providers.gradleProperty("ritApiBaseUrl").orNull?.trim()?.trimEnd('/')
 if (cloudDemoRequested) {
     val url = configuredApiBaseUrl ?: error("Cloud demo requires -PritApiBaseUrl=https://<real-render-host>")
@@ -38,6 +42,12 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "RIT_API_BASE_URL", "\"$apiBaseUrl\"")
         buildConfigField("boolean", "RIT_CLOUD_DEMO", cloudDemoRequested.toString())
+    }
+
+    buildTypes {
+        getByName("debug") {
+            if (sideBySideCloudInstall) applicationIdSuffix = ".cloudtest"
+        }
     }
 
     buildFeatures {

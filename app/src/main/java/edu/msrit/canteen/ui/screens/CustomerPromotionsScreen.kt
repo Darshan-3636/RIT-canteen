@@ -18,12 +18,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import edu.msrit.canteen.customer.CustomerCatalogSource
 import edu.msrit.canteen.customer.DevelopmentPromotions
+import edu.msrit.canteen.customer.DebugPromotionsApi
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.Promotion
 import edu.msrit.canteen.customer.PromotionSource
@@ -45,6 +51,8 @@ import edu.msrit.canteen.ui.theme.RitType
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val offerDate = DateTimeFormatter.ofPattern("d MMM yyyy").withZone(ZoneId.systemDefault())
 
@@ -70,7 +78,7 @@ private fun Promotion.eligibilityLabel(catalog: CustomerCatalogSource): String {
     if (names.isNotEmpty()) return "For ${names.take(2).joinToString(" · ")}"
     val categories = catalog.categories.filter { it.id in categoryIds }.map { it.name }
     if (categories.isNotEmpty()) return "For ${categories.take(2).joinToString(" · ")}"
-    return "Seller feature · preview only"
+    return "For this seller's menu"
 }
 
 @Composable
@@ -79,7 +87,18 @@ fun CustomerPromotionsScreen(onBack: () -> Unit, onPromotion: (String) -> Unit,
                              catalog: CustomerCatalogSource = PreviewCatalog,
                              now: Instant = Instant.now(), sellerId: String? = null) {
     val colors = RitThemeTokens.colors
-    val promotions = source.presentable(now = now).filter {
+    val serverSource = source === DevelopmentPromotions
+    var loading by remember(sellerId) { mutableStateOf(serverSource) }
+    var loadError by remember(sellerId) { mutableStateOf<String?>(null) }
+    LaunchedEffect(sellerId,serverSource) {
+        if (serverSource) {
+            val result = withContext(Dispatchers.IO) { DebugPromotionsApi.customerOffers(sellerId) }
+            if (result.value != null) DevelopmentPromotions.replaceDemo(result.value)
+            loadError = result.error
+            loading = false
+        }
+    }
+    val promotions = (if (loading) emptyList() else source.presentable(now = now)).filter {
         (sellerId == null || it.sellerId == sellerId) && it.hasVisibleTarget(catalog)
     }
     val sellerName = catalog.sellers.firstOrNull { it.id == sellerId }?.name
@@ -90,10 +109,12 @@ fun CustomerPromotionsScreen(onBack: () -> Unit, onPromotion: (String) -> Unit,
             RitText(if (sellerName == null) "Discover seller specials and featured food."
                 else "Specials and featured food from $sellerName.", RitType.body, colors.muted)
             Spacer(Modifier.height(10.dp))
-            RitStatusIndicator("Demo offers · not redeemable")
+            RitStatusIndicator("Offers are checked again at individual checkout")
             Spacer(Modifier.height(14.dp))
         }
-        if (promotions.isEmpty()) RitEmptyState("No demo offers", "There are no published preview promotions.")
+        if (loading) RitEmptyState("Loading offers…", "Checking current seller offers.")
+        else if (loadError != null) RitEmptyState("Offers unavailable", loadError!!)
+        else if (promotions.isEmpty()) RitEmptyState("No offers available", "There are no current published offers for this menu.")
         else LazyColumn(modifier = Modifier.testTag("offers_list"),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp)) {
             items(promotions, key = { it.id }) { promotion ->
@@ -148,20 +169,20 @@ fun CustomerPromotionDetailScreen(id: String, onBack: () -> Unit, onSeller: (Str
     Column(Modifier.fillMaxSize().background(colors.background).testTag("promotion_detail")) {
         CatalogHeader("Offer details", onBack)
         if (promotion == null) {
-            RitEmptyState("Offer not found", "This demo placement is unavailable.")
+            RitEmptyState("Offer not found", "This offer is no longer available.")
         } else {
             val seller = catalog.sellers.find { it.id == promotion.sellerId }
             LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)) {
                 item {
-                    RitStatusIndicator("Demo only · no checkout discount")
+                    RitStatusIndicator("Discounts apply only when selected at individual checkout")
                     Spacer(Modifier.height(15.dp))
                     RitText(promotion.title, RitType.heading)
                     RitText(promotion.description, RitType.body, colors.muted)
                     Spacer(Modifier.height(18.dp))
                     RitMessageCard("Validity", when (promotion.statusAt(now)) {
-                        PromotionStatus.ACTIVE -> "Within the sample schedule, but not a verified campus offer."
-                        PromotionStatus.UPCOMING -> "Sample placement has not started."
-                        PromotionStatus.EXPIRED -> "Sample placement has expired."
+                        PromotionStatus.ACTIVE -> "Available during the listed period, subject to item and seller eligibility."
+                        PromotionStatus.UPCOMING -> "This offer has not started."
+                        PromotionStatus.EXPIRED -> "This offer has expired."
                     } + " ${offerDate.format(promotion.startsAt)} – ${offerDate.format(promotion.endsAt)}")
                     Spacer(Modifier.height(18.dp))
                     RitText("Seller", RitType.title)
@@ -171,7 +192,7 @@ fun CustomerPromotionDetailScreen(id: String, onBack: () -> Unit, onSeller: (Str
                         RitSecondaryButton("View seller profile", { onSeller(seller.id) }, Modifier.fillMaxWidth().testTag("promotion_open_seller"))
                     }
                     Spacer(Modifier.height(18.dp))
-                    RitText("Related preview food", RitType.title)
+                    RitText("Related food", RitType.title)
                 }
                 val related = catalog.visibleItems(sellerId = promotion.sellerId)
                     .filter { it.id in promotion.itemIds || it.categoryId in promotion.categoryIds }
@@ -182,7 +203,7 @@ fun CustomerPromotionDetailScreen(id: String, onBack: () -> Unit, onSeller: (Str
                 }
                 item {
                     Spacer(Modifier.height(12.dp))
-                    RitText("No coupon redemption, effective price or personalization is calculated in this preview.",
+                    RitText("The final discount is calculated by the server when you select this offer at individual checkout.",
                         RitType.small, colors.muted)
                 }
             }

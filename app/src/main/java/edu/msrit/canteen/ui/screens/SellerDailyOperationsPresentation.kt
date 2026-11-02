@@ -1410,7 +1410,7 @@ private fun sellerPreviewRecord(): BulkRequestRecord {
     val first = QuoteRevision(
         version = 1,
         actor = QuoteActor.SELLER,
-        lines = listOf(edu.msrit.canteen.customer.QuoteLineSnapshot("north-lunch", "North Counter Lunch", 8, 9_000)),
+        lines = listOf(edu.msrit.canteen.customer.QuoteLineSnapshot("north-lunch", "Ramaiah's Cafeteria Lunch", 8, 9_000)),
         pickup = pickup,
         specialPickup = false,
         totalPaise = 72_000,
@@ -1421,7 +1421,7 @@ private fun sellerPreviewRecord(): BulkRequestRecord {
         version = 2,
         actor = QuoteActor.CUSTOMER,
         lines = listOf(
-            edu.msrit.canteen.customer.QuoteLineSnapshot("north-lunch", "North Counter Lunch", 6, 8_500),
+            edu.msrit.canteen.customer.QuoteLineSnapshot("north-lunch", "Ramaiah's Cafeteria Lunch", 6, 8_500),
             edu.msrit.canteen.customer.QuoteLineSnapshot("north-snack", "Savoury Snack Box", 4, 6_500),
         ),
         pickup = pickup.plusMinutes(30),
@@ -1457,7 +1457,7 @@ private fun sellerPreviewProposal(): QuoteRevision {
         version = previous.version + 1,
         actor = QuoteActor.SELLER,
         lines = listOf(
-            edu.msrit.canteen.customer.QuoteLineSnapshot("north-lunch", "North Counter Lunch", 7, 8_500),
+            edu.msrit.canteen.customer.QuoteLineSnapshot("north-lunch", "Ramaiah's Cafeteria Lunch", 7, 8_500),
             edu.msrit.canteen.customer.QuoteLineSnapshot("north-snack", "Savoury Snack Box", 4, 6_500),
         ),
         pickup = previous.pickup.plusMinutes(15),

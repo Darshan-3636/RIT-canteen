@@ -42,6 +42,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import edu.msrit.canteen.customer.DevelopmentInsights
 import edu.msrit.canteen.customer.DebugSellerAnalyticsApi
+import edu.msrit.canteen.customer.DebugSellerInboxApi
+import edu.msrit.canteen.customer.DebugSellerSupportApi
 import edu.msrit.canteen.customer.SellerCloudAnalytics
 import edu.msrit.canteen.customer.DevelopmentPromotions
 import edu.msrit.canteen.customer.InsightPeriod
@@ -99,9 +101,11 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 enum class SellerInsightPage { OVERVIEW, TRENDS, PRODUCTS, CUSTOMERS, PROMOTIONS, FORECAST,
     REPORT_BUILDER, REPORT_HISTORY, SUPPORT, NEW_TICKET, TICKET_DETAIL, NOTIFICATIONS, PAYMENT_STATUS }
@@ -199,7 +203,8 @@ private fun IllustrativeForecastChart(days: List<edu.msrit.canteen.customer.Dail
 @Composable
 fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: AuthorizedIdentity?,
                         sample: Boolean, ticketId: String?, onBack: () -> Unit,
-                        onNavigate: (SellerInsightPage) -> Unit, onTicket: (String) -> Unit) {
+                        onNavigate: (SellerInsightPage) -> Unit, onTicket: (String) -> Unit,
+                        canRespond: Boolean = false) {
     val today = LocalDate.now(RIT_TIME_ZONE)
     var range by remember(page) { mutableStateOf(if (page == SellerInsightPage.OVERVIEW || page == SellerInsightPage.FORECAST)
         InsightRange(today.minusDays(29), today) else InsightPeriod.MONTH.range(today)) }
@@ -208,6 +213,12 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
     var cloudError by remember(sellerId, page) { mutableStateOf<String?>(null) }
     var cloudLoading by remember(sellerId, page) { mutableStateOf(false) }
     var cloudRetry by remember(sellerId, page) { mutableIntStateOf(0) }
+    var cloudNotices by remember(sellerId, page) { mutableStateOf<List<DebugSellerInboxApi.Notice>?>(null) }
+    var noticeBusy by remember(sellerId, page) { mutableStateOf(false) }
+    var cloudSupport by remember(sellerId,page,ticketId) { mutableStateOf<JSONObject?>(null) }
+    var supportReply by remember(ticketId) { mutableStateOf("") }
+    var supportRequestId by remember(ticketId) { mutableStateOf(UUID.randomUUID().toString()) }
+    var supportBusy by remember(ticketId) { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var reportBusy by remember(sellerId, page) { mutableStateOf(false) }
@@ -235,6 +246,23 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
             cloudSummary = result.value
             cloudError = result.error
             cloudLoading = false
+        } else if (BuildConfig.RIT_CLOUD_DEMO && page == SellerInsightPage.NOTIFICATIONS) {
+            cloudLoading = true
+            cloudError = null
+            val result = withContext(Dispatchers.IO) { DebugSellerInboxApi.list() }
+            cloudNotices = result.value
+            cloudError = result.error
+            cloudLoading = false
+        } else if (BuildConfig.RIT_CLOUD_DEMO && page in setOf(SellerInsightPage.SUPPORT,SellerInsightPage.TICKET_DETAIL)) {
+            cloudLoading=true
+            cloudError=null
+            val result=withContext(Dispatchers.IO) {
+                if(page==SellerInsightPage.SUPPORT) DebugSellerSupportApi.list(sellerId)
+                else DebugSellerSupportApi.detail(sellerId,ticketId.orEmpty())
+            }
+            cloudSupport=result.value
+            cloudError=result.error
+            cloudLoading=false
         }
     }
     val summary = DevelopmentInsights.sales(identity, sellerId, range, sample)
@@ -291,6 +319,99 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                             RitType.small, RitThemeTokens.colors.muted)
                     }
                 }
+            } else if (page == SellerInsightPage.NOTIFICATIONS) {
+                when {
+                    cloudLoading -> RitText("Loading notifications…",RitType.body)
+                    cloudError!=null -> {
+                        RitEmptyState("Could not load notifications",cloudError!!)
+                        RitSecondaryButton("Retry",{ cloudRetry++ },Modifier.fillMaxWidth())
+                    }
+                    cloudNotices.isNullOrEmpty() -> RitEmptyState("No notifications","Order and quote updates will appear here.")
+                    else -> cloudNotices!!.forEach { note ->
+                        InsightCard(note.title,note.body)
+                        if(!note.read) RitSecondaryButton(if(noticeBusy) "Saving…" else "Mark as read",{
+                            if(!noticeBusy) {
+                                noticeBusy=true
+                                scope.launch {
+                                    val result=withContext(Dispatchers.IO) { DebugSellerInboxApi.markRead(note.id) }
+                                    if(result.value==true) cloudNotices=cloudNotices?.map {
+                                        if(it.id==note.id) it.copy(read=true) else it }
+                                    else cloudError=result.error ?: "Could not mark notification as read."
+                                    noticeBusy=false
+                                }
+                            }
+                        },Modifier.fillMaxWidth(),enabled=!noticeBusy)
+                    }
+                }
+            } else if (page == SellerInsightPage.SUPPORT) {
+                when {
+                    cloudLoading -> RitText("Loading support tickets…",RitType.body)
+                    cloudError!=null -> {
+                        RitEmptyState("Could not load tickets",cloudError!!)
+                        RitSecondaryButton("Retry",{ cloudRetry++ },Modifier.fillMaxWidth())
+                    }
+                    cloudSupport==null -> RitEmptyState("Support unavailable","No server response was confirmed.")
+                    else -> {
+                        val rows=cloudSupport!!.getJSONArray("items")
+                        if(rows.length()==0) RitEmptyState("No support tickets","Customer requests for this seller will appear here.")
+                        repeat(rows.length()) { index ->
+                            val row=rows.getJSONObject(index)
+                            InsightCard(row.getString("subject"),
+                                "${row.getString("category")} · ${row.getString("status")}",
+                                { onTicket(row.getString("id")) })
+                        }
+                    }
+                }
+            } else if (page == SellerInsightPage.TICKET_DETAIL) {
+                when {
+                    cloudLoading -> RitText("Loading ticket…",RitType.body)
+                    cloudError!=null -> {
+                        RitEmptyState("Could not load ticket",cloudError!!)
+                        RitSecondaryButton("Retry",{ cloudRetry++ },Modifier.fillMaxWidth())
+                    }
+                    cloudSupport==null -> RitEmptyState("Ticket unavailable","No server response was confirmed.")
+                    else -> {
+                        val ticket=cloudSupport!!.getJSONObject("ticket")
+                        RitText(ticket.getString("subject"),RitType.title)
+                        RitText(ticket.getString("status"),RitType.small,RitThemeTokens.colors.muted)
+                        val messages=cloudSupport!!.getJSONArray("messages")
+                        repeat(messages.length()) { index ->
+                            val row=messages.getJSONObject(index)
+                            InsightCard(row.getString("authorRole"),row.getString("body"))
+                        }
+                        if(canRespond && ticket.getString("status")!="CLOSED") {
+                            RitTextField(supportReply,{ supportReply=it },"Reply to customer","Message",Modifier.fillMaxWidth())
+                            RitPrimaryButton(if(supportBusy) "Sending…" else "Send reply",{
+                                if(!supportBusy) {
+                                    supportBusy=true
+                                    scope.launch {
+                                        val result=withContext(Dispatchers.IO) { DebugSellerSupportApi.reply(
+                                            sellerId,ticket.getString("id"),supportReply.trim(),supportRequestId) }
+                                        if(result.value!=null) {
+                                            supportReply="";supportRequestId=UUID.randomUUID().toString();cloudRetry++
+                                        } else cloudError=result.error ?: "Reply was not confirmed."
+                                        supportBusy=false
+                                    }
+                                }
+                            },Modifier.fillMaxWidth(),enabled=!supportBusy && supportReply.trim().length>=2)
+                            if(ticket.getString("status")=="OPEN") RitSecondaryButton("Escalate to platform support",{
+                                if(!supportBusy) {
+                                    supportBusy=true
+                                    scope.launch {
+                                        val result=withContext(Dispatchers.IO) { DebugSellerSupportApi.escalate(
+                                            sellerId,ticket.getString("id")) }
+                                        if(result.value!=null) cloudRetry++
+                                        else cloudError=result.error ?: "Escalation was not confirmed."
+                                        supportBusy=false
+                                    }
+                                }
+                            },Modifier.fillMaxWidth(),enabled=!supportBusy)
+                        }
+                    }
+                }
+            } else if (page == SellerInsightPage.NEW_TICKET) {
+                RitEmptyState("Open customer tickets","Use the support list to reply or escalate customer requests.")
+                RitSecondaryButton("Open support list",{ onNavigate(SellerInsightPage.SUPPORT) },Modifier.fillMaxWidth())
             } else if (page == SellerInsightPage.REPORT_BUILDER) {
                 RitText("Export stored request and support counts. Verified revenue is unavailable.",
                     RitType.body, RitThemeTokens.colors.muted)

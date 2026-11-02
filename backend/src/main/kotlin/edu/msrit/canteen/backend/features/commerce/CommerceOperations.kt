@@ -59,7 +59,8 @@ internal fun validateAndPrice(connection:Connection,context:BackendContext,selle
     val policy=connection.prepareStatement("SELECT bulk_minimum_units,special_pickup_enabled FROM seller_ordering_policies WHERE seller_id=? FOR SHARE").use { s -> s.setString(1,sellerId); s.executeQuery().use { r -> if(r.next()) r.getInt(1) to r.getBoolean(2) else 8 to false } }
     val priced=lines.map { line ->
         connection.prepareStatement("""SELECT i.name,i.price_paise FROM menu_items i JOIN seller_categories c ON c.seller_id=i.seller_id AND c.category_id=i.category_id
-            WHERE i.id=? AND i.seller_id=? AND i.published AND i.archived_at IS NULL AND $ACTIVE_CATEGORY_SQL AND i.availability='AVAILABLE' FOR SHARE OF i""").use { s ->
+            WHERE i.id=? AND i.seller_id=? AND i.order_eligibility IN ('BULK_ONLY','BOTH')
+              AND i.published AND i.archived_at IS NULL AND $ACTIVE_CATEGORY_SQL AND i.availability='AVAILABLE' FOR SHARE OF i""").use { s ->
             s.setString(1,line.itemId); s.setString(2,sellerId); s.executeQuery().use { r ->
                 if(!r.next()) throw rule("ITEM_UNAVAILABLE","One or more items are unavailable for this seller")
                 PricedLine(line.itemId,r.getString(1),line.quantity,r.getLong(2))
@@ -137,6 +138,7 @@ private fun insertRevision(c:Connection,id:UUID,version:Int,status:String,pickup
 
 private fun event(c:Connection,id:UUID,version:Int,actor:UUID,type:String) {
     c.prepareStatement("INSERT INTO bulk_request_events(request_id,version,actor_user_id,event_type) VALUES (?,?,?,?)").use { s -> s.setObject(1,id);s.setInt(2,version);s.setObject(3,actor);s.setString(4,type);s.executeUpdate() }
+    notifyBulkEvent(c,id,version,type)
 }
 
 internal fun counteroffer(context:BackendContext,principal:AuthenticatedPrincipal,sellerId:String,id:UUID,terms:QuoteTermsRequest):BulkRequestDto {
@@ -267,16 +269,25 @@ internal fun createIndividual(context:BackendContext,principal:AuthenticatedPrin
     if(lines.isEmpty() || lines.size>100) throw bad("INVALID_LINES","Provide between 1 and 100 item lines")
     if(lines.map { it.itemId }.toSet().size!=lines.size) throw bad("DUPLICATE_ITEMS","Each item may appear only once")
     if(lines.any { it.quantity !in 1..999 }) throw bad("INVALID_QUANTITY","Each quantity must be between 1 and 999")
-    val seller=c.prepareStatement("SELECT id FROM sellers WHERE is_main_canteen AND active").use { s -> s.executeQuery().use { r -> if(r.next()) r.getString(1) else throw rule("MAIN_CANTEEN_UNAVAILABLE","Main Canteen is unavailable") } }
-    val priced=lines.map { line -> c.prepareStatement("SELECT i.name,i.price_paise FROM menu_items i WHERE i.id=? AND i.seller_id=? AND i.kind='PREPARED' AND i.published AND i.archived_at IS NULL AND $ACTIVE_CATEGORY_SQL AND i.availability='AVAILABLE' FOR SHARE OF i").use { s -> s.setString(1,line.itemId);s.setString(2,seller);s.executeQuery().use { r -> if(r.next()) PricedLine(line.itemId,r.getString(1),line.quantity,r.getLong(2)) else throw rule("INDIVIDUAL_ITEM_UNAVAILABLE","Only available Main Canteen prepared food can be saved individually") } } }
+    val seller=c.prepareStatement("""SELECT s.id FROM menu_items i JOIN sellers s ON s.id=i.seller_id
+        JOIN seller_ordering_policies p ON p.seller_id=s.id WHERE i.id=? AND s.active AND p.individual_enabled
+        FOR SHARE OF s,p""").use { s -> s.setString(1,lines.first().itemId);s.executeQuery().use { r ->
+        if(r.next()) r.getString(1) else throw rule("SELLER_UNAVAILABLE","This seller does not accept individual orders") } }
+    val priced=lines.map { line -> c.prepareStatement("""SELECT i.name,i.price_paise FROM menu_items i WHERE i.id=? AND i.seller_id=?
+        AND i.order_eligibility IN ('INDIVIDUAL_ONLY','BOTH') AND i.published AND i.archived_at IS NULL
+        AND $ACTIVE_CATEGORY_SQL AND i.availability='AVAILABLE' FOR SHARE OF i""").use { s ->
+        s.setString(1,line.itemId);s.setString(2,seller);s.executeQuery().use { r ->
+        if(r.next()) PricedLine(line.itemId,r.getString(1),line.quantity,r.getLong(2))
+        else throw rule("INDIVIDUAL_ITEM_UNAVAILABLE","An item is unavailable for individual ordering") } } }
     val id=UUID.randomUUID();val sum=totalPaise(priced);val now=context.clock.instant()
     c.prepareStatement("INSERT INTO individual_demo_orders(id,customer_user_id,seller_id,subtotal_paise,created_at) VALUES (?,?,?,?,?)").use { s -> s.setObject(1,id);s.setObject(2,principal.userId);s.setString(3,seller);s.setLong(4,sum);s.setTimestamp(5,Timestamp.from(now));s.executeUpdate() }
     c.prepareStatement("INSERT INTO individual_demo_order_lines(order_id,seller_id,item_id,item_name_snapshot,quantity,unit_price_paise) VALUES (?,?,?,?,?,?)").use { s -> priced.forEach { s.setObject(1,id);s.setString(2,seller);s.setString(3,it.itemId);s.setString(4,it.name);s.setInt(5,it.quantity);s.setLong(6,it.price);s.addBatch() };s.executeBatch() }
-    IndividualDemoOrderDto(id.toString(),seller,"DEMO_SAVED",true,false,sum,now.toString(),priced.map { IndividualDemoLineDto(it.itemId,it.name,it.quantity,it.price) })
+    notifyIndividualEvent(c,id,"DEMO_SAVED")
+    loadDemoIndividual(c,id,true)!!
 }
 internal fun customerIndividual(context:BackendContext,user:UUID):IndividualDemoOrderListDto = context.dataSource.connection.use { c ->
     val ids=c.prepareStatement("SELECT id FROM individual_demo_orders WHERE customer_user_id=? ORDER BY created_at DESC").use { s -> s.setObject(1,user);s.executeQuery().use { r -> buildList { while(r.next()) add(r.getObject(1,UUID::class.java)) } } }
-    IndividualDemoOrderListDto(ids.mapNotNull { loadDemoIndividual(c,it) })
+    IndividualDemoOrderListDto(ids.mapNotNull { loadDemoIndividual(c,it,true) })
 }
 
 internal fun rejectBulk(context:BackendContext,principal:AuthenticatedPrincipal,sellerId:String,id:UUID,request:BulkRejectRequest):BulkRequestDto {

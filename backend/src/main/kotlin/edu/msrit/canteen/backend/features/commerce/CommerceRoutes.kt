@@ -26,6 +26,12 @@ import java.sql.Connection
 fun Route.registerCommerceRoutes(context: BackendContext,
                                  sandboxGateway: SandboxPaymentGateway = UnavailableSandboxPaymentGateway) {
     get("/sellers") { call.commerce { call.respond(context.dataSource.connection.use { SellerListDto(sellers(it)) }) } }
+    get("/catalog/snapshot") { call.commerce {
+        call.respond(context.dataSource.connection.use { db ->
+            val visible=sellers(db)
+            CatalogSnapshotDto(visible,visible.flatMap { menuItems(db,it.id,null,null) })
+        })
+    } }
     get("/sellers/{sellerId}") {
         call.commerce {
             val id=call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")
@@ -61,12 +67,12 @@ fun Route.registerCommerceRoutes(context: BackendContext,
             val seller = call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")
             val policy = context.dataSource.connection.use { db ->
                 val row = db.prepareStatement(
-                    """SELECT p.bulk_minimum_units,p.special_pickup_enabled,p.timezone
+                    """SELECT p.bulk_minimum_units,p.special_pickup_enabled,p.timezone,p.individual_enabled
                        FROM seller_ordering_policies p JOIN sellers s ON s.id=p.seller_id
                        WHERE p.seller_id=? AND s.active""").use { stmt ->
                     stmt.setString(1,seller)
                     stmt.executeQuery().use { result ->
-                        if (result.next()) Triple(result.getInt(1), result.getBoolean(2), result.getString(3)) else null
+                        if (result.next()) Triple(result.getInt(1), result.getBoolean(2), result.getString(3)) to result.getBoolean(4) else null
                     }
                 } ?: throw CommerceFault(404,"SELLER_NOT_FOUND","Seller not found")
                 val hours = db.prepareStatement(
@@ -86,7 +92,7 @@ fun Route.registerCommerceRoutes(context: BackendContext,
                             result.getObject(1, java.time.LocalDate::class.java).toString(), result.getString(2)))
                     } }
                 }
-                SellerOperatingPolicyDto(seller,row.first,row.second,row.third,hours,closures)
+                SellerOperatingPolicyDto(seller,row.first.first,row.first.second,row.first.third,hours,closures,row.second)
             }
             call.respond(policy)
         }
@@ -118,16 +124,17 @@ fun Route.registerCommerceRoutes(context: BackendContext,
             val seller=call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")
             val principal=call.requireSellerCapability(context,seller,"hours.edit") ?: return@commerce
             val body=call.receive<BulkPolicyPatch>()
-            if(body.minimumUnits==null && body.specialPickupEnabled==null) throw CommerceFault(400,"EMPTY_PATCH","Provide a minimum or special-pickup setting")
+            if(body.minimumUnits==null && body.specialPickupEnabled==null && body.individualEnabled==null) throw CommerceFault(400,"EMPTY_PATCH","Provide an ordering-policy setting")
             body.minimumUnits?.let { if(it !in 1..999) throw CommerceFault(400,"INVALID_MINIMUM","minimumUnits must be between 1 and 999") }
             context.transaction { c ->
                 if(!context.authorization.hasSellerCapability(c,principal,seller,"hours.edit")) throw CommerceFault(403,"SELLER_CAPABILITY_REQUIRED","This seller action is not permitted")
                 c.lockSellerPolicy(seller,call.policyVersion())
                 recordAudit(c,principal.userId,"SELLER","seller.operations.update","SELLER",seller,seller)
-                c.prepareStatement("INSERT INTO seller_ordering_policies(seller_id,bulk_minimum_units,special_pickup_enabled) VALUES (?,?,?) ON CONFLICT(seller_id) DO UPDATE SET bulk_minimum_units=COALESCE(?,seller_ordering_policies.bulk_minimum_units),special_pickup_enabled=COALESCE(?,seller_ordering_policies.special_pickup_enabled),updated_at=now()").use { s ->
-                    s.setString(1,seller);s.setInt(2,body.minimumUnits ?: 8);s.setBoolean(3,body.specialPickupEnabled ?: false)
-                    if(body.minimumUnits==null)s.setNull(4,java.sql.Types.INTEGER) else s.setInt(4,body.minimumUnits)
-                    if(body.specialPickupEnabled==null)s.setNull(5,java.sql.Types.BOOLEAN) else s.setBoolean(5,body.specialPickupEnabled)
+                c.prepareStatement("INSERT INTO seller_ordering_policies(seller_id,bulk_minimum_units,special_pickup_enabled,individual_enabled) VALUES (?,?,?,?) ON CONFLICT(seller_id) DO UPDATE SET bulk_minimum_units=COALESCE(?,seller_ordering_policies.bulk_minimum_units),special_pickup_enabled=COALESCE(?,seller_ordering_policies.special_pickup_enabled),individual_enabled=COALESCE(?,seller_ordering_policies.individual_enabled),updated_at=now()").use { s ->
+                    s.setString(1,seller);s.setInt(2,body.minimumUnits ?: 8);s.setBoolean(3,body.specialPickupEnabled ?: false);s.setBoolean(4,body.individualEnabled ?: false)
+                    if(body.minimumUnits==null)s.setNull(5,java.sql.Types.INTEGER) else s.setInt(5,body.minimumUnits)
+                    if(body.specialPickupEnabled==null)s.setNull(6,java.sql.Types.BOOLEAN) else s.setBoolean(6,body.specialPickupEnabled)
+                    if(body.individualEnabled==null)s.setNull(7,java.sql.Types.BOOLEAN) else s.setBoolean(7,body.individualEnabled)
                     s.executeUpdate()
                 }
             }
@@ -265,6 +272,10 @@ fun Route.registerCommerceRoutes(context: BackendContext,
     get("/me/cart/individual") {
         call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce;call.respond(readIndividualCart(context,p)) }
     }
+    post("/me/cart/individual/offer-quote") {
+        call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
+            call.respond(quoteIndividualOffer(context,p,call.receive<IndividualOfferQuoteRequest>())) }
+    }
     get("/me/draft/bulk") {
         call.commerce { val p=call.requireAuthenticatedUser(context) ?: return@commerce
             call.respond(readBulkDraft(context,p)) }
@@ -330,7 +341,7 @@ fun Route.registerCommerceRoutes(context: BackendContext,
         call.commerce { val seller=call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")
             val p=call.requireSellerCapability(context,seller,"bulk.respond") ?: return@commerce
             val body=call.receive<DemoSellerStatusRequest>()
-            call.respond(transitionIndividualDemo(context,p,seller,call.uuidParameter("orderId"),body.status)) }
+            call.respond(transitionIndividualDemo(context,p,seller,call.uuidParameter("orderId"),body.status,body.pickupCode)) }
     }
 }
 

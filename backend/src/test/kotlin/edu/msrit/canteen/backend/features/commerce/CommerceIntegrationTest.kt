@@ -121,6 +121,11 @@ class CommerceIntegrationTest {
             }
             val directory=client.get("/api/v1/sellers");assertEquals(HttpStatusCode.OK,directory.status)
             assertTrue(directory.bodyAsText().contains("main-canteen"));assertTrue(directory.bodyAsText().contains("UNKNOWN"))
+            val snapshot=client.get("/api/v1/catalog/snapshot")
+            assertEquals(HttpStatusCode.OK,snapshot.status)
+            assertTrue(snapshot.bodyAsText().contains("\"sellers\""))
+            assertTrue(snapshot.bodyAsText().contains("\"items\""))
+            assertTrue(snapshot.bodyAsText().contains("masala-dosa"))
             val menu=client.get("/api/v1/sellers/north-counter/menu?query=coffee");assertEquals(HttpStatusCode.OK,menu.status)
             assertTrue(menu.bodyAsText().contains("\"items\":[]"));assertFalse(menu.bodyAsText().contains("pantry-water"))
             assertEquals(HttpStatusCode.NotFound,client.get("/api/v1/sellers/north-counter/menu/masala-dosa").status)
@@ -327,9 +332,10 @@ class CommerceIntegrationTest {
                 header(HttpHeaders.Authorization,"Bearer $token");contentType(ContentType.Application.Json)
                 setBody("""{"outcome":"$outcome"}""")
             }
-            suspend fun move(token:String,status:String)=client.post("$sellerPath/$id/demo-status") {
+            val pickupCode=Regex(""""pickupCode":"([A-F0-9]{12})"""").find(created.bodyAsText())!!.groupValues[1]
+            suspend fun move(token:String,status:String,code:String?=null)=client.post("$sellerPath/$id/demo-status") {
                 header(HttpHeaders.Authorization,"Bearer $token");contentType(ContentType.Application.Json)
-                setBody("""{"status":"$status"}""")
+                setBody("""{"status":"$status","pickupCode":${if(code==null) "null" else "\"$code\""}}""")
             }
             assertEquals(HttpStatusCode.NotFound,pay(f.stranger.token,"SUCCESS").status)
             val sellerCreated=client.post("/api/v1/me/individual-demo-orders") {
@@ -359,6 +365,7 @@ class CommerceIntegrationTest {
             val sellerQueue=client.get(sellerPath) { header(HttpHeaders.Authorization,"Bearer ${f.seller.token}") }
             assertEquals(HttpStatusCode.OK,sellerQueue.status)
             assertTrue(sellerQueue.bodyAsText().contains(id))
+            assertFalse(sellerQueue.bodyAsText().contains(pickupCode))
             val otherSellerQueue=client.get("/api/v1/sellers/north-counter/individual-demo-orders") {
                 header(HttpHeaders.Authorization,"Bearer ${f.seller.token}")
             }
@@ -367,7 +374,8 @@ class CommerceIntegrationTest {
             assertEquals(HttpStatusCode.OK,move(f.seller.token,"DEMO_ACCEPTED").status)
             assertEquals(HttpStatusCode.OK,move(f.seller.token,"DEMO_ACCEPTED").status) // Safe retry does not emit another transition.
             assertEquals(HttpStatusCode.OK,move(f.seller.token,"DEMO_READY").status)
-            val complete=move(f.seller.token,"DEMO_COMPLETED")
+            assertEquals(HttpStatusCode.UnprocessableEntity,move(f.seller.token,"DEMO_COMPLETED","INVALID00000").status)
+            val complete=move(f.seller.token,"DEMO_COMPLETED",pickupCode)
             assertEquals(HttpStatusCode.OK,complete.status)
             assertTrue(complete.bodyAsText().contains("\"paymentVerified\":false"))
             assertEquals(HttpStatusCode.OK,pay(f.customer.token,"SUCCESS").status)

@@ -11,7 +11,10 @@ enum class SellerCapability(val wire: String, val label: String) {
     AVAILABILITY("availability.edit", "Change item availability"), HOURS("hours.edit", "Edit hours and closures"),
     PROMOTIONS("promotions.manage", "Manage promotions"), EMPLOYEES("employees.manage", "Manage team"),
     PROFILE("profile.edit", "Edit public profile"), ANALYTICS("analytics.view", "View sales insights"),
-    REPORTS("reports.export", "Configure reports");
+    REPORTS("reports.export", "Configure reports"),
+    INVENTORY_VIEW("inventory.view", "View inventory"),
+    INVENTORY_MANAGE("inventory.manage", "Manage inventory"),
+    INVENTORY_ADJUST("inventory.adjust", "Adjust stock");
     companion object { fun fromWire(value: String) = entries.firstOrNull { it.wire == value } }
 }
 

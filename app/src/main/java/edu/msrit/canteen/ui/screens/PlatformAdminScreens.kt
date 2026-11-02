@@ -299,7 +299,7 @@ fun PlatformAdminScreen(page: AdminPage, identity: AuthorizedIdentity?, sample: 
     AdminPageShell(title, "admin_${page.name.lowercase()}", onBack) {
         if (!PresentationAccess.allows(identity, ProtectedArea.Administrator)) { AdminDeniedState(onBack); return@AdminPageShell }
         if (BuildConfig.RIT_CLOUD_DEMO) {
-            CloudAdminContent(page, sellerId, onSeller)
+            CloudAdminContent(page, sellerId, ticketId, onSeller, onTicket)
             return@AdminPageShell
         }
         when (page) {

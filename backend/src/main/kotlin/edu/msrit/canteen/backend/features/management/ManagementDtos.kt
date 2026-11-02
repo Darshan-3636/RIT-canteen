@@ -8,12 +8,13 @@ import kotlinx.serialization.Serializable
     val kind: String, val imageKey: String, val description: String = "",
     val dietary: String = "NOT_SPECIFIED", val published: Boolean = false,
     val availability: String = "AVAILABLE", val unavailableVisibility: String = "SHOW",
+    val orderEligibility: String = "BULK_ONLY",
 )
 @Serializable internal data class ManagedItem(
     val id: String, val sellerId: String, val categoryId: String, val name: String, val description: String,
     val pricePaise: Long, val kind: String, val dietary: String, val availability: String,
     val published: Boolean, val unavailableVisibility: String, val imageKey: String,
-    val archivedAt: String?, val version: Long,
+    val archivedAt: String?, val version: Long, val orderEligibility: String = "BULK_ONLY",
 )
 @Serializable internal data class CategoryWrite(
     val expectedVersion: Long, val displayName: String? = null, val sortOrder: Int = 0, val active: Boolean = true,

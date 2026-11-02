@@ -44,8 +44,8 @@ fun seedCommerceFixtures(context: BackendContext) {
             mappings.forEach { (seller, category) -> sql.setString(1, seller); sql.setString(2, category); sql.addBatch() }
             sql.executeBatch()
         }
-        db.prepareStatement("INSERT INTO seller_ordering_policies(seller_id) VALUES (?) ON CONFLICT(seller_id) DO NOTHING").use { sql ->
-            items.map { it.sellerId }.distinct().forEach { sql.setString(1, it); sql.addBatch() }
+        db.prepareStatement("INSERT INTO seller_ordering_policies(seller_id,individual_enabled) VALUES (?,?) ON CONFLICT(seller_id) DO NOTHING").use { sql ->
+            items.map { it.sellerId }.distinct().forEach { sql.setString(1, it); sql.setBoolean(2,it == "main-canteen"); sql.addBatch() }
             sql.executeBatch()
         }
         // Upgrade only pristine 12-item seed rows. Any changed field prevents an update, so seller edits survive.
@@ -64,11 +64,12 @@ fun seedCommerceFixtures(context: BackendContext) {
             sql.executeBatch()
         }
         db.prepareStatement("""INSERT INTO menu_items(id,seller_id,category_id,name,description,price_paise,kind,dietary,
-            availability,published,unavailable_visibility,image_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+            availability,published,unavailable_visibility,image_key,order_eligibility) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(id) DO NOTHING""").use { sql ->
             items.forEach { item ->
                 sql.setString(1, item.id); sql.setString(2, item.sellerId)
                 item.bindWithoutIdentity(sql, 3)
+                sql.setString(13,if(item.sellerId == "main-canteen" && item.kind == "PREPARED") "BOTH" else "BULK_ONLY")
                 sql.addBatch()
             }
             sql.executeBatch()

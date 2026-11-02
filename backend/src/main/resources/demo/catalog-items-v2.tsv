@@ -16,7 +16,7 @@ bisi-bele-bath	main-canteen	rice	Bisi Bele Bath	Karnataka-style spiced lentil ri
 chapati-meal	main-canteen	meals	Chapati Meal	Chapatis with a vegetable curry, dal and simple sides.	8000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	chapati-meal
 veg-thali	main-canteen	meals	Veg Thali	Rice, chapati and a selection of small vegetarian curries and sides.	11000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	veg-thali
 tomato-rice	main-canteen	rice	Tomato Rice	Tangy tomato rice tempered with curry leaves and mustard.	5000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	tomato-rice
-north-lunch	north-counter	combos	North Counter Lunch Combo	A sample quick lunch combo with savoury North Counter bites.	9000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	north-lunch
+north-lunch	north-counter	combos	Ramaiah's Cafeteria Lunch Combo	A sample quick lunch combo with savoury Ramaiah's Cafeteria bites.	9000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	north-lunch
 north-snack	north-counter	snacks	Assorted Savoury Snack Box	Assorted prepared savoury snacks for sharing.	6500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	north-snack
 veg-samosa	north-counter	snacks	Veg Samosa	Crisp pastry filled with spiced potato and peas.	2500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	veg-samosa
 khasta-kachori	north-counter	snacks	Khasta Kachori	Flaky kachori with a spiced savoury filling.	3000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	khasta-kachori

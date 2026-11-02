@@ -71,7 +71,7 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
     val latest = record.latest
     val seller = catalog.sellers.firstOrNull { it.id == record.sellerId }
     val menu = catalog.visibleItems(record.sellerId).filter {
-        seller != null && itemEligibility(seller, it) != ItemEligibility.UNAVAILABLE
+        seller != null && itemEligibility(seller, it) in setOf(ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK, ItemEligibility.BULK_ONLY)
     }
     val quantities = remember(record.reference, latest.version) {
         mutableStateMapOf<String, Int>().apply {

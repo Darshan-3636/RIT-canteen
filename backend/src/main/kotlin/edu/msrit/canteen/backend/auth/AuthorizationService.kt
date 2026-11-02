@@ -31,10 +31,13 @@ object SellerCapabilities {
     const val PROFILE_EDIT = "profile.edit"
     const val ANALYTICS_VIEW = "analytics.view"
     const val REPORTS_EXPORT = "reports.export"
+    const val INVENTORY_VIEW = "inventory.view"
+    const val INVENTORY_MANAGE = "inventory.manage"
+    const val INVENTORY_ADJUST = "inventory.adjust"
 
     val ALL: Set<String> = setOf(BULK_VIEW, BULK_RESPOND, OPERATIONS_HISTORY, CATALOG_EDIT,
         AVAILABILITY_EDIT, HOURS_EDIT, PROMOTIONS_MANAGE, EMPLOYEES_MANAGE, PROFILE_EDIT,
-        ANALYTICS_VIEW, REPORTS_EXPORT)
+        ANALYTICS_VIEW, REPORTS_EXPORT, INVENTORY_VIEW, INVENTORY_MANAGE, INVENTORY_ADJUST)
 }
 
 /** Every call reads the live session/user/membership state, never a client-declared role. */

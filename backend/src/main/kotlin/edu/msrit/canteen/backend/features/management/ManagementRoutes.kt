@@ -13,6 +13,7 @@ import kotlinx.serialization.json.put
 
 internal fun Route.registerManagementRoutes(context: BackendContext) {
     registerManagementAnalytics(context)
+    registerPromotionRoutes(context)
     val catalog=CatalogService(context)
     val members=MembershipService(context)
     val admin=AdministrationService(context)

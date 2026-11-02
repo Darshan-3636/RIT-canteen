@@ -60,10 +60,12 @@ object DebugCommerceApi {
             else Result(value = parseIndividualCart(response.body!!))
         }
 
-    fun checkoutIndividualCart(expectedVersion: Long, idempotencyKey: String): Result<IndividualOrderPreview> =
+    fun checkoutIndividualCart(expectedVersion: Long, idempotencyKey: String,
+                               promotionId: String? = null): Result<IndividualOrderPreview> =
         withToken { token ->
             val response = DebugBackendApi.request("POST", "/api/v1/me/cart/individual/checkout",
-                JSONObject().put("expectedVersion", expectedVersion), token, idempotencyKey)
+                JSONObject().put("expectedVersion", expectedVersion)
+                    .put("promotionId", promotionId ?: JSONObject.NULL), token, idempotencyKey)
             if (response.status !in 200..201) Result(error = response.error ?: "Could not save the demo order.")
             else Result(value = parseIndividualOrder(response.body!!))
         }
@@ -75,7 +77,7 @@ object DebugCommerceApi {
                 val item = items.getJSONObject(index)
                 IndividualServerCartLine(item.getString("itemId"), item.getInt("quantity"),
                     item.getLong("unitPricePaise"), item.getBoolean("available"))
-            })
+            }, row.optString("sellerId").takeIf(String::isNotBlank))
     }
 
     fun individualOrders(): Result<List<IndividualOrderPreview>> = withToken { token ->
@@ -135,9 +137,10 @@ object DebugCommerceApi {
             row.optString("idempotencyKey").takeUnless { it.isBlank() || it == "null" })
     }
 
-    fun transitionIndividual(sellerId: String, id: String, status: String): Result<IndividualOrderPreview> = withToken { token ->
+    fun transitionIndividual(sellerId: String, id: String, status: String,
+                             pickupCode: String? = null): Result<IndividualOrderPreview> = withToken { token ->
         val response = DebugBackendApi.request("POST", "/api/v1/sellers/$sellerId/individual-demo-orders/$id/demo-status",
-            JSONObject().put("status", status), token)
+            JSONObject().put("status", status).put("pickupCode",pickupCode ?: JSONObject.NULL), token)
         if (response.status != 200) Result(error = response.error ?: "Demo order transition failed.")
         else Result(value = parseIndividualOrder(response.body!!))
     }
@@ -226,9 +229,13 @@ object DebugCommerceApi {
                 val line = rows.getJSONObject(index)
                 QuoteLineSnapshot(line.getString("itemId"), line.getString("itemName"),
                     line.getInt("quantity"), line.getLong("unitPricePaise"))
-            }, row.getLong("subtotalPaise"), locallySaved = true, status = row.getString("status"),
+            }, row.optLong("totalPaise",row.getLong("subtotalPaise")), locallySaved = true, status = row.getString("status"),
             demoPaymentOutcome = row.optString("demoPaymentOutcome", "NOT_ATTEMPTED"),
-            sandboxPaymentStatus = row.optString("sandboxPaymentStatus").takeUnless { it.isBlank() || it == "null" })
+            sandboxPaymentStatus = row.optString("sandboxPaymentStatus").takeUnless { it.isBlank() || it == "null" },
+            pickupReference = row.optString("pickupReference"),
+            pickupCode = row.optString("pickupCode").takeUnless { it.isBlank() || it == "null" },
+            handedOverAt = row.optString("handedOverAt").takeUnless { it.isBlank() || it == "null" },
+            sellerId = row.getString("sellerId"))
     }
 
     private fun parseBulk(row: JSONObject): BulkRequestRecord {

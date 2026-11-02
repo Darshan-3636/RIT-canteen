@@ -4,7 +4,8 @@ import java.sql.Connection
 
 internal fun sellers(connection: Connection): List<SellerDto> = connection.prepareStatement(
     """SELECT s.id,s.name,s.description,s.active,s.is_main_canteen,
-              COALESCE(p.bulk_minimum_units,8) AS bulk_minimum_units
+              COALESCE(p.bulk_minimum_units,8) AS bulk_minimum_units,
+              COALESCE(p.individual_enabled,FALSE) AS individual_enabled
        FROM sellers s LEFT JOIN seller_ordering_policies p ON p.seller_id=s.id
        WHERE s.active ORDER BY s.is_main_canteen DESC,s.name"""
 ).use { statement -> statement.executeQuery().use { rows ->
@@ -16,7 +17,7 @@ internal fun sellers(connection: Connection): List<SellerDto> = connection.prepa
             }
             add(SellerDto(id,rows.getString("name"),rows.getString("description"),true,main,
                 bulkMinimumUnits=rows.getInt("bulk_minimum_units"),
-                orderingModes=if(main) listOf("INDIVIDUAL_PREPARED_DEMO","BULK_REQUEST") else listOf("BULK_REQUEST"),
+                orderingModes=if(rows.getBoolean("individual_enabled")) listOf("INDIVIDUAL_PREPARED_DEMO","BULK_REQUEST") else listOf("BULK_REQUEST"),
                 categoryIds=categories))
         }
     }
@@ -24,9 +25,13 @@ internal fun sellers(connection: Connection): List<SellerDto> = connection.prepa
 
 internal fun menuItems(connection: Connection, sellerId: String, query: String?, categoryId: String?): List<MenuItemDto> {
     val sql = """SELECT i.id,i.seller_id,i.name,i.description,i.price_paise,i.kind,i.dietary,i.availability,
-                       i.published,i.image_key,i.category_id,s.is_main_canteen
+                       i.published,i.image_key,i.category_id,i.order_eligibility,
+                       COALESCE(p.individual_enabled,FALSE) AS individual_enabled
                 FROM menu_items i JOIN sellers s ON s.id=i.seller_id
+                LEFT JOIN seller_ordering_policies p ON p.seller_id=s.id
                 WHERE i.seller_id=? AND s.active AND i.published AND i.archived_at IS NULL AND $ACTIVE_CATEGORY_SQL
+                  AND (i.order_eligibility IN ('BULK_ONLY','BOTH') OR
+                       (i.order_eligibility IN ('INDIVIDUAL_ONLY','BOTH') AND p.individual_enabled))
                   AND (i.availability='AVAILABLE' OR i.unavailable_visibility='SHOW')
                   AND (? IS NULL OR i.category_id=?)
                   AND (? IS NULL OR i.name ILIKE ? OR i.description ILIKE ?)
@@ -37,12 +42,12 @@ internal fun menuItems(connection: Connection, sellerId: String, query: String?,
         statement.setString(4,term); statement.setString(5,term); statement.setString(6,term)
         statement.executeQuery().use { rows -> buildList {
             while(rows.next()) {
-                val main=rows.getBoolean("is_main_canteen"); val kind=rows.getString("kind")
+                val eligibility=rows.getString("order_eligibility")
                 add(MenuItemDto(rows.getString("id"),rows.getString("seller_id"),rows.getString("name"),
-                    rows.getString("description"),rows.getLong("price_paise"),kind,rows.getString("dietary"),
+                    rows.getString("description"),rows.getLong("price_paise"),rows.getString("kind"),rows.getString("dietary"),
                     rows.getString("availability"),rows.getBoolean("published"),
-                    if(main && kind=="PREPARED") listOf("INDIVIDUAL_PREPARED_DEMO","BULK_REQUEST") else listOf("BULK_REQUEST"),
-                    rows.getString("image_key"),rows.getString("category_id")))
+                    itemModes(eligibility,rows.getBoolean("individual_enabled")),
+                    rows.getString("image_key"),rows.getString("category_id"),eligibility))
             }
         } }
     }
@@ -51,21 +56,28 @@ internal fun menuItems(connection: Connection, sellerId: String, query: String?,
 /** Seller-owned item lookup includes unpublished/hidden rows so a successful edit can return its result. */
 internal fun menuItem(connection: Connection, sellerId: String, itemId: String): MenuItemDto? = connection.prepareStatement(
     """SELECT i.id,i.seller_id,i.name,i.description,i.price_paise,i.kind,i.dietary,i.availability,
-              i.published,i.image_key,i.category_id,s.is_main_canteen
+              i.published,i.image_key,i.category_id,i.order_eligibility,
+              COALESCE(p.individual_enabled,FALSE) AS individual_enabled
        FROM menu_items i JOIN sellers s ON s.id=i.seller_id
+       LEFT JOIN seller_ordering_policies p ON p.seller_id=s.id
        WHERE i.seller_id=? AND i.id=? AND s.active"""
 ).use { statement ->
     statement.setString(1,sellerId);statement.setString(2,itemId)
     statement.executeQuery().use { rows ->
         if(!rows.next()) null else {
-            val main=rows.getBoolean("is_main_canteen");val kind=rows.getString("kind")
+            val eligibility=rows.getString("order_eligibility")
             MenuItemDto(rows.getString("id"),rows.getString("seller_id"),rows.getString("name"),
-                rows.getString("description"),rows.getLong("price_paise"),kind,rows.getString("dietary"),
+                rows.getString("description"),rows.getLong("price_paise"),rows.getString("kind"),rows.getString("dietary"),
                 rows.getString("availability"),rows.getBoolean("published"),
-                if(main && kind=="PREPARED") listOf("INDIVIDUAL_PREPARED_DEMO","BULK_REQUEST") else listOf("BULK_REQUEST"),
-                rows.getString("image_key"),rows.getString("category_id"))
+                itemModes(eligibility,rows.getBoolean("individual_enabled")),
+                rows.getString("image_key"),rows.getString("category_id"),eligibility)
         }
     }
+}
+
+private fun itemModes(eligibility: String, individualEnabled: Boolean) = buildList {
+    if(individualEnabled && eligibility in setOf("INDIVIDUAL_ONLY","BOTH")) add("INDIVIDUAL_PREPARED_DEMO")
+    if(eligibility in setOf("BULK_ONLY","BOTH")) add("BULK_REQUEST")
 }
 
 /** Alias i must be a menu_items row. Shared by selection, drafts and checkout pricing. */

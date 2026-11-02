@@ -16,7 +16,8 @@ data class IndividualDraft(val lines: List<IndividualLine> = emptyList()) {
 data class IndividualServerCartLine(val itemId: String, val quantity: Int, val unitPricePaise: Long,
                                     val available: Boolean)
 data class IndividualServerCart(val version: Long, val subtotalPaise: Long,
-                                val readyForCheckout: Boolean, val lines: List<IndividualServerCartLine>)
+                                val readyForCheckout: Boolean, val lines: List<IndividualServerCartLine>,
+                                val sellerId: String? = null)
 
 /** Selection only. This cannot submit, charge, reserve, or notify a kitchen. */
 class IndividualCartSession(private val catalog: CustomerCatalogSource = PreviewCatalog) {
@@ -40,7 +41,9 @@ class IndividualCartSession(private val catalog: CustomerCatalogSource = Preview
 
     fun setQuantity(item: MenuItem, quantity: Int): Boolean {
         val seller = catalog.sellers.find { it.id == item.sellerId } ?: return false
-        if (quantity < 0 || itemEligibility(seller, item) != ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK) return false
+        if (quantity < 0 || itemEligibility(seller, item) !in setOf(ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK, ItemEligibility.INDIVIDUAL_ONLY)) return false
+        if (quantity > 0 && draft.lines.any { line -> line.itemId != item.id &&
+                catalog.items.find { it.id == line.itemId }?.sellerId != item.sellerId }) return false
         val other = draft.lines.filterNot { it.itemId == item.id }
         draft = IndividualDraft(if (quantity == 0) other else other + IndividualLine(item.id, quantity))
         return true
@@ -73,9 +76,10 @@ fun checkIndividualCart(draft: IndividualDraft, catalog: CustomerCatalogSource):
         val item = catalog.items.find { it.id == line.itemId }
         val seller = item?.let { found -> catalog.sellers.find { it.id == found.sellerId } }
         if (item == null || seller == null || line.quantity <= 0 ||
-            itemEligibility(seller, item) != ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK) unavailable += line.itemId
+            itemEligibility(seller, item) !in setOf(ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK, ItemEligibility.INDIVIDUAL_ONLY)) unavailable += line.itemId
         else valid += item to line.quantity
     }
+    if (valid.map { it.first.sellerId }.distinct().size > 1) unavailable += valid.map { it.first.id }
     return IndividualCartCheck(valid, valid.sumOf { (item, quantity) -> item.price.rupees.toLong() * quantity * 100L }, unavailable)
 }
 
@@ -83,7 +87,11 @@ data class IndividualOrderPreview(val id: String, val placedAt: LocalDateTime,
                                   val lines: List<QuoteLineSnapshot>, val totalPaise: Long,
                                   val locallySaved: Boolean = false, val status: String = "SAMPLE",
                                   val demoPaymentOutcome: String = "NOT_ATTEMPTED",
-                                  val sandboxPaymentStatus: String? = null)
+                                  val sandboxPaymentStatus: String? = null,
+                                  val pickupReference: String = "",
+                                  val pickupCode: String? = null,
+                                  val handedOverAt: String? = null,
+                                  val sellerId: String = "")
 
 /** UAT metadata only. The server remains authoritative for amount and status. */
 data class SandboxPayment(val id: String, val sourceType: String, val sourceId: String,

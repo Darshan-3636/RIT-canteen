@@ -29,7 +29,7 @@ object CloudDemoIdentitySeed {
                 "Cloud demo database contains public local fixture identities; use a fresh demo database"
             }
             ensureUser(db, customerEmail, customerPassword, "Demo Customer", "STUDENT", null)
-            ensureUser(db, ownerEmail, ownerPassword, "Demo Main Canteen Owner", null, "main-canteen")
+            ensureUser(db, ownerEmail, ownerPassword, "Demo M.S.R.I.T Canteen Owner", null, "main-canteen")
         }
     }
 

@@ -7,7 +7,8 @@ object DebugCommerceApi {
     fun replaceBulkDraft(expectedVersion: Long, draft: BulkDraft): Result<BulkServerDraft> = Result()
     fun individualCart(): Result<IndividualServerCart> = Result()
     fun replaceIndividualCart(expectedVersion: Long, lines: List<IndividualLine>): Result<IndividualServerCart> = Result()
-    fun checkoutIndividualCart(expectedVersion: Long, idempotencyKey: String): Result<IndividualOrderPreview> = Result()
+    fun checkoutIndividualCart(expectedVersion: Long, idempotencyKey: String,
+                               promotionId: String? = null): Result<IndividualOrderPreview> = Result()
     fun individualOrders(): Result<List<IndividualOrderPreview>> = Result()
     fun sellerIndividualOrders(sellerId: String): Result<List<IndividualOrderPreview>> = Result()
     fun simulateIndividualPayment(id: String, outcome: String): Result<IndividualOrderPreview> = Result()
@@ -15,7 +16,8 @@ object DebugCommerceApi {
     fun sandboxPayments(): Result<List<SandboxPayment>> = Result()
     fun sandboxPayment(id: String): Result<SandboxPayment> = Result()
     fun reconcileSandboxPayment(id: String): Result<SandboxPayment> = Result()
-    fun transitionIndividual(sellerId: String, id: String, status: String): Result<IndividualOrderPreview> = Result()
+    fun transitionIndividual(sellerId: String, id: String, status: String,
+                             pickupCode: String? = null): Result<IndividualOrderPreview> = Result()
     fun submitIndividual(draft: IndividualDraft): Result<IndividualOrderPreview> = Result()
     fun bulkRequests(sellerId: String? = null): Result<List<BulkRequestRecord>> = Result()
     fun submitBulk(draft: BulkDraft, idempotencyKey: String): Result<BulkRequestRecord> = Result()

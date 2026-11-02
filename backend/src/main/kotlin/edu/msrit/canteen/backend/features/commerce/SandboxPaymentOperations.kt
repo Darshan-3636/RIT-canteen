@@ -33,7 +33,7 @@ private fun source(db: Connection, principal: AuthenticatedPrincipal, type: Stri
     if (customer !in setOf("STUDENT", "FACULTY"))
         throw CommerceFault(403, "CUSTOMER_REQUIRED", "A Student or Faculty customer account is required")
     return when (type) {
-        "INDIVIDUAL" -> db.prepareStatement("""SELECT seller_id,subtotal_paise,status FROM individual_demo_orders
+        "INDIVIDUAL" -> db.prepareStatement("""SELECT seller_id,subtotal_paise-discount_paise,status FROM individual_demo_orders
             WHERE id=? AND customer_user_id=? FOR UPDATE""").use { query ->
             query.setObject(1, id); query.setObject(2, principal.userId)
             query.executeQuery().use { rows ->

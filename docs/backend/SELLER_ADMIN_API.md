@@ -1,8 +1,18 @@
 # Seller and platform management API
 
-Implemented locally on the integrated backend; requires **V048**. This implementation's single migration replaces the earlier proposed Seller/Admin allocation in the design report. No inventory migrations are included. V001-V047 and PhonePe gateway/attempt behavior remain unchanged.
+Implemented in the local working tree. Apply V048-V053 in order to a disposable database before testing these routes. V001-V047 and PhonePe gateway/attempt behavior remain unchanged. None of V048-V053 has been applied to shared Supabase.
+
+## V049 canteen names and ordering eligibility
+
+V049 changes the four existing seller display names while retaining their IDs and all historical references. `esb-msrit-canteen` is reserved as the stable proposed ID for ESB MSRIT Canteen; an administrator creates and approves its setup draft with an existing active owner before activation. The migration does not create an unowned seller.
+
+Each item has `orderEligibility`: `INDIVIDUAL_ONLY`, `BULK_ONLY`, or `BOTH`. Seller catalog create and patch accept the field; private item responses and public menu items return it. Public `orderingModes` reflect both item eligibility and the seller's `individualEnabled` policy. The three existing secondary sellers default to individual ordering disabled. An authorized `hours.edit` member can PATCH `/sellers/{sellerId}/bulk-policy` with `individualEnabled`; the existing minimum and special-pickup fields remain supported. The operating-policy GET returns `individualEnabled`.
+
+Individual cart replacement, checkout and direct demo order creation require one seller, that seller's individual policy, and individually eligible items. Bulk draft replacement and request pricing require bulk-eligible items. Existing order line snapshots and payment records are unchanged. The legacy `INDIVIDUAL_PREPARED_DEMO` mode string remains for API compatibility and denotes the existing demo-only individual lifecycle, even for newly eligible packaged items.
 
 All paths below start with `/api/v1`. Authentication uses the existing opaque bearer session. Public menu responses retain their fields. Errors retain `{"error":{"code":"...","message":"..."}}`.
+
+GET `/catalog/snapshot` returns active sellers and their visible menu items in one public response; the older `/sellers` and per-seller `/menu` routes remain available for older clients. Android falls back to those routes when an older server returns 404 for the snapshot.
 
 ## Seller resources
 
@@ -66,6 +76,7 @@ All require the live platform-admin flag and an ACTIVE account. Existing searcha
 | GET/POST `/admin/sellers/{sellerId}/memberships`, PATCH `.../{id}`, PUT `.../{id}/capabilities` | Same bodies/invariants as seller commands; admin may assign OWNER. Administrative access is explicit. |
 | GET/POST `/admin/catalog/categories`, PUT `/admin/catalog/categories/{id}` | Creation/replacement body: `id,name,sortOrder,active`. Deactivation affects every assigned seller; no deletion. |
 | GET `/admin/dashboard/metrics` | Platform operations counts; optional `from,to` bound order counts. Member/catalog/account counts are current state. No verified revenue is inferred. |
+| GET `/admin/reports/export` | CSV of the same stored operational metrics; optional `from,to` at most 366 days. Platform-admin only; each export request is audited. Verified revenue is absent. |
 | GET `/admin/audit` | Existing pagination/action/targetType plus `sellerId,targetId` filters. Successful management, order-decision and export actions are audited. |
 
 Approval is one decision per draft. Repeating a stale version returns 409; GET the draft to recover the created seller after a lost response. Duplicate item IDs, memberships and proposed seller IDs are rejected without creating duplicate entities. Existing payment/cart/bulk idempotency remains unchanged.
@@ -76,7 +87,22 @@ Management services own JDBC transactions and reuse existing authorization/SQL/a
 
 New edits require versions; legacy catalog and operations callers may initially omit their optional precondition. They retain last-writer behavior until migrated. New catalog/private state reads provide versions without changing existing response DTO shapes. Non-destructive migration defaults preserve existing rows.
 
-Individual seller transitions retain demo semantics and the existing `bulk.view`/`bulk.respond` permissions: simulated-payment -> ACCEPTED/REJECTED; ACCEPTED -> READY -> COMPLETED. Repeating an already reached supported status is a no-op. Invalid/cross-seller transitions fail, and no transition verifies payment or deducts stock. Real paid fulfillment and inventory remain outside this implementation; the existing confirmed-pickup placeholder is not populated with unpaid orders.
+Individual seller transitions retain demo semantics and the existing `bulk.view`/`bulk.respond` permissions: simulated-payment -> ACCEPTED/REJECTED; ACCEPTED -> READY -> COMPLETED. V053 requires `pickupCode` from the customer for READY -> COMPLETED, stores `handedOverAt` and the seller actor, and exposes a human-readable `pickupReference`. The customer order response includes the code; the seller queue does not. Repeating an already reached supported status is a no-op. Invalid/cross-seller transitions fail, and no transition verifies payment or deducts stock. Automated recipe consumption waits for a real, verified fulfillment event.
+
+## Added commerce and inventory routes
+
+V050 records scoped, deduplicated in-app notices for individual and bulk order changes. V051 adds seller promotions: GET/POST `S/promotions`, PATCH `S/promotions/{id}` (`promotions.manage`), GET `/me/offers`, and POST `/me/cart/individual/offer-quote`. Checkout may include `promotionId`; the server locks eligible items and snapshots integer-paise discounts. V052 creates a seller-scoped stock ledger and adds these routes under `S/inventory`:
+
+| Route group | Capability | Operations |
+| --- | --- | --- |
+| `overview`, `batches`, `alerts`, `ledger`, `receipts`, `purchase-orders`, `recipes/{itemId}` | `inventory.view` | Read seller-owned stock, batches, alerts, movements, orders and recipes. |
+| `categories`, `materials`, `suppliers` | `inventory.manage` | POST create, PATCH with `expectedVersion` to update or archive. |
+| `purchase-orders`, `purchase-orders/{id}/placed`, `purchase-orders/{id}/cancelled` | `inventory.manage` | Create draft and enforce valid PO transitions. |
+| `receipts`, `wastage`, `reorder-rules/{materialId}`, `alerts/{id}/acknowledge`, `recipes/{itemId}` | `inventory.manage` | Receive/consume batches, set thresholds, acknowledge alerts and save recipes. |
+| `adjustments` | `inventory.adjust` | Post a reasoned stock adjustment. |
+| `report.csv` | `inventory.view` | Export current balances, reorder settings and expiring batch counts. |
+
+Receipts, wastage and adjustments use a client UUID `requestId`; identical retries return the recorded result, while changed payloads fail. Stock movements lock the material and batch, update both projections and append one immutable ledger row in the same transaction. They reject negative balances and cross-seller references. Expiry alerts materialize when inventory is opened; low-stock alerts update with ledger movements. Order-based recipe consumption is intentionally inactive while payment and fulfillment are demo-only.
 
 Validation failures use 400, missing/expired sessions 401, denied privileges 403, absent/out-of-scope entities 404, and stale/conflicting lifecycle/constraint changes 409. Existing commerce business-rule errors retain 422. Mutations and audit insertions commit together. No shared Supabase migration or deployment has been performed.
 

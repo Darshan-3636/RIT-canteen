@@ -3,24 +3,57 @@ package edu.msrit.canteen.backend.features.management
 import edu.msrit.canteen.backend.api.requirePlatformAdmin
 import edu.msrit.canteen.backend.api.requireSellerCapability
 import edu.msrit.canteen.backend.core.BackendContext
+import edu.msrit.canteen.backend.core.transaction
 import edu.msrit.canteen.backend.features.engagement.*
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.response.header
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import kotlinx.serialization.json.*
 import java.time.temporal.ChronoUnit
+import java.util.UUID
 
 internal fun Route.registerManagementAnalytics(context: BackendContext) {
     get("/admin/dashboard/metrics") { call.handled {
         call.requirePlatformAdmin(context) ?: return@handled
         call.respond(managementMetrics(context,call,null))
     } }
+    get("/admin/reports/export") { call.handled {
+        val actor=call.requirePlatformAdmin(context) ?: return@handled
+        val metrics=managementMetrics(context,call,null)
+        val rows=buildList {
+            add("Metric,Value")
+            for(key in listOf("scope","from","to","timezone","source","activeSellers",
+                "activeMemberships","catalogItems","archivedItems","suspendedUsers","pendingSetupDrafts"))
+                add("${reportCell(key)},${reportCell(metrics[key]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content.orEmpty())}")
+            for(key in listOf("individualDemoOrdersByStatus","bulkRequestsByStatus"))
+                metrics[key]?.jsonObject?.forEach { (status,value) ->
+                    add("${reportCell("$key.$status")},${reportCell(value.jsonPrimitive.content)}")
+                }
+        }
+        context.transaction { db ->
+            context.requireAdminInTx(db,actor)
+            recordAudit(db,actor.userId,"ADMIN","admin.report.export",
+                "PLATFORM_REPORT",UUID.randomUUID().toString(),detail=mapOf(
+                    "from" to (metrics["from"]?.toString() ?: ""),"to" to (metrics["to"]?.toString() ?: "")))
+        }
+        call.response.header(HttpHeaders.ContentDisposition,"attachment; filename=platform-report.csv")
+        call.respondText(rows.joinToString("\n",postfix="\n"),ContentType.parse("text/csv; charset=utf-8"))
+    } }
     get("/sellers/{sellerId}/analytics/operations") { call.handled {
         val seller=call.parameters["sellerId"]!!
         call.requireSellerCapability(context,seller,"analytics.view") ?: return@handled
         call.respond(managementMetrics(context,call,seller))
     } }
+}
+
+private fun reportCell(value: String): String {
+    val safe=if(value.firstOrNull() in listOf('=','+','-','@')) "'"+value else value
+    return "\""+safe.replace("\"","\"\"")+"\""
 }
 
 /** Stock, forecasts and verified revenue are not inferred from demo or sandbox orders. */
