@@ -23,6 +23,7 @@ import edu.msrit.canteen.ui.theme.RitThemeTokens
 import edu.msrit.canteen.ui.theme.AppearancePreference
 import edu.msrit.canteen.customer.AppearanceChoice
 import edu.msrit.canteen.customer.SandboxPayment
+import edu.msrit.canteen.presentation.PresentationApp
 
 class MainActivity : ComponentActivity() {
     private var activeSandboxPaymentId: String? = null
@@ -60,7 +61,8 @@ class MainActivity : ComponentActivity() {
                     if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
                 }
                 Box(Modifier.fillMaxSize().background(colors.background)) {
-                    RitAppNavigation(appearance = appearance, onSandboxCheckout = ::launchSandbox,
+                    if (BuildConfig.RIT_UI_ONLY_PRESENTATION) PresentationApp()
+                    else RitAppNavigation(appearance = appearance, onSandboxCheckout = ::launchSandbox,
                         sandboxCallbackId = sandboxCallbackId)
                 }
             }

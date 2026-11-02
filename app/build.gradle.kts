@@ -24,13 +24,15 @@ if (cloudDemoRequested) {
     }
 }
 val apiBaseUrl = configuredApiBaseUrl ?: "http://127.0.0.1:8080"
+// This isolated branch builds a separately installable, offline presentation client.
+val uiOnlyPresentation = providers.gradleProperty("ritUiOnlyPresentation").orNull?.toBooleanStrictOrNull() ?: true
 
 android {
     namespace = "edu.msrit.canteen"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "edu.msrit.canteen"
+        applicationId = if (uiOnlyPresentation) "edu.msrit.canteen.presentation" else "edu.msrit.canteen"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -38,6 +40,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "RIT_API_BASE_URL", "\"$apiBaseUrl\"")
         buildConfigField("boolean", "RIT_CLOUD_DEMO", cloudDemoRequested.toString())
+        buildConfigField("boolean", "RIT_UI_ONLY_PRESENTATION", uiOnlyPresentation.toString())
     }
 
     buildFeatures {
