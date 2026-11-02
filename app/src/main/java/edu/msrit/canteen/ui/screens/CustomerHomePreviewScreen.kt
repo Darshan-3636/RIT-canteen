@@ -28,7 +28,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import edu.msrit.canteen.customer.CustomerCatalogSource
 import edu.msrit.canteen.customer.FavoritesRepository
-import edu.msrit.canteen.customer.FoodPhoto
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.visibleItems
 import edu.msrit.canteen.onboarding.CopyContext
@@ -99,7 +98,9 @@ fun CustomerHomePreviewScreen(
                     Spacer(Modifier.height(20.dp))
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(RitRadii.hero)).background(colors.warmCard)
                         .clickable(role = Role.Button, onClick = onSellers)) {
-                        FoodPhotoContent(FoodPhoto.DOSA, "Illustrative masala dosa photograph", Modifier.fillMaxWidth().height(158.dp))
+                        val hero = catalog.items.firstOrNull { it.id == "masala-dosa" }
+                        FoodPhotoContent(hero?.photo, "Illustrative masala dosa photograph",
+                            Modifier.fillMaxWidth().height(158.dp), hero?.localImageUri)
                         Column(Modifier.padding(16.dp)) {
                             RitText("Discover the campus menu", RitType.title)
                             RitText("Browse the main canteen and group-order sellers", RitType.small, colors.muted)

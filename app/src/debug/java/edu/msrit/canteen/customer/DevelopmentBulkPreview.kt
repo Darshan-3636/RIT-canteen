@@ -1,5 +1,6 @@
 package edu.msrit.canteen.customer
 
+import edu.msrit.canteen.BuildConfig
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -10,6 +11,7 @@ object DevelopmentBulkPreview : BulkPolicySource {
     override fun forSeller(sellerId: String): SellerBulkPolicy? {
         if (PreviewCatalog.sellers.none { it.id == sellerId }) return null
         DevelopmentSellerBusiness.policyOverrides[sellerId]?.let { return it }
+        if (BuildConfig.RIT_CLOUD_DEMO) return null // Never invent operating hours for a connected seller.
         return defaultForSeller(sellerId)
     }
 
@@ -21,11 +23,7 @@ object DevelopmentBulkPreview : BulkPolicySource {
         }
         return SellerBulkPolicy(
             sellerId = sellerId,
-            minimumOverride = when (sellerId) {
-                "north-counter" -> 10
-                "campus-pantry" -> 12
-                else -> null
-            },
+            minimumOverride = PreviewCatalog.sellers.find { it.id == sellerId }?.bulkMinimumUnits,
             weeklyHours = weekdays + (DayOfWeek.SATURDAY to listOf(BulkTimeWindow(LocalTime.of(10, 0), LocalTime.of(14, 0)))),
             holidays = setOf(today.plusDays(4)),
             temporaryClosures = setOf(today.plusDays(6)),
@@ -33,6 +31,7 @@ object DevelopmentBulkPreview : BulkPolicySource {
     }
 
     fun sample(stage: QuoteStage, now: LocalDateTime = LocalDateTime.now(RIT_TIME_ZONE)): QuoteThread? {
+        if (BuildConfig.RIT_CLOUD_DEMO) return null
         val pickup = (1L..14L).asSequence()
             .map { now.plusDays(it).withHour(11).withMinute(30).withSecond(0).withNano(0) }
             .first { pickupWindow(forSeller(PreviewCatalog.MAIN_ID), it, now) == PickupWindow.REGULAR }

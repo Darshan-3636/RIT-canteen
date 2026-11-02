@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: rit_canteen
+      POSTGRES_USER: rit_canteen
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in your local .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - rit_canteen_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rit_canteen -d rit_canteen"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  rit_canteen_pgdata:

@@ -2,6 +2,7 @@ package edu.msrit.canteen.customer
 
 /** Release boundary: no mock business session or mutation is available. */
 object DevelopmentSellerBusiness : SellerBusinessRepository {
+    fun applyServerPolicy(policy: SellerBulkPolicy, reasons: List<SellerClosure> = emptyList()) = Unit
     override val employees: List<SellerEmployee> = emptyList()
     override val policyOverrides: Map<String, SellerBulkPolicy> = emptyMap()
     override val closureReasons: Map<String, List<SellerClosure>> = emptyMap()

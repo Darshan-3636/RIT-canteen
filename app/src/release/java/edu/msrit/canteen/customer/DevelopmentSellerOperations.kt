@@ -6,6 +6,7 @@ import java.time.LocalDateTime
 /** Release contains no scenario records and cannot authorize mock transitions. */
 object DevelopmentSellerOperations : BulkOperationsRepository {
     override val records: List<BulkRequestRecord> = emptyList()
+    fun applyServer(newRecords: List<BulkRequestRecord>) = Unit
     override fun reset() = Unit
     override fun submitLocalDemo(draft: BulkDraft, actor: AuthorizedIdentity?, now: LocalDateTime) =
         DemoTransitionResult.UNAUTHORIZED to null

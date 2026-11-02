@@ -97,7 +97,7 @@ fun BulkOrdersScreen(onBack: () -> Unit, onDraft: () -> Unit, onQuickReorder: ()
                 RitStatusIndicator(if (showSample) "Development scenario · not an actual request" else "No verified account or orders")
                 Spacer(Modifier.height(14.dp))
                 if (showSample) {
-                    BulkInfoCard("DEMO-BULK-01 · counteroffer", "A fictional seller response demonstrates the future revision timeline. It was not sent by Main Canteen and is not payable.",
+                    BulkInfoCard("DEMO-BULK-01 · counteroffer", "A fictional seller response demonstrates the future revision timeline. It was not sent by M.S.R.I.T Canteen and is not payable.",
                         Modifier.testTag("bulk_orders_sample"))
                     Spacer(Modifier.height(10.dp))
                     RitSecondaryButton("Inspect demo negotiation", onSampleNegotiation,
@@ -248,7 +248,7 @@ fun BulkCounterproposalScreen(thread: QuoteThread?, policies: BulkPolicySource, 
                 RitText("Items and quantities", RitType.title)
             }
             items(catalog.visibleItems(thread.sellerId), key = { it.id }) { item ->
-                if (edu.msrit.canteen.customer.itemEligibility(catalog.sellers.first { it.id == thread.sellerId }, item) != edu.msrit.canteen.customer.ItemEligibility.UNAVAILABLE) {
+                if (edu.msrit.canteen.customer.itemEligibility(catalog.sellers.first { it.id == thread.sellerId }, item) in setOf(edu.msrit.canteen.customer.ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK, edu.msrit.canteen.customer.ItemEligibility.BULK_ONLY)) {
                     val quantity = draft.draft.lines.find { it.itemId == item.id }?.quantity ?: 0
                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column(Modifier.weight(1f)) {

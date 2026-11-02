@@ -23,6 +23,7 @@ fun CustomerUnavailableScreen(section: String, onBack: () -> Unit) {
         "favourites" -> "Favourites"
         "profile" -> "Profile"
         "access" -> "Mock access required"
+        "payment" -> "Payment unavailable"
         else -> "Coming later"
     }
     Column(Modifier.fillMaxSize().background(RitThemeTokens.colors.background)) {
@@ -35,7 +36,8 @@ fun CustomerUnavailableScreen(section: String, onBack: () -> Unit) {
                 "orders" -> "There is no connected order history yet. This preview has not placed any orders."
                 "favourites" -> "Saving favourites is planned for a later stage; nothing is stored by this preview."
                 "profile" -> "A verified customer account and profile require the email authentication service."
-                "access" -> "Select the Customer mock login in the debug Testing Hub. This is not a real account session."
+                "access" -> "Sign in with an authorized customer account to continue. Demo accounts are available only in development builds."
+                "payment" -> "Payment is not integrated. An agreed bulk quote remains unpaid; no QR or pickup credential exists."
                 else -> "This feature is not connected yet."
             })
         }

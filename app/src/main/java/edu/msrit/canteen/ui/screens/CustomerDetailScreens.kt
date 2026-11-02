@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -79,7 +80,7 @@ fun SellerProfileScreen(
                     }
                     RitText(seller.description, RitType.body, colors.muted)
                     Spacer(Modifier.height(10.dp))
-                    CatalogPill(if (seller.capabilities.futureIndividualPrepared) "Individual prepared food planned + Bulk" else "Bulk orders only")
+                    CatalogPill(if (seller.capabilities.futureIndividualPrepared) "Individual and bulk ordering" else "Bulk orders only")
                     Spacer(Modifier.height(12.dp))
                     RitText(seller.location ?: "Location not yet verified", RitType.small, colors.muted)
                     RitText(seller.hours?.display ?: "Operating hours not yet configured", RitType.small, colors.muted)
@@ -92,7 +93,7 @@ fun SellerProfileScreen(
                     }
                     if (onBulk != null && seller.capabilities.bulk) {
                         Spacer(Modifier.height(9.dp))
-                        RitPrimaryButton("Build a local bulk draft", { onBulk(seller.id) },
+                        RitPrimaryButton("Start a bulk order", { onBulk(seller.id) },
                             Modifier.fillMaxWidth().testTag("seller_start_bulk"))
                     }
                     Spacer(Modifier.height(20.dp))
@@ -112,7 +113,7 @@ fun SellerProfileScreen(
 
 @Composable
 fun FoodDetailsScreen(itemId: String, onBack: () -> Unit, onAddBulk: ((String) -> Unit)? = null,
-                      onAddIndividual: ((String) -> Unit)? = null, onViewCart: (() -> Unit)? = null,
+                      onAddIndividual: ((String, (Boolean) -> Unit) -> Unit)? = null, onViewCart: (() -> Unit)? = null,
                       favorites: FavoritesRepository? = null,
                       customerId: String? = null, catalog: CustomerCatalogSource = PreviewCatalog) {
     val item = catalog.items.find { it.id == itemId && it in catalog.visibleItems() }
@@ -122,6 +123,8 @@ fun FoodDetailsScreen(itemId: String, onBack: () -> Unit, onAddBulk: ((String) -
     val eligibility = itemEligibility(seller, item)
     var expanded by rememberSaveable(itemId) { mutableStateOf(false) }
     var added by rememberSaveable(itemId) { mutableStateOf(false) }
+    var adding by remember(itemId) { mutableStateOf(false) }
+    var addFailed by remember(itemId) { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(colors.background).testTag("food_details")) {
         CatalogHeader("Food Details", onBack)
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 18.dp)) {
@@ -152,24 +155,36 @@ fun FoodDetailsScreen(itemId: String, onBack: () -> Unit, onAddBulk: ((String) -
                 RitText(when (eligibility) {
                     ItemEligibility.UNAVAILABLE -> "This item is unavailable for a new request."
                     ItemEligibility.BULK_ONLY -> "Bulk requests only. Individual ordering is not offered for this item."
-                    ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK -> "Add prepared food to an individual cart with no minimum, or plan a group bulk request. Checkout remains a demo preview."
+                    ItemEligibility.INDIVIDUAL_ONLY -> "Available for individual orders only."
+                    ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK -> "The seller allows both order types for this item. Choose individual for your own order or bulk for a group request."
                 }, RitType.body, colors.muted)
                 Spacer(Modifier.height(8.dp))
-                RitText("Price is illustrative; confirm the live menu before ordering.", RitType.small, colors.muted)
+                RitText("The final item price is confirmed when you place your order.", RitType.small, colors.muted)
             }
         }
-        if (eligibility == ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK && onAddIndividual != null) {
+        if (eligibility in setOf(ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK, ItemEligibility.INDIVIDUAL_ONLY) && onAddIndividual != null) {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                if (eligibility == ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK)
+                    RitText("Choose your order type", RitType.label, modifier = Modifier.testTag("food_choose_order_type"))
                 if (added) RitText("Added to individual cart", RitType.label, colors.accent,
                     Modifier.testTag("food_added_feedback"))
-                RitPrimaryButton("Add to Cart", { onAddIndividual(item.id); added = true },
-                    Modifier.fillMaxWidth().testTag("food_add_individual"))
+                if (addFailed) RitText("Could not update your cart. Please retry.", RitType.small, colors.accent,
+                    Modifier.testTag("food_add_error"))
+                RitPrimaryButton(if (adding) "Adding…" else "Add to Individual Cart", {
+                    adding = true
+                    addFailed = false
+                    onAddIndividual(item.id) { success ->
+                        adding = false
+                        added = success
+                        addFailed = !success
+                    }
+                }, Modifier.fillMaxWidth().testTag("food_add_individual"), enabled = !adding)
                 if (added && onViewCart != null) RitSecondaryButton("View Cart", onViewCart,
                     Modifier.fillMaxWidth().testTag("food_view_cart"))
-                if (onAddBulk != null) RitSecondaryButton("Add to Bulk Cart", { onAddBulk(item.id) },
+                if (onAddBulk != null && eligibility == ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK) RitSecondaryButton("Add to Bulk Cart", { onAddBulk(item.id) },
                     Modifier.fillMaxWidth().testTag("food_add_bulk"))
             }
-        } else if (onAddBulk != null && eligibility != ItemEligibility.UNAVAILABLE) {
+        } else if (onAddBulk != null && eligibility == ItemEligibility.BULK_ONLY) {
             RitPrimaryButton("Add to Bulk Cart", { onAddBulk(item.id) },
                 Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp).testTag("food_add_bulk"))
         } else {

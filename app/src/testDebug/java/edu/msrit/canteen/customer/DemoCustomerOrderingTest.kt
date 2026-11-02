@@ -1,5 +1,7 @@
 package edu.msrit.canteen.customer
 
+import edu.msrit.canteen.BuildConfig
+import org.junit.Assume.assumeFalse
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -23,6 +25,7 @@ class DemoCustomerOrderingTest {
     }
 
     @Test fun bulkTemplateCanBeCreatedAndEditedWithoutActiveCartOrMinimum() {
+        assumeFalse("Cloud templates use the server API", BuildConfig.RIT_CLOUD_DEMO)
         val editor = BulkDraftSession()
         assertTrue(editor.selectSeller("north-counter"))
         assertTrue(editor.setQuantity(item("north-snack"), 2))

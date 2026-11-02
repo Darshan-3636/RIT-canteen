@@ -1,5 +1,12 @@
 # RIT Canteen implementation status
 
+## Demo login, account scoping and catalog imagery (October 2026)
+
+- Normal debug Welcome/Login now supports eight seeded local email/password personas and Student/Faculty-only local signup. Sessions restore on normal relaunch, route by authorized role and seller, and clear navigation/cart state on logout. These credentials and signup logic are debug-only; release retains the unavailable real-OTP boundary.
+- Customer profile, preferences, support tickets, notifications, named templates, favorites and order previews are separated by stable customer ID. Individual demo order history is in-memory per account, not backend-persistent. Seller capabilities use the signed-in employee and associated seller, while administrator access is separate.
+- Four current seller concept images and twelve menu-item images are mapped by stable fixture ID. The images are illustrative, not verified vendor photography, and are overridden by a local selected image where supported. Unknown future IDs retain neutral placeholders.
+- Existing backend, OTP, payment and production seller verification remain unimplemented.
+
 ## Prompt 9.1 — urgent demo ordering and analytics polish (22 October 2026)
 
 - Added a debug-only individual prepared-food cart for Main Canteen, with multi-item quantity editing, eligibility checks and a local review/save-demo-order action. Packaged products and secondary-seller food remain bulk-only. No customer payment, production order or seller individual-fulfillment workflow was created.

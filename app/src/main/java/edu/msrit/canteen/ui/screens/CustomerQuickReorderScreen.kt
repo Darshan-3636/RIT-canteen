@@ -1,5 +1,6 @@
 package edu.msrit.canteen.ui.screens
 
+import edu.msrit.canteen.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,9 +18,12 @@ import androidx.compose.ui.unit.dp
 import edu.msrit.canteen.customer.CurrentItemState
 import edu.msrit.canteen.customer.CustomerCatalogSource
 import edu.msrit.canteen.customer.EmptyOrderHistory
+import edu.msrit.canteen.customer.IndividualOrderPreview
+import edu.msrit.canteen.customer.ItemEligibility
 import edu.msrit.canteen.customer.OrderHistorySource
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.currentItemState
+import edu.msrit.canteen.customer.itemEligibility
 import edu.msrit.canteen.ui.components.CatalogHeader
 import edu.msrit.canteen.ui.components.RitEmptyState
 import edu.msrit.canteen.ui.components.RitMessageCard
@@ -37,8 +41,37 @@ private val historyDate = DateTimeFormatter.ofPattern("d MMM yyyy").withZone(Zon
 @Composable
 fun CustomerQuickReorderScreen(onBack: () -> Unit, onFood: (String) -> Unit, onSeller: (String) -> Unit,
                                history: OrderHistorySource = EmptyOrderHistory,
+                               liveOrders: List<IndividualOrderPreview> = emptyList(),
                                catalog: CustomerCatalogSource = PreviewCatalog) {
     val colors = RitThemeTokens.colors
+    if(BuildConfig.RIT_CLOUD_DEMO) {
+        val saved=liveOrders.filter { it.locallySaved }
+        Column(Modifier.fillMaxSize().background(colors.background).testTag("quick_reorder_screen")) {
+            CatalogHeader("Order Again",onBack)
+            RitText("Choose an item from your saved orders. Current menu rules and prices apply.",
+                RitType.body,colors.muted,Modifier.padding(20.dp))
+            if(saved.isEmpty()) RitEmptyState("No saved orders yet","Items from your order history will appear here.")
+            else LazyColumn(contentPadding=PaddingValues(horizontal=20.dp,vertical=8.dp)) {
+                items(saved,key={ it.id }) { order ->
+                    RitText(order.pickupReference.ifBlank { "Previous order" },RitType.title)
+                    order.lines.forEach { line ->
+                        val item=catalog.items.find { it.id==line.itemId && it.sellerId==order.sellerId }
+                        val seller=catalog.sellers.find { it.id==order.sellerId }
+                        val eligible=item!=null && seller!=null &&
+                            itemEligibility(seller,item)!=ItemEligibility.UNAVAILABLE
+                        RitText("${line.quantity} × ${line.title}",RitType.body)
+                        RitText(if(eligible) "Current price ${item!!.price.display}" else
+                            "No longer available from this seller",RitType.small,colors.muted)
+                        if(eligible) RitSecondaryButton("Choose order type",{ onFood(line.itemId) },
+                            Modifier.fillMaxWidth().testTag("reorder_open_item_${line.itemId}"))
+                        else if(seller!=null) RitSecondaryButton("View seller",{ onSeller(seller.id) },Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(12.dp))
+                    }
+                }
+            }
+        }
+        return
+    }
     Column(Modifier.fillMaxSize().background(colors.background).testTag("quick_reorder_screen")) {
         CatalogHeader("Quick Reorder", onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {

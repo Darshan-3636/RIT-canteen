@@ -14,8 +14,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import edu.msrit.canteen.BuildConfig
 import edu.msrit.canteen.customer.CustomerCatalogSource
 import edu.msrit.canteen.customer.FavoritesRepository
+import edu.msrit.canteen.customer.DevelopmentFavoritesRepository
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.visibleItems
 import edu.msrit.canteen.ui.components.CatalogFoodCard
@@ -49,13 +51,18 @@ fun CustomerFavoritesScreen(
         CatalogHeader("Favourites", onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
             RitText("Saved for later", RitType.heading)
-            RitText("Only on this device in the debug preview.", RitType.body, colors.muted)
+            RitText(if (BuildConfig.RIT_CLOUD_DEMO) "Saved to your demo account on the server."
+                else "Only on this device in the debug preview.", RitType.body, colors.muted)
             Spacer(Modifier.height(10.dp))
-            RitStatusIndicator("Demo Customer favourites · not account-synced")
+            RitStatusIndicator(if (BuildConfig.RIT_CLOUD_DEMO) "Account-synced demo favourites"
+                else "Demo Customer favourites · not account-synced")
+            if (BuildConfig.RIT_CLOUD_DEMO) (favorites as? DevelopmentFavoritesRepository)?.cloudError?.let {
+                RitText(it, RitType.body, colors.accent, Modifier.testTag("favorites_server_error"))
+            }
         }
         if (foods.isEmpty() && sellers.isEmpty()) {
             Column(Modifier.weight(1f).testTag("favorites_empty")) {
-                RitEmptyState("No favourites yet", "Save a food or seller while browsing the preview catalog.")
+                RitEmptyState("No favourites yet", "Save a food or seller while browsing the catalog.")
             }
         } else {
             LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -81,7 +88,7 @@ fun CustomerFavoritesScreen(
                 val staleItems = itemIds - foods.map { it.id }.toSet()
                 val staleSellers = sellerIds - sellers.map { it.id }.toSet()
                 if (staleItems.isNotEmpty() || staleSellers.isNotEmpty()) item {
-                    RitText("Some saved entries are no longer available in this preview catalog.", RitType.small,
+                    RitText("Some saved entries are no longer available in the current catalog.", RitType.small,
                         colors.muted, Modifier.padding(20.dp).fillMaxWidth())
                 }
             }

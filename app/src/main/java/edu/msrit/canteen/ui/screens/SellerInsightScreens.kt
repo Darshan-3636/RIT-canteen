@@ -1,5 +1,8 @@
 package edu.msrit.canteen.ui.screens
 
+import edu.msrit.canteen.BuildConfig
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,29 +22,37 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import edu.msrit.canteen.customer.DevelopmentInsights
+import edu.msrit.canteen.customer.DebugSellerAnalyticsApi
+import edu.msrit.canteen.customer.DebugSellerInboxApi
+import edu.msrit.canteen.customer.DebugSellerSupportApi
+import edu.msrit.canteen.customer.SellerCloudAnalytics
 import edu.msrit.canteen.customer.DevelopmentPromotions
 import edu.msrit.canteen.customer.InsightPeriod
 import edu.msrit.canteen.customer.InsightRange
+import edu.msrit.canteen.customer.MetricRow
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.RIT_TIME_ZONE
 import edu.msrit.canteen.customer.ReportSelection
 import edu.msrit.canteen.customer.ReportType
-import edu.msrit.canteen.customer.SalesSummary
-import edu.msrit.canteen.customer.MetricRow
 import edu.msrit.canteen.customer.TicketCategory
 import edu.msrit.canteen.customer.TicketStatus
 import edu.msrit.canteen.customer.TrendGrouping
@@ -50,9 +61,33 @@ import edu.msrit.canteen.customer.range
 import edu.msrit.canteen.customer.statusAt
 import edu.msrit.canteen.customer.validateReport
 import edu.msrit.canteen.navigation.AuthorizedIdentity
+import edu.msrit.canteen.ui.components.AnalyticsCard
+import edu.msrit.canteen.ui.components.CatalogPill
+import edu.msrit.canteen.ui.components.weekdayDate
+import edu.msrit.canteen.ui.components.AnalyticsRangeSelector
+import edu.msrit.canteen.ui.components.AnalyticsToggle
+import edu.msrit.canteen.ui.components.DonutChart
+import edu.msrit.canteen.ui.components.LineLegend
+import edu.msrit.canteen.ui.components.ShareBar
+import edu.msrit.canteen.ui.components.ShareLegend
+import edu.msrit.canteen.ui.components.ShareSlice
+import edu.msrit.canteen.ui.components.formatRange
+import edu.msrit.canteen.ui.components.percentShares
+import edu.msrit.canteen.ui.components.periodName
+import edu.msrit.canteen.ui.components.shortDate
+import edu.msrit.canteen.ui.components.tabular
+import edu.msrit.canteen.ui.components.SalesBarChart
+import edu.msrit.canteen.ui.components.InsightNavEntry
+import edu.msrit.canteen.ui.components.InsightNavList
+import edu.msrit.canteen.ui.components.RankedItemRow
+import edu.msrit.canteen.ui.components.RevenuePanel
+import edu.msrit.canteen.ui.components.StatCell
+import edu.msrit.canteen.ui.components.StatStrip
+import edu.msrit.canteen.ui.components.fillDays
+import edu.msrit.canteen.ui.components.formatRupees
+import edu.msrit.canteen.ui.components.lastDays
 import edu.msrit.canteen.ui.components.CatalogHeader
 import edu.msrit.canteen.ui.components.RitChip
-import edu.msrit.canteen.ui.components.RitIcon
 import edu.msrit.canteen.ui.components.RitIconKind
 import edu.msrit.canteen.ui.components.RitEmptyState
 import edu.msrit.canteen.ui.components.RitPrimaryButton
@@ -62,16 +97,20 @@ import edu.msrit.canteen.ui.components.RitTextField
 import edu.msrit.canteen.ui.theme.RitRadii
 import edu.msrit.canteen.ui.theme.RitThemeTokens
 import edu.msrit.canteen.ui.theme.RitType
-import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
+import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 enum class SellerInsightPage { OVERVIEW, TRENDS, PRODUCTS, CUSTOMERS, PROMOTIONS, FORECAST,
     REPORT_BUILDER, REPORT_HISTORY, SUPPORT, NEW_TICKET, TICKET_DETAIL, NOTIFICATIONS, PAYMENT_STATUS }
 
-private fun money(paise: Long): String = "₹" + NumberFormat.getNumberInstance(Locale.forLanguageTag("en-IN"))
-    .format(paise / 100.0)
+private val savedTime = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
 
 @Composable
 private fun InsightPage(title: String, tag: String, onBack: () -> Unit,
@@ -80,7 +119,8 @@ private fun InsightPage(title: String, tag: String, onBack: () -> Unit,
     Column(Modifier.fillMaxSize().background(colors.background).testTag(tag)) {
         CatalogHeader(title, onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
-            RitText(if (hasSample) "DEMO DATA · not live sales"
+            RitText(if (BuildConfig.RIT_CLOUD_DEMO) "SERVER DEMO REQUESTS · NOT VERIFIED SALES"
+                else if (hasSample) "DEMO DATA · not live sales"
                 else "NO VERIFIED APP SALES · preview state only", RitType.small, colors.accent)
             Spacer(Modifier.height(14.dp))
             content()
@@ -126,76 +166,10 @@ private fun PeriodPicker(onRange: (InsightRange) -> Unit) {
 }
 
 @Composable
-private fun SalesChart(summary: SalesSummary, points: List<edu.msrit.canteen.customer.DailySales> = summary.daily) {
-    if (points.isEmpty()) { RitEmptyState("No eligible sales", "No verified app-payment history exists in this view."); return }
+private fun IllustrativeForecastChart(days: List<edu.msrit.canteen.customer.DailySales>, today: LocalDate) {
     val colors = RitThemeTokens.colors
-    val max = (points.maxOfOrNull { it.netPaise } ?: 0L).coerceAtLeast(1L)
-    Canvas(Modifier.fillMaxWidth().height(170.dp).semantics {
-        contentDescription = "Sample daily sales trend: " + points.joinToString { "${it.day}: ${money(it.netPaise)}" }
-    }) {
-        val left = 8.dp.toPx(); val right = size.width - 8.dp.toPx()
-        val bottom = size.height - 22.dp.toPx(); val top = 14.dp.toPx()
-        drawLine(colors.outline, Offset(left, bottom), Offset(right, bottom), 1.dp.toPx())
-        drawLine(colors.outline, Offset(left, top), Offset(left, bottom), 1.dp.toPx())
-        val coords = points.mapIndexed { index, point -> Offset(
-            if (points.size == 1) (left + right) / 2 else left + (right - left) * index / (points.size - 1),
-            bottom - (bottom - top) * point.netPaise.toFloat() / max) }
-        coords.zipWithNext().forEach { (a, b) -> drawLine(colors.accent, a, b, 3.dp.toPx()) }
-        coords.forEach { drawCircle(colors.accent, 4.dp.toPx(), it) }
-    }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        RitText(points.first().day.toString(), RitType.small, colors.muted)
-        RitText("₹0 to ${money(max)}", RitType.small, colors.muted)
-        RitText(points.last().day.toString(), RitType.small, colors.muted)
-    }
-    Spacer(Modifier.height(12.dp))
-}
-
-@Composable
-private fun OverviewMetric(label: String, value: String, detail: String, modifier: Modifier = Modifier) {
-    val colors = RitThemeTokens.colors
-    Column(modifier.border(1.dp, colors.outline, RoundedCornerShape(RitRadii.card))
-        .background(colors.card, RoundedCornerShape(RitRadii.card)).padding(14.dp)) {
-        RitText(label, RitType.small, colors.muted)
-        Spacer(Modifier.height(4.dp))
-        RitText(value, RitType.heading)
-        RitText(detail, RitType.small, colors.muted)
-    }
-}
-
-@Composable
-private fun PerformanceBar(row: MetricRow, maximum: Long, rank: Int? = null) {
-    val colors = RitThemeTokens.colors
-    Column(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            RitText("${rank?.let { "$it. " }.orEmpty()}${row.label}", RitType.label, modifier = Modifier.weight(1f))
-            RitText(money(row.netPaise), RitType.label, colors.accent)
-        }
-        Spacer(Modifier.height(5.dp))
-        Box(Modifier.fillMaxWidth().height(8.dp).background(colors.accentSoft, RoundedCornerShape(8.dp))) {
-            Box(Modifier.fillMaxWidth((row.netPaise.toFloat() / maximum.coerceAtLeast(1L)).coerceIn(0.03f, 1f))
-                .height(8.dp).background(colors.accent, RoundedCornerShape(8.dp)))
-        }
-        RitText("${row.units} units", RitType.small, colors.muted)
-    }
-}
-
-@Composable
-private fun OverviewLink(label: String, icon: RitIconKind, onClick: () -> Unit, tag: String) {
-    val colors = RitThemeTokens.colors
-    Row(Modifier.fillMaxWidth().border(1.dp, colors.outline, RoundedCornerShape(RitRadii.card))
-        .background(colors.card, RoundedCornerShape(RitRadii.card)).clickable(onClick = onClick)
-        .testTag(tag).padding(14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        RitIcon(icon, colors.accent, size = 22.dp)
-        RitText(label, RitType.label, modifier = Modifier.weight(1f))
-        RitText("›", RitType.label, colors.accent)
-    }
-}
-
-@Composable
-private fun IllustrativeForecastChart(summary: SalesSummary) {
-    val colors = RitThemeTokens.colors
-    val history = summary.daily.takeLast(8).map { it.netPaise.toFloat() }
+    val shown = days.takeLast(8)
+    val history = shown.map { it.netPaise.toFloat() }
     if (history.isEmpty()) { RitEmptyState("No demo history", "Select a sample period to see an illustration."); return }
     val average = history.average().toFloat()
     val projection = (1..5).map { offset -> average * (1f + ((offset % 3) - 1) * 0.09f) }
@@ -214,17 +188,83 @@ private fun IllustrativeForecastChart(summary: SalesSummary) {
             2.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))) }
         coords.forEachIndexed { index, point -> drawCircle(if (index < history.size) colors.accent else colors.muted, 3.dp.toPx(), point) }
     }
-    RitText("Solid: historical demo sales   - - -  Illustrative projection", RitType.small, colors.muted)
+    // Labels sit under their actual points: first day, the last real day, and the end of the projection.
+    val lastReal = (history.size - 1).toFloat() / (values.size - 1)
+    Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp)) {
+        RitText(shortDate(shown.first().day), RitType.small, colors.muted, Modifier.align(Alignment.CenterStart))
+        RitText(if (shown.last().day == today) "Today" else shortDate(shown.last().day), RitType.small, colors.muted,
+            Modifier.align(BiasAlignment(lastReal * 2f - 1f, 0f)))
+        RitText("+5 days", RitType.small, colors.muted, Modifier.align(Alignment.CenterEnd))
+    }
+    Spacer(Modifier.height(12.dp))
+    LineLegend(listOf("Demo sales" to false, "Illustrative projection" to true))
 }
 
 @Composable
 fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: AuthorizedIdentity?,
                         sample: Boolean, ticketId: String?, onBack: () -> Unit,
-                        onNavigate: (SellerInsightPage) -> Unit, onTicket: (String) -> Unit) {
+                        onNavigate: (SellerInsightPage) -> Unit, onTicket: (String) -> Unit,
+                        canRespond: Boolean = false) {
     val today = LocalDate.now(RIT_TIME_ZONE)
     var range by remember(page) { mutableStateOf(if (page == SellerInsightPage.OVERVIEW || page == SellerInsightPage.FORECAST)
         InsightRange(today.minusDays(29), today) else InsightPeriod.MONTH.range(today)) }
     var overviewDays by remember(page) { mutableIntStateOf(30) }
+    var cloudSummary by remember(sellerId, page) { mutableStateOf<SellerCloudAnalytics?>(null) }
+    var cloudError by remember(sellerId, page) { mutableStateOf<String?>(null) }
+    var cloudLoading by remember(sellerId, page) { mutableStateOf(false) }
+    var cloudRetry by remember(sellerId, page) { mutableIntStateOf(0) }
+    var cloudNotices by remember(sellerId, page) { mutableStateOf<List<DebugSellerInboxApi.Notice>?>(null) }
+    var noticeBusy by remember(sellerId, page) { mutableStateOf(false) }
+    var cloudSupport by remember(sellerId,page,ticketId) { mutableStateOf<JSONObject?>(null) }
+    var supportReply by remember(ticketId) { mutableStateOf("") }
+    var supportRequestId by remember(ticketId) { mutableStateOf(UUID.randomUUID().toString()) }
+    var supportBusy by remember(ticketId) { mutableStateOf(false) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var reportBusy by remember(sellerId, page) { mutableStateOf(false) }
+    var reportFeedback by remember(sellerId, page) { mutableStateOf<String?>(null) }
+    val saveReport = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        if (uri == null) reportBusy = false
+        else scope.launch {
+            val feedback = withContext(Dispatchers.IO) {
+                val result = DebugSellerAnalyticsApi.exportCsv(sellerId, range.start, range.end)
+                if (result.csv == null) result.error ?: "Report export failed."
+                else runCatching {
+                    requireNotNull(context.contentResolver.openOutputStream(uri, "w"))
+                        .use { it.write(result.csv.toByteArray(Charsets.UTF_8)) }
+                }.fold({ "CSV report saved." }, { "Could not save the CSV file." })
+            }
+            reportFeedback = feedback
+            reportBusy = false
+        }
+    }
+    LaunchedEffect(sellerId, page, range, cloudRetry) {
+        if (BuildConfig.RIT_CLOUD_DEMO && page in setOf(SellerInsightPage.OVERVIEW, SellerInsightPage.TRENDS)) {
+            cloudLoading = true
+            cloudError = null
+            val result = withContext(Dispatchers.IO) { DebugSellerAnalyticsApi.summary(sellerId, range.start, range.end) }
+            cloudSummary = result.value
+            cloudError = result.error
+            cloudLoading = false
+        } else if (BuildConfig.RIT_CLOUD_DEMO && page == SellerInsightPage.NOTIFICATIONS) {
+            cloudLoading = true
+            cloudError = null
+            val result = withContext(Dispatchers.IO) { DebugSellerInboxApi.list() }
+            cloudNotices = result.value
+            cloudError = result.error
+            cloudLoading = false
+        } else if (BuildConfig.RIT_CLOUD_DEMO && page in setOf(SellerInsightPage.SUPPORT,SellerInsightPage.TICKET_DETAIL)) {
+            cloudLoading=true
+            cloudError=null
+            val result=withContext(Dispatchers.IO) {
+                if(page==SellerInsightPage.SUPPORT) DebugSellerSupportApi.list(sellerId)
+                else DebugSellerSupportApi.detail(sellerId,ticketId.orEmpty())
+            }
+            cloudSupport=result.value
+            cloudError=result.error
+            cloudLoading=false
+        }
+    }
     val summary = DevelopmentInsights.sales(identity, sellerId, range, sample)
     val sellerName = PreviewCatalog.sellers.find { it.id == sellerId }?.name ?: "Seller"
     val title = when (page) {
@@ -238,123 +278,344 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
     }
     InsightPage(title, "seller_insight_${page.name.lowercase()}", onBack,
         hasSample = sample) {
-        when (page) {
-            SellerInsightPage.OVERVIEW -> {
-                RitText(sellerName, RitType.small, RitThemeTokens.colors.muted)
-                RitText("Sales Overview", RitType.heading)
-                Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    listOf(1 to "Today", 7 to "7 Days", 30 to "30 Days").forEach { (days, label) ->
-                        RitChip(label, overviewDays == days, {
-                            overviewDays = days; range = InsightRange(today.minusDays(days.toLong() - 1), today)
-                        }, Modifier.weight(1f).testTag("overview_range_$days"))
-                    }
-                }
+        if (BuildConfig.RIT_CLOUD_DEMO) {
+            if (page in setOf(SellerInsightPage.OVERVIEW, SellerInsightPage.TRENDS)) {
+                AnalyticsRangeSelector(overviewDays, { days -> overviewDays = days; range = lastDays(days, today) })
                 Spacer(Modifier.height(14.dp))
-                if (summary.orders == 0) RitEmptyState("No verified sales history", "Real analytics will appear after provider-verified app payments.")
-                else {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                        OverviewMetric("Total Sales", money(summary.netPaise), "App demo sales", Modifier.weight(1f).testTag("sample_net_sales"))
-                        OverviewMetric("Orders", "${summary.orders}", "Demo records", Modifier.weight(1f))
+                when {
+                    cloudLoading -> RitText("Loading saved request counts…", RitType.body,
+                        modifier = Modifier.testTag("seller_cloud_analytics_loading"))
+                    cloudError != null -> {
+                        RitEmptyState("Could not load analytics", cloudError!!)
+                        RitSecondaryButton("Retry", { cloudRetry++ }, Modifier.fillMaxWidth()
+                            .testTag("seller_cloud_analytics_retry"))
                     }
-                    Spacer(Modifier.height(9.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                        OverviewMetric("Average Order", money(summary.averagePaise), "Per demo order", Modifier.weight(1f))
-                        OverviewMetric("Returning Buyers", "${summary.returningCustomers}", "Sample customers", Modifier.weight(1f))
-                    }
-                    Spacer(Modifier.height(22.dp))
-                    RitText("Sales trend", RitType.title)
-                    SalesChart(summary)
-                    RitText("Best-selling items", RitType.title)
-                    summary.products.take(3).forEachIndexed { index, row ->
-                        PerformanceBar(row, summary.products.first().netPaise, index + 1)
-                    }
-                    Spacer(Modifier.height(13.dp))
-                    RitText("Category performance", RitType.title)
-                    summary.categories.take(4).forEach { row ->
-                        PerformanceBar(row, summary.categories.first().netPaise)
+                    cloudSummary == null -> RitEmptyState("Analytics unavailable", "No server response was confirmed.")
+                    else -> {
+                        val current = cloudSummary!!
+                        RitText("${current.simulatedOrderCount} DEMO/SIMULATED orders · ${displayPaise(current.simulatedTotalPaise)} fictional total",
+                            RitType.heading, modifier = Modifier.testTag("seller_cloud_simulated_sales"))
+                        RitText("Synthetic/demo transactions only. Payment verified: false. Not real sales or revenue.",
+                            RitType.small, RitThemeTokens.colors.muted)
+                        Spacer(Modifier.height(10.dp))
+                        RitText("${current.sandboxOrderCount} PhonePe UAT sandbox orders · ${displayPaise(current.sandboxTotalPaise)} test total",
+                            RitType.body, modifier = Modifier.testTag("seller_cloud_uat_sales"))
+                        RitText("Separate sandbox metric · payment verified: false · no real money or settlement.",
+                            RitType.small, RitThemeTokens.colors.muted)
+                        Spacer(Modifier.height(12.dp))
+                        RitText("${current.totalRequests} saved bulk requests", RitType.heading,
+                            modifier = Modifier.testTag("seller_cloud_request_total"))
+                        RitText("${range.start} to ${range.end} · ${current.status.replace('_', ' ').lowercase()}",
+                            RitType.small, RitThemeTokens.colors.muted)
+                        Spacer(Modifier.height(12.dp))
+                        if (current.byStatus.isEmpty()) RitEmptyState("No requests in this period",
+                            "Counts will appear after customers submit requests to this seller.")
+                        else current.byStatus.toSortedMap().forEach { (status, count) ->
+                            InsightCard(status.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase),
+                                "$count saved requests", tag = "seller_cloud_status_${status.lowercase()}")
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        RitText("Verified revenue and forecasts are unavailable: no payment provider is connected.",
+                            RitType.small, RitThemeTokens.colors.muted)
                     }
                 }
-                Spacer(Modifier.height(16.dp))
-                RitText("Explore your business", RitType.title)
-                listOf(
-                    Triple("Sales Trends", RitIconKind.Orders, SellerInsightPage.TRENDS),
-                    Triple("Products", RitIconKind.Food, SellerInsightPage.PRODUCTS),
-                    Triple("Customers", RitIconKind.Person, SellerInsightPage.CUSTOMERS),
-                    Triple("Promotions", RitIconKind.Heart, SellerInsightPage.PROMOTIONS),
-                    Triple("Forecasting", RitIconKind.Arrow, SellerInsightPage.FORECAST),
-                    Triple("Reports", RitIconKind.Bulk, SellerInsightPage.REPORT_BUILDER),
-                ).chunked(2).forEach { row ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                        row.forEach { (label, icon, destination) ->
-                            Box(Modifier.weight(1f)) { OverviewLink(label, icon, { onNavigate(destination) },
-                                "overview_open_${destination.name.lowercase()}") }
+            } else if (page == SellerInsightPage.NOTIFICATIONS) {
+                when {
+                    cloudLoading -> RitText("Loading notifications…",RitType.body)
+                    cloudError!=null -> {
+                        RitEmptyState("Could not load notifications",cloudError!!)
+                        RitSecondaryButton("Retry",{ cloudRetry++ },Modifier.fillMaxWidth())
+                    }
+                    cloudNotices.isNullOrEmpty() -> RitEmptyState("No notifications","Order and quote updates will appear here.")
+                    else -> cloudNotices!!.forEach { note ->
+                        InsightCard(note.title,note.body)
+                        if(!note.read) RitSecondaryButton(if(noticeBusy) "Saving…" else "Mark as read",{
+                            if(!noticeBusy) {
+                                noticeBusy=true
+                                scope.launch {
+                                    val result=withContext(Dispatchers.IO) { DebugSellerInboxApi.markRead(note.id) }
+                                    if(result.value==true) cloudNotices=cloudNotices?.map {
+                                        if(it.id==note.id) it.copy(read=true) else it }
+                                    else cloudError=result.error ?: "Could not mark notification as read."
+                                    noticeBusy=false
+                                }
+                            }
+                        },Modifier.fillMaxWidth(),enabled=!noticeBusy)
+                    }
+                }
+            } else if (page == SellerInsightPage.SUPPORT) {
+                when {
+                    cloudLoading -> RitText("Loading support tickets…",RitType.body)
+                    cloudError!=null -> {
+                        RitEmptyState("Could not load tickets",cloudError!!)
+                        RitSecondaryButton("Retry",{ cloudRetry++ },Modifier.fillMaxWidth())
+                    }
+                    cloudSupport==null -> RitEmptyState("Support unavailable","No server response was confirmed.")
+                    else -> {
+                        val rows=cloudSupport!!.getJSONArray("items")
+                        if(rows.length()==0) RitEmptyState("No support tickets","Customer requests for this seller will appear here.")
+                        repeat(rows.length()) { index ->
+                            val row=rows.getJSONObject(index)
+                            InsightCard(row.getString("subject"),
+                                "${row.getString("category")} · ${row.getString("status")}",
+                                { onTicket(row.getString("id")) })
                         }
                     }
                 }
+            } else if (page == SellerInsightPage.TICKET_DETAIL) {
+                when {
+                    cloudLoading -> RitText("Loading ticket…",RitType.body)
+                    cloudError!=null -> {
+                        RitEmptyState("Could not load ticket",cloudError!!)
+                        RitSecondaryButton("Retry",{ cloudRetry++ },Modifier.fillMaxWidth())
+                    }
+                    cloudSupport==null -> RitEmptyState("Ticket unavailable","No server response was confirmed.")
+                    else -> {
+                        val ticket=cloudSupport!!.getJSONObject("ticket")
+                        RitText(ticket.getString("subject"),RitType.title)
+                        RitText(ticket.getString("status"),RitType.small,RitThemeTokens.colors.muted)
+                        val messages=cloudSupport!!.getJSONArray("messages")
+                        repeat(messages.length()) { index ->
+                            val row=messages.getJSONObject(index)
+                            InsightCard(row.getString("authorRole"),row.getString("body"))
+                        }
+                        if(canRespond && ticket.getString("status")!="CLOSED") {
+                            RitTextField(supportReply,{ supportReply=it },"Reply to customer","Message",Modifier.fillMaxWidth())
+                            RitPrimaryButton(if(supportBusy) "Sending…" else "Send reply",{
+                                if(!supportBusy) {
+                                    supportBusy=true
+                                    scope.launch {
+                                        val result=withContext(Dispatchers.IO) { DebugSellerSupportApi.reply(
+                                            sellerId,ticket.getString("id"),supportReply.trim(),supportRequestId) }
+                                        if(result.value!=null) {
+                                            supportReply="";supportRequestId=UUID.randomUUID().toString();cloudRetry++
+                                        } else cloudError=result.error ?: "Reply was not confirmed."
+                                        supportBusy=false
+                                    }
+                                }
+                            },Modifier.fillMaxWidth(),enabled=!supportBusy && supportReply.trim().length>=2)
+                            if(ticket.getString("status")=="OPEN") RitSecondaryButton("Escalate to platform support",{
+                                if(!supportBusy) {
+                                    supportBusy=true
+                                    scope.launch {
+                                        val result=withContext(Dispatchers.IO) { DebugSellerSupportApi.escalate(
+                                            sellerId,ticket.getString("id")) }
+                                        if(result.value!=null) cloudRetry++
+                                        else cloudError=result.error ?: "Escalation was not confirmed."
+                                        supportBusy=false
+                                    }
+                                }
+                            },Modifier.fillMaxWidth(),enabled=!supportBusy)
+                        }
+                    }
+                }
+            } else if (page == SellerInsightPage.NEW_TICKET) {
+                RitEmptyState("Open customer tickets","Use the support list to reply or escalate customer requests.")
+                RitSecondaryButton("Open support list",{ onNavigate(SellerInsightPage.SUPPORT) },Modifier.fillMaxWidth())
+            } else if (page == SellerInsightPage.REPORT_BUILDER) {
+                RitText("Export stored request and support counts. Verified revenue is unavailable.",
+                    RitType.body, RitThemeTokens.colors.muted)
+                PeriodPicker { range = it }
+                Spacer(Modifier.height(12.dp))
+                RitPrimaryButton(if (reportBusy) "Preparing report..." else "Save CSV report", {
+                    if (!reportBusy) {
+                        reportFeedback = null
+                        reportBusy = true
+                        saveReport.launch("seller-report-${range.start}-${range.end}.csv")
+                    }
+                }, Modifier.fillMaxWidth(), enabled = !reportBusy && range.valid() &&
+                    ChronoUnit.DAYS.between(range.start, range.end) <= 366)
+                reportFeedback?.let { RitText(it, RitType.small, RitThemeTokens.colors.muted) }
+            } else RitEmptyState("Feature unavailable", when (page) {
+                SellerInsightPage.PRODUCTS, SellerInsightPage.CUSTOMERS, SellerInsightPage.PROMOTIONS,
+                SellerInsightPage.FORECAST -> "No verified payment or product-sales source exists for this report."
+                SellerInsightPage.REPORT_BUILDER, SellerInsightPage.REPORT_HISTORY ->
+                    "Report selections can be stored by the backend, but file generation and download are not implemented."
+                SellerInsightPage.SUPPORT, SellerInsightPage.NEW_TICKET, SellerInsightPage.TICKET_DETAIL ->
+                    "Seller support is not connected to this Android screen yet."
+                else -> "This seller workflow is not connected to the cloud backend yet."
+            })
+            return@InsightPage
+        }
+        when (page) {
+            SellerInsightPage.OVERVIEW -> {
+                val period = when (overviewDays) { 1 -> "Today so far"; 7 -> "Last 7 days"; else -> "Last 30 days" }
+                RitText(sellerName, RitType.heading)
+                Spacer(Modifier.height(14.dp))
+                AnalyticsRangeSelector(overviewDays, { days -> overviewDays = days; range = lastDays(days, today) })
+                Spacer(Modifier.height(16.dp))
+                if (summary.orders == 0) RitEmptyState("No verified sales history", "Real analytics will appear after provider-verified app payments.")
+                else {
+                    RevenuePanel(summary.netPaise, period, chart = if (overviewDays == 1) null else ({
+                        SalesBarChart(fillDays(summary.daily, range), period.lowercase())
+                    }))
+                    Spacer(Modifier.height(10.dp))
+                    StatStrip(listOf(
+                        StatCell("Orders", "${summary.orders}", "overview_orders"),
+                        StatCell("Average order", formatRupees(summary.averagePaise), "overview_average"),
+                        StatCell("Repeat buyers", "${summary.returningCustomers}", "overview_repeat"),
+                    ))
+                    Spacer(Modifier.height(26.dp))
+                    RitText("Best sellers", RitType.title)
+                    Spacer(Modifier.height(4.dp))
+                    summary.products.take(3).forEach { row ->
+                        val item = PreviewCatalog.items.find { it.id == row.id }
+                        RankedItemRow(row.label, row.units, row.netPaise, row.netPaise.toFloat() / summary.products.first().netPaise,
+                            item?.photo, item?.localImageUri)
+                    }
+                }
+                Spacer(Modifier.height(26.dp))
+                RitText("Explore your business", RitType.title)
+                Spacer(Modifier.height(10.dp))
+                InsightNavList(listOf(
+                    Triple("Sales trends", "Daily, weekly and monthly totals", SellerInsightPage.TRENDS) to RitIconKind.Orders,
+                    Triple("Items & categories", "What sells most, by value and units", SellerInsightPage.PRODUCTS) to RitIconKind.Food,
+                    Triple("Customers", "Unique and repeat buyers", SellerInsightPage.CUSTOMERS) to RitIconKind.Person,
+                    Triple("Promotions", "Your offers and discounts given", SellerInsightPage.PROMOTIONS) to RitIconKind.Heart,
+                    Triple("Forecasting", "Illustrative demo only", SellerInsightPage.FORECAST) to RitIconKind.Arrow,
+                    Triple("Reports", "Set up a sales workbook", SellerInsightPage.REPORT_BUILDER) to RitIconKind.Bulk,
+                ).map { (entry, icon) ->
+                    val (label, detail, destination) = entry
+                    InsightNavEntry(label, detail, icon, "overview_open_${destination.name.lowercase()}") { onNavigate(destination) }
+                })
             }
             SellerInsightPage.TRENDS -> {
                 var grouping by remember { mutableStateOf(TrendGrouping.DAILY) }
-                RitText("Sample sales over time", RitType.title)
                 PeriodPicker { range = it }
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    TrendGrouping.entries.forEach { mode -> RitChip(mode.label, grouping == mode, { grouping = mode },
-                        Modifier.testTag("trend_${mode.name.lowercase()}")) }
-                }
+                Spacer(Modifier.height(10.dp))
+                AnalyticsToggle(TrendGrouping.entries.map { it to it.label }, grouping, { grouping = it }, tagPrefix = "trend")
+                Spacer(Modifier.height(16.dp))
                 if (summary.orders == 0) RitEmptyState("No sales in range", "Only future verified app payments can populate real trends.")
-                else { val grouped = groupSales(summary.daily, grouping)
-                    InsightCard("Sample net sales", money(summary.netPaise)); SalesChart(summary, grouped)
-                    grouped.forEach { InsightCard(it.day.toString(), "${it.orders} paid sample orders · ${money(it.netPaise)}") } }
+                else {
+                    val grouped = groupSales(fillDays(summary.daily, range), grouping)
+                    val best = grouped.maxBy { it.netPaise }
+                    val noun = when (grouping) { TrendGrouping.DAILY -> "day"; TrendGrouping.WEEKLY -> "week"; TrendGrouping.MONTHLY -> "month" }
+                    RevenuePanel(summary.netPaise, formatRange(range), chart = {
+                        SalesBarChart(grouped, formatRange(range), grouping = grouping)
+                        if (grouping != TrendGrouping.DAILY) {
+                            Spacer(Modifier.height(10.dp))
+                            val which = if (grouped.size > 1) "The first and last ${noun}s" else "This $noun"
+                            RitText("${if (grouping == TrendGrouping.WEEKLY) "Weeks start on Monday. " else ""}$which may only " +
+                                "partly fall in this range.", RitType.small, RitThemeTokens.colors.muted)
+                        }
+                    })
+                    Spacer(Modifier.height(10.dp))
+                    StatStrip(listOf(
+                        StatCell("Orders", "${summary.orders}"),
+                        StatCell("Average order", formatRupees(summary.averagePaise)),
+                        StatCell("Best $noun · ${grouping.periodName(best.day).removePrefix("week of ")}", formatRupees(best.netPaise), "trends_best"),
+                    ))
+                }
             }
             SellerInsightPage.PRODUCTS -> {
+                var byUnits by remember { mutableStateOf(false) }
                 PeriodPicker { range = it }
+                Spacer(Modifier.height(16.dp))
                 if (summary.orders == 0) RitEmptyState("No product sales", "No eligible paid history for this period.")
                 else {
-                    RitText("Best-selling products · sample", RitType.title)
-                    summary.products.forEach { InsightCard(it.label, "${it.units} units · ${money(it.netPaise)} sample net") }
-                    RitText("Category contribution · sample", RitType.title)
-                    summary.categories.forEach { InsightCard(it.label, "${it.units} units · ${money(it.netPaise)} sample net") }
+                    fun metric(row: MetricRow) = if (byUnits) row.units.toLong() else row.netPaise
+                    AnalyticsToggle(listOf(false to "Revenue", true to "Units"), byUnits, { byUnits = it }, tagPrefix = "products_by")
+                    Spacer(Modifier.height(20.dp))
+                    RitText("Items", RitType.title)
+                    Spacer(Modifier.height(8.dp))
+                    val items = summary.products.sortedByDescending(::metric)
+                    AnalyticsCard {
+                        items.forEach { row ->
+                            val item = PreviewCatalog.items.find { it.id == row.id }
+                            RankedItemRow(row.label, row.units, row.netPaise, metric(row).toFloat() / metric(items.first()).coerceAtLeast(1),
+                                item?.photo, item?.localImageUri)
+                        }
+                    }
+                    Spacer(Modifier.height(24.dp))
+                    RitText("Categories", RitType.title)
+                    Spacer(Modifier.height(8.dp))
+                    val slices = summary.categories.sortedByDescending(::metric).map {
+                        ShareSlice(it.label, metric(it), if (byUnits) "${it.units} units" else formatRupees(it.netPaise))
+                    }
+                    val shares = percentShares(slices.map { it.value })
+                    AnalyticsCard {
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            DonutChart(slices,
+                                if (byUnits) "${summary.categories.sumOf { it.units }}" else formatRupees(summary.netPaise),
+                                if (byUnits) "units" else "revenue",
+                                "Category share by ${if (byUnits) "units" else "revenue"}: " +
+                                    slices.indices.joinToString { "${slices[it].label} ${shares[it]}%" } + ".")
+                        }
+                        Spacer(Modifier.height(14.dp))
+                        ShareLegend(slices)
+                    }
                 }
             }
             SellerInsightPage.CUSTOMERS -> {
                 PeriodPicker { range = it }
+                Spacer(Modifier.height(16.dp))
                 if (summary.orders == 0) RitEmptyState("No purchasing insights", "Insights require eligible app-payment history.")
-                else { InsightCard("Sample unique buyers", summary.customers.toString())
-                    InsightCard("Sample returning buyers", summary.returningCustomers.toString())
-                    InsightCard("Privacy", "Only aggregate counts are shown; no student records or personal profiles.") }
+                else {
+                    val oneTime = summary.customers - summary.returningCustomers
+                    StatStrip(listOf(
+                        StatCell("Unique buyers", "${summary.customers}", "customers_unique"),
+                        StatCell("Repeat buyers", "${summary.returningCustomers}", "customers_repeat"),
+                        StatCell("One-time buyers", "$oneTime", "customers_one_time"),
+                    ))
+                    Spacer(Modifier.height(10.dp))
+                    val slices = listOf(ShareSlice("Repeat buyers", summary.returningCustomers.toLong(), "${summary.returningCustomers}"),
+                        ShareSlice("One-time buyers", oneTime.toLong(), "$oneTime"))
+                    val shares = percentShares(slices.map { it.value })
+                    AnalyticsCard {
+                        RitText("Repeat vs one-time", RitType.label)
+                        Spacer(Modifier.height(12.dp))
+                        ShareBar(slices, "Buyers: ${shares[0]}% repeat, ${shares[1]}% one-time.")
+                        Spacer(Modifier.height(8.dp))
+                        ShareLegend(slices)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    RitText("Repeat means 2 or more orders in the selected period. Only totals are shown, never individual customers.",
+                        RitType.small, RitThemeTokens.colors.muted)
+                }
             }
             SellerInsightPage.PROMOTIONS -> {
                 val offers = DevelopmentPromotions.promotions.filter { it.sellerId == sellerId }
                 if (offers.isEmpty()) RitEmptyState("No promotions", "Create a seller promotion to preview its state.")
                 else {
                     val active = offers.count { it.published && it.statusAt(java.time.Instant.now()) == edu.msrit.canteen.customer.PromotionStatus.ACTIVE }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                        OverviewMetric("Active offers", "$active", "Demo placements", Modifier.weight(1f))
-                        OverviewMetric("Sample discounts", money(summary.discountPaise), "Not attributed", Modifier.weight(1f))
-                    }
-                    Spacer(Modifier.height(14.dp))
-                    RitText("Offer previews", RitType.title)
+                    StatStrip(listOf(
+                        StatCell("Active offers", "$active", "promotions_active"),
+                        StatCell("Discounts given this month", formatRupees(summary.discountPaise), "promotions_discounts"),
+                    ))
+                    Spacer(Modifier.height(22.dp))
+                    RitText("Your offers", RitType.title)
+                    Spacer(Modifier.height(8.dp))
                     offers.forEach { promotion ->
                         PromotionCard(promotion, sellerName, java.time.Instant.now(), {}, PreviewCatalog)
                         Spacer(Modifier.height(9.dp))
                     }
                 }
-                InsightCard("Campaign results pending", "Views, taps and paid-order attribution need consented events and verified payment data.")
+                InsightCard("Offer results aren't measured yet", "Views, taps and paid orders from an offer need consented tracking and verified payments.")
             }
             SellerInsightPage.FORECAST -> {
                 if (!sample || summary.orders == 0) RitEmptyState("Insufficient historical data",
                     "Predictions become available only after enough verified app sales accumulate. No model is trained or confidence claimed.")
                 else {
                     RitText("Illustrative Forecast — Demo Only", RitType.heading)
-                    RitText("A visual example based on synthetic app-sale patterns. Not a trained model or a reliable operational prediction.",
+                    Spacer(Modifier.height(4.dp))
+                    RitText("A visual example from synthetic sales. Not a trained model or a reliable prediction.",
                         RitType.body, RitThemeTokens.colors.muted)
-                    Spacer(Modifier.height(14.dp))
-                    IllustrativeForecastChart(summary)
-                    Spacer(Modifier.height(18.dp))
+                    Spacer(Modifier.height(16.dp))
+                    AnalyticsCard { IllustrativeForecastChart(fillDays(summary.daily, range), today) }
+                    Spacer(Modifier.height(24.dp))
                     RitText("Illustrative next-week demand", RitType.title)
-                    summary.products.take(3).forEach { row ->
-                        InsightCard(row.label, "About ${((row.units / 30.0) * 7).toInt().coerceAtLeast(1)} units in this mock illustration")
+                    Spacer(Modifier.height(8.dp))
+                    AnalyticsCard {
+                        summary.products.take(3).forEachIndexed { index, row ->
+                            if (index > 0) Spacer(Modifier.height(12.dp))
+                            Row(Modifier.fillMaxWidth()) {
+                                RitText(row.label, RitType.label, modifier = Modifier.weight(1f))
+                                RitText("about ${((row.units / 30.0) * 7).toInt().coerceAtLeast(1)} units",
+                                    RitType.label.tabular(), RitThemeTokens.colors.muted)
+                            }
+                        }
                     }
+                    Spacer(Modifier.height(12.dp))
                     RitText("Walk-in sales, events and kitchen capacity are not included.", RitType.small, RitThemeTokens.colors.muted)
                 }
             }
@@ -362,7 +623,17 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
             SellerInsightPage.REPORT_HISTORY -> {
                 val history = DevelopmentInsights.reports(identity, sellerId)
                 if (history.isEmpty()) RitEmptyState("No generated reports", "Real XLSX generation and secure download are not available yet.")
-                else history.forEach { InsightCard(it.title, "${it.range.start}–${it.range.end} · ${it.status} · ${it.generatedAt}") }
+                else AnalyticsCard {
+                    history.forEachIndexed { index, row ->
+                        if (index > 0) Spacer(Modifier.height(16.dp))
+                        RitText(row.title, RitType.label)
+                        RitText("${formatRange(row.range)} · saved ${weekdayDate(row.generatedAt.toLocalDate())}, " +
+                            savedTime.format(row.generatedAt), RitType.small, RitThemeTokens.colors.muted)
+                        Spacer(Modifier.height(8.dp))
+                        CatalogPill(row.status)
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
                 InsightCard("Download unavailable", "No financial workbook has been generated or saved on this device.")
             }
             SellerInsightPage.SUPPORT -> {
@@ -400,41 +671,79 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
 
 @Composable
 private fun ReportBuilder(sellerId: String, identity: AuthorizedIdentity?, onNavigate: (SellerInsightPage) -> Unit) {
-    var start by remember { mutableStateOf(LocalDate.now(RIT_TIME_ZONE).withDayOfMonth(1).toString()) }
-    var end by remember { mutableStateOf(LocalDate.now(RIT_TIME_ZONE).toString()) }
+    val colors = RitThemeTokens.colors
+    val today = LocalDate.now(RIT_TIME_ZONE)
+    val presets = listOf("This month" to InsightPeriod.MONTH.range(today), "Last 7 days" to lastDays(7, today),
+        "Last 30 days" to lastDays(30, today), "Custom" to null)
+    var preset by remember { mutableStateOf(presets.first().first) }
+    var start by remember { mutableStateOf(today.withDayOfMonth(1).toString()) }
+    var end by remember { mutableStateOf(today.toString()) }
     var type by remember { mutableStateOf(ReportType.SALES) }
     var message by remember { mutableStateOf("") }
     var selectedItems by remember { mutableStateOf<Set<String>>(emptySet()) }
-    RitText("Five-sheet XLSX specification", RitType.title)
-    InsightCard("Planned worksheets", "Sales Summary · Item-wise Sales · Category-wise Sales · Order Details · Daily Breakdown")
-    RitTextField(start, { start = it }, "From", "YYYY-MM-DD", Modifier.fillMaxWidth(), inputTag = "report_start")
+    RitText("Date range", RitType.title)
     Spacer(Modifier.height(8.dp))
-    RitTextField(end, { end = it }, "Through", "YYYY-MM-DD", Modifier.fillMaxWidth(), inputTag = "report_end")
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        presets.forEach { (label, presetRange) ->
+            RitChip(label, preset == label, {
+                preset = label
+                if (presetRange != null) { start = presetRange.start.toString(); end = presetRange.end.toString() }
+            }, Modifier.testTag("report_range_${label.lowercase().replace(' ', '_')}"))
+        }
+    }
+    if (preset == "Custom") {
+        Spacer(Modifier.height(10.dp))
+        RitTextField(start, { start = it }, "From", "e.g. 2026-10-01", Modifier.fillMaxWidth(), inputTag = "report_start")
+        Spacer(Modifier.height(8.dp))
+        RitTextField(end, { end = it }, "Through", "e.g. 2026-10-26", Modifier.fillMaxWidth(), inputTag = "report_end")
+    }
+    Spacer(Modifier.height(20.dp))
+    RitText("Report type", RitType.title)
     Spacer(Modifier.height(8.dp))
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         ReportType.entries.forEach { value -> RitChip(value.label, value == type, { type = value }) }
     }
-    RitText("Optional product filter", RitType.label)
+    Spacer(Modifier.height(20.dp))
+    RitText("Items", RitType.title)
+    RitText("All items are included unless you pick some.", RitType.small, colors.muted)
+    Spacer(Modifier.height(8.dp))
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         PreviewCatalog.items.filter { it.sellerId == sellerId }.forEach { item ->
             RitChip(item.name, item.id in selectedItems, { selectedItems = if (item.id in selectedItems)
                 selectedItems - item.id else selectedItems + item.id })
         }
     }
+    Spacer(Modifier.height(20.dp))
+    RitText("Workbook sheets", RitType.title)
+    Spacer(Modifier.height(8.dp))
+    AnalyticsCard {
+        listOf("Sales summary", "Item-wise sales", "Category-wise sales", "Order details", "Daily breakdown").forEachIndexed { index, sheet ->
+            if (index > 0) Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(6.dp).height(6.dp).background(colors.accent, RoundedCornerShape(3.dp)))
+                Spacer(Modifier.width(12.dp))
+                RitText(sheet, RitType.body)
+            }
+        }
+    }
+    Spacer(Modifier.height(20.dp))
     val parsed = runCatching { InsightRange(LocalDate.parse(start), LocalDate.parse(end)) }.getOrNull()
     val selection = parsed?.let { ReportSelection(sellerId, type, it, selectedItems) }
-    val error = if (selection == null) "Enter valid ISO dates" else
+    val error = if (selection == null) "Enter dates as YYYY-MM-DD" else
         validateReport(selection, PreviewCatalog.items.filter { item -> item.sellerId == sellerId }.map { item -> item.id }.toSet())
-    if (error != null) RitText(error, RitType.small, RitThemeTokens.colors.accent)
-    else InsightCard("Preview", "${type.label} · ${parsed?.start}–${parsed?.end} · ${if (selectedItems.isEmpty()) "all products" else "${selectedItems.size} products"}")
-    Spacer(Modifier.height(8.dp))
+    if (error != null) RitText(error, RitType.small, colors.accent)
+    else RitText("${type.label} · ${parsed?.let(::formatRange)} · ${if (selectedItems.isEmpty()) "all items" else
+        "${selectedItems.size} ${if (selectedItems.size == 1) "item" else "items"}"}", RitType.label, modifier = Modifier.testTag("report_summary"))
+    Spacer(Modifier.height(12.dp))
     RitPrimaryButton("Save sample configuration", {
         message = if (selection != null && DevelopmentInsights.saveReportPreview(identity, selection))
             "Sample configuration saved. No XLSX generated." else "Unable to save sample configuration."
     }, Modifier.fillMaxWidth(), enabled = error == null)
-    RitText(message, RitType.small, RitThemeTokens.colors.accent)
+    if (message.isNotEmpty()) { Spacer(Modifier.height(8.dp)); RitText(message, RitType.small, colors.accent) }
+    Spacer(Modifier.height(10.dp))
     RitSecondaryButton("Reports & downloads", { onNavigate(SellerInsightPage.REPORT_HISTORY) }, Modifier.fillMaxWidth())
-    InsightCard("Real export unavailable", "Prompt 24 will generate XLSX from verified, seller-scoped transaction history.")
+    Spacer(Modifier.height(14.dp))
+    RitText("XLSX export isn't available yet. It will use verified, seller-scoped sales.", RitType.small, colors.muted)
 }
 
 @Composable
