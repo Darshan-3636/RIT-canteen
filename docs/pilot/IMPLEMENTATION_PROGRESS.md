@@ -1,6 +1,6 @@
 # College pilot implementation progress
 
-Branch `feat/rit-seller-admin-android-cloud-integration`, base HEAD `8c34c10804b6ed677a5112da6987fb8041c4c9db`. Changes are uncommitted and unpushed.
+Branch `feat/rit-seller-admin-android-cloud-integration` on `Srujanmp1366/RIT-canteen`. Implementation commit `eb944a288a81d720da445ee131d2022f809f65eb` was pushed to the fork; the live backend has not been deployed from this branch.
 
 ## Implemented in this working tree
 
@@ -18,10 +18,10 @@ Branch `feat/rit-seller-admin-android-cloud-integration`, base HEAD `8c34c10804b
 - Android debug/release Kotlin compilation and debug unit tests passed after the seller/admin support, quick-reorder and platform report UI changes: **154 tests, 0 failed, 3 skipped**.
 - No startup or latency timing has been measured. Catalog loading reduces its initial network request count from one directory plus one menu per seller to one snapshot request when the new backend is available.
 
-## Still required before phone pilot
+## Still required for the full cloud pilot
 
 1. Finish remaining preview-only screens, report and support edge cases, and production wording where the workflow is actually live. Quick reorder currently reopens current items for customer choice; it does not submit a repeat order automatically.
 2. Add automatic recipe consumption only after a real, verified paid fulfillment event and its idempotent integration tests exist. Current individual fulfillment and PhonePe UAT remain explicitly simulated/unverified.
 3. Run the full backend and Android verification suites, measure startup/login/navigation on device, and fix any resulting issues.
-4. Review V048-V053 against authorized live read-only metadata, then obtain separate approval for Supabase migration and matching Render deployment. Neither was modified or deployed. The current live backend may return 404 for the new routes.
-5. Build and install on the phone only after the remaining application work is complete, as requested.
+4. Verify live Flyway history using authorized read-only access, then deploy the matching Render backend so Flyway can apply V048-V053. As checked on 2026-11-02, `/ready` returned 200 while `/api/v1/catalog/snapshot` returned 404. No shared database was modified or deployed from this branch.
+5. The cloud debug APK was built and installed side by side as `edu.msrit.canteen.cloudtest`; startup was confirmed. Complete end-to-end phone checks after the backend rollout.
