@@ -86,10 +86,23 @@ class NormalCatalogFlowUiTest {
         rule.onNodeWithTag("seller_menu_item_idli").assertExists()
         rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_rava-idli"))
         rule.onNodeWithTag("seller_menu_item_rava-idli").performClick()
-        rule.onNodeWithTag("food_add_individual").performClick()
+        rule.onNodeWithTag("food_add_order").performClick()
+        rule.onNodeWithTag("food_order_type_dialog").assertExists()
+        rule.onNodeWithTag("food_choose_individual_order").performClick()
         rule.onNodeWithTag("food_view_cart").performClick()
         rule.onNodeWithTag("customer_cart").assertExists()
         rule.onNodeWithTag("cart_line_individual_rava-idli").assertExists()
+    }
+
+    @Test fun dualEligibleFoodCanBeAddedAsBulkAfterChoosingOrderType() {
+        customer(); chooseSeller("main-canteen"); selectCategory("breakfast")
+        rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_idli"))
+        rule.onNodeWithTag("seller_menu_item_idli").performClick()
+        rule.onNodeWithTag("food_add_order").performClick()
+        rule.onNodeWithTag("food_order_type_dialog").assertExists()
+        rule.onNodeWithTag("food_choose_bulk_order").performClick()
+        rule.onNodeWithTag("customer_cart").assertExists()
+        rule.onNodeWithTag("cart_tab_bulk").assertExists()
     }
 
     @Test fun pantryMenuSearchDistinguishesJuiceFromWaterWithinOneSeller() {
@@ -112,7 +125,7 @@ class NormalCatalogFlowUiTest {
         rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_bakery-paneer-puff"))
         rule.onNodeWithTag("seller_menu_item_bakery-paneer-puff").performClick()
         rule.onNodeWithText("Paneer Puff").assertExists()
-        rule.onNodeWithTag("food_add_individual").assertDoesNotExist()
+        rule.onNodeWithTag("food_add_order").assertExists()
         rule.onNodeWithTag("seller_menu_item_masala-dosa").assertDoesNotExist()
     }
 
@@ -121,8 +134,7 @@ class NormalCatalogFlowUiTest {
         rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_veg-samosa"))
         rule.onNodeWithTag("seller_menu_item_veg-samosa").performClick()
         rule.onNodeWithText("Veg Samosa").assertExists()
-        rule.onNodeWithTag("food_add_individual").assertDoesNotExist()
-        rule.onNodeWithTag("food_add_bulk").assertExists()
+        rule.onNodeWithTag("food_add_order").assertExists()
     }
 
     @Test fun ownerCanEditNewItemThroughNormalSellerMenuAndLogout() {

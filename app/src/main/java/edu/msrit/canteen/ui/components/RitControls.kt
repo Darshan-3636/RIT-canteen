@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -25,6 +27,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -174,6 +178,59 @@ fun RitTextField(
             },
         )
         trailingContent?.invoke()
+        }
+    }
+}
+
+@Composable
+fun RitDropdownField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    placeholder: String,
+    options: List<String>,
+    modifier: Modifier = Modifier,
+    inputTag: String,
+) {
+    val colors = RitThemeTokens.colors
+    val shape = RoundedCornerShape(RitRadii.card)
+    var expanded by rememberSaveable(inputTag) { androidx.compose.runtime.mutableStateOf(false) }
+    Column(modifier) {
+        Box(
+            Modifier.fillMaxWidth().clip(shape).border(1.dp, colors.outline, shape).background(colors.surface)
+                .clickable(role = Role.Button) { expanded = !expanded }
+                .testTag(inputTag)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    RitText(label, RitType.small, colors.muted)
+                    Spacer(Modifier.height(5.dp))
+                    RitText(value.ifBlank { placeholder }, RitType.body,
+                        if (value.isBlank()) colors.muted else colors.foreground, maxLines = 2)
+                }
+                RitText(if (expanded) "⌃" else "⌄", RitType.title, colors.muted)
+            }
+        }
+        if (expanded) {
+            Column(
+                Modifier.fillMaxWidth().padding(top = 4.dp).heightIn(max = 280.dp)
+                    .clip(shape).border(1.dp, colors.outline, shape).background(colors.surface)
+                    .verticalScroll(rememberScrollState()).testTag("${inputTag}_options"),
+            ) {
+                options.forEachIndexed { index, option ->
+                    Box(
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                            .clickable(role = Role.Button) {
+                                onValueChange(option)
+                                expanded = false
+                            }
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .testTag("${inputTag}_option_$index"),
+                        contentAlignment = Alignment.CenterStart,
+                    ) { RitText(option, RitType.body, maxLines = 2) }
+                }
+            }
         }
     }
 }

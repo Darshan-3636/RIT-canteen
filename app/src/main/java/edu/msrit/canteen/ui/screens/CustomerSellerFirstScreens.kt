@@ -27,7 +27,6 @@ import edu.msrit.canteen.customer.visibleSellers
 import edu.msrit.canteen.ui.components.CatalogCategories
 import edu.msrit.canteen.ui.components.CatalogFoodCard
 import edu.msrit.canteen.ui.components.CatalogHeader
-import edu.msrit.canteen.ui.components.CatalogPill
 import edu.msrit.canteen.ui.components.CatalogSellerCard
 import edu.msrit.canteen.ui.components.RitBottomItem
 import edu.msrit.canteen.ui.components.RitBottomNavigation
@@ -36,14 +35,22 @@ import edu.msrit.canteen.ui.components.RitLoadingIndicator
 import edu.msrit.canteen.ui.components.RitSearchField
 import edu.msrit.canteen.ui.components.RitSecondaryButton
 import edu.msrit.canteen.ui.components.RitStatusIndicator
+import edu.msrit.canteen.ui.components.RitDropdownField
 import edu.msrit.canteen.ui.components.RitText
 import edu.msrit.canteen.ui.components.SellerPhotoContent
-import edu.msrit.canteen.ui.components.sellerOrderingBadge
 import edu.msrit.canteen.ui.theme.RitRadii
 import edu.msrit.canteen.ui.theme.RitThemeTokens
 import edu.msrit.canteen.ui.theme.RitType
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+
+internal const val ALL_CANTEENS = "All canteens"
+internal val RIT_CANTEEN_OPTIONS = listOf(
+    "M.S.R.I.T Canteen",
+    "M.S.R.I.T Condiments",
+    "Cafe Da Costa",
+    "Ramaiah's Cafeteria",
+)
 
 /** Seller-first customer entry. The caller owns routing and supplies the seller-selection callback. */
 @Composable
@@ -59,16 +66,26 @@ fun ChooseSellerScreen(
 ) {
     val colors = RitThemeTokens.colors
     var query by rememberSaveable { mutableStateOf("") }
-    val sellers = catalog.visibleSellers(query, null)
+    var selectedCanteen by rememberSaveable { mutableStateOf(ALL_CANTEENS) }
+    val sellers = catalog.visibleSellers(query, null).filter { seller ->
+        selectedCanteen == ALL_CANTEENS || seller.name.startsWith(selectedCanteen, ignoreCase = true)
+    }
 
     Column(Modifier.fillMaxSize().background(colors.background).testTag("choose_seller")) {
-        CatalogHeader("Choose Seller", onBack)
+        CatalogHeader("Choose Canteen", onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
-            RitText("What are you craving?", RitType.heading)
-            RitText("Pick a campus seller first. Their menu and search stay together.", RitType.body, colors.muted)
+            RitText("Browse campus canteen menus.", RitType.body, colors.muted)
+            Spacer(Modifier.height(10.dp))
+            RitDropdownField(
+                value = selectedCanteen,
+                onValueChange = { selectedCanteen = it },
+                label = "Canteen",
+                placeholder = ALL_CANTEENS,
+                options = listOf(ALL_CANTEENS) + RIT_CANTEEN_OPTIONS,
+                modifier = Modifier.fillMaxWidth(),
+                inputTag = "canteen_selector",
+            )
             Spacer(Modifier.height(12.dp))
-            RitStatusIndicator("Sample sellers · hours and live availability unverified")
-            Spacer(Modifier.height(14.dp))
             RitSearchField(query, { query = it }, hint = "Find a seller…", onClearClick = { query = "" })
             Spacer(Modifier.height(14.dp))
         }
@@ -144,10 +161,8 @@ fun SellerScopedMenuScreen(
                     )
                     Spacer(Modifier.height(9.dp))
                     RitText(seller.name, RitType.heading)
-                    RitText(seller.description, RitType.body, colors.muted, maxLines = 2)
+                    RitText(seller.description.replace(" for group requests.", "."), RitType.body, colors.muted, maxLines = 2)
                     Spacer(Modifier.height(9.dp))
-                    CatalogPill(sellerOrderingBadge(seller))
-                    Spacer(Modifier.height(7.dp))
                     RitText(seller.location ?: "Location not verified", RitType.small, colors.muted)
                     RitText(seller.hours?.display?.let { "Preview hours: $it · live status unverified" }
                         ?: "Hours and live availability unverified", RitType.small, colors.muted)

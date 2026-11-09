@@ -19,7 +19,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import edu.msrit.canteen.R
 import edu.msrit.canteen.ui.components.RitIconKind
@@ -43,30 +42,21 @@ fun WelcomeScreen(onGetStarted: () -> Unit, onLogin: () -> Unit) {
         )
         Spacer(Modifier.height(11.dp))
         RitText("RIT Canteen", RitType.heading)
-        RitText("Good food. A closer campus.", RitType.body, colors.muted)
+        RitText("Are you craving for food?", RitType.title, colors.muted)
         Spacer(Modifier.height(24.dp))
         RitPrimaryButton("Log In", onLogin, Modifier.fillMaxWidth().testTag("welcome_login"),
             trailingIcon = RitIconKind.Arrow)
         Spacer(Modifier.height(12.dp))
-        RitSecondaryButton("Create Customer Account", onGetStarted,
+        RitSecondaryButton("Register", onGetStarted,
             Modifier.fillMaxWidth().testTag("welcome_get_started"))
-        RitText("For students and faculty · Seller access is by invitation", RitType.small,
-            colors.muted, Modifier.padding(top = 10.dp))
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(22.dp))
         Box(Modifier.fillMaxWidth().height(226.dp).clip(RoundedCornerShape(28.dp))) {
             Image(
-                painterResource(R.drawable.rit_welcome_food),
-                contentDescription = "Prepared dosa with chutneys, concept photograph",
+                painterResource(R.drawable.rit_welcome_students),
+                contentDescription = "Students sharing a meal in a campus canteen",
                 modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
             )
         }
-        Spacer(Modifier.height(24.dp))
-        RitText("Your campus, served.", RitType.display.copy(textAlign = TextAlign.Center))
-        Spacer(Modifier.height(10.dp))
-        RitText(
-            "Discover food at the main canteen, plan group orders, and explore participating stalls.",
-            RitType.body.copy(textAlign = TextAlign.Center), colors.muted,
-        )
         Spacer(Modifier.height(16.dp))
     }
 }

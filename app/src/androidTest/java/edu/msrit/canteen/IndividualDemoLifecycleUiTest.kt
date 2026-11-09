@@ -55,7 +55,7 @@ class IndividualDemoLifecycleUiTest {
         var changed: String? = null
         var current by mutableStateOf(order)
         var canRespond by mutableStateOf(true)
-        rule.setContent { RitTheme { SellerIndividualBackendScreen(listOf(current), canRespond, {}, { _, status -> changed = status }) } }
+        rule.setContent { RitTheme { SellerIndividualBackendScreen(listOf(current), canRespond, {}, { _, status, _ -> changed = status }) } }
         rule.onNodeWithTag("seller_demo_next_${order.id}").assertDoesNotExist()
         rule.runOnIdle { current = order.copy(status = "DEMO_PAYMENT_SIMULATED") }
         rule.onNodeWithTag("seller_demo_next_${order.id}").performScrollTo().performClick()
