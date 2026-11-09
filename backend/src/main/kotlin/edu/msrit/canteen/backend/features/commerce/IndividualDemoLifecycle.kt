@@ -41,14 +41,50 @@ internal fun loadDemoIndividual(db: Connection, id: UUID, includePickupCode: Boo
 
 internal fun sellerIndividual(context: BackendContext, sellerId: String): IndividualDemoOrderListDto =
     context.dataSource.connection.use { db ->
-        val ids = db.prepareStatement("""SELECT id FROM individual_demo_orders WHERE seller_id=?
-            ORDER BY created_at DESC""").use { query ->
+        data class SellerOrderRow(
+            val id: UUID, val seller: String, val status: String, val demoOnly: Boolean,
+            val paymentVerified: Boolean, val subtotal: Long, val createdAt: String,
+            val outcome: String, val discount: Long, val promotionId: String?,
+            val pickupReference: String, val handedOverAt: String?, val sandboxStatus: String?,
+            val customerName: String, val lines: MutableList<IndividualDemoLineDto> = mutableListOf(),
+        )
+        val grouped = linkedMapOf<UUID, SellerOrderRow>()
+        db.prepareStatement("""SELECT o.id,o.seller_id,o.status,o.demo_only,o.payment_verified,o.subtotal_paise,
+                o.created_at,o.demo_payment_outcome,o.discount_paise,o.promotion_id,o.pickup_reference,
+                o.handed_over_at,p.state,u.full_name,l.item_id,l.item_name_snapshot,l.quantity,l.unit_price_paise
+            FROM individual_demo_orders o
+            JOIN users u ON u.id=o.customer_user_id
+            LEFT JOIN LATERAL (SELECT state FROM sandbox_payment_attempts
+                WHERE source_type='INDIVIDUAL' AND source_id=o.id ORDER BY created_at DESC LIMIT 1) p ON TRUE
+            LEFT JOIN individual_demo_order_lines l ON l.order_id=o.id
+            WHERE o.seller_id=?
+            ORDER BY o.created_at DESC,l.item_id""").use { query ->
             query.setString(1, sellerId)
-            query.executeQuery().use { rows -> buildList {
-                while (rows.next()) add(rows.getObject(1, UUID::class.java))
-            } }
+            query.executeQuery().use { rows ->
+                while (rows.next()) {
+                    val id = rows.getObject(1, UUID::class.java)
+                    val order = grouped.getOrPut(id) {
+                        SellerOrderRow(id, rows.getString(2), rows.getString(3), rows.getBoolean(4),
+                            rows.getBoolean(5), rows.getLong(6), rows.getTimestamp(7).toInstant().toString(),
+                            rows.getString(8), rows.getLong(9), rows.getObject(10, UUID::class.java)?.toString(),
+                            rows.getString(11), rows.getTimestamp(12)?.toInstant()?.toString(), rows.getString(13),
+                            rows.getString(14))
+                    }
+                    rows.getString(15)?.let { itemId ->
+                        order.lines += IndividualDemoLineDto(itemId, rows.getString(16), rows.getInt(17), rows.getLong(18))
+                    }
+                }
+            }
         }
-        IndividualDemoOrderListDto(ids.mapNotNull { loadDemoIndividual(db, it) })
+        IndividualDemoOrderListDto(grouped.values.map { order ->
+            IndividualDemoOrderDto(id = order.id.toString(), sellerId = order.seller, status = order.status,
+                demoOnly = order.demoOnly, paymentVerified = order.paymentVerified, subtotalPaise = order.subtotal,
+                createdAt = order.createdAt, lines = order.lines, demoPaymentOutcome = order.outcome,
+                sandboxPaymentStatus = order.sandboxStatus, discountPaise = order.discount,
+                totalPaise = order.subtotal - order.discount, promotionId = order.promotionId,
+                pickupReference = order.pickupReference, handedOverAt = order.handedOverAt,
+                customerName = order.customerName)
+        })
     }
 
 /** Explicitly fictional payment; payment_verified remains false and no provider is contacted. */

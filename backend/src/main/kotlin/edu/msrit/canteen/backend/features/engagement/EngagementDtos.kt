@@ -136,6 +136,8 @@ data class AnalyticsSummaryDto(
     val source: String = "NO_VERIFIED_PAYMENTS",
     val demoRequestCounts: DemoRequestCountsDto? = null,
     val demoRequestCountsStatus: String,
+    val savedIndividualOrderCount: Int? = null,
+    val unavailableItemCount: Int? = null,
     val simulatedSales: SimulatedSalesDto? = null,
     val sandboxSales: SimulatedSalesDto? = null,
     val forecast: String = "INSUFFICIENT_DATA",

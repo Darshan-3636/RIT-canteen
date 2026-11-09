@@ -1,6 +1,7 @@
 package edu.msrit.canteen
 
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -86,6 +87,7 @@ class NormalCatalogFlowUiTest {
         rule.onNodeWithTag("seller_menu_item_idli").assertExists()
         rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_rava-idli"))
         rule.onNodeWithTag("seller_menu_item_rava-idli").performClick()
+        rule.onNodeWithTag("food_add_order").assertTextEquals("Add to Cart")
         rule.onNodeWithTag("food_add_order").performClick()
         rule.onNodeWithTag("food_order_type_dialog").assertExists()
         rule.onNodeWithTag("food_choose_individual_order").performClick()
@@ -134,7 +136,10 @@ class NormalCatalogFlowUiTest {
         rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_veg-samosa"))
         rule.onNodeWithTag("seller_menu_item_veg-samosa").performClick()
         rule.onNodeWithText("Veg Samosa").assertExists()
-        rule.onNodeWithTag("food_add_order").assertExists()
+        rule.onNodeWithTag("food_add_order").assertTextEquals("Add to Cart").performClick()
+        rule.onNodeWithTag("food_order_type_dialog").assertDoesNotExist()
+        rule.onNodeWithTag("customer_cart").assertExists()
+        rule.onNodeWithTag("cart_tab_bulk").assertExists()
     }
 
     @Test fun ownerCanEditNewItemThroughNormalSellerMenuAndLogout() {

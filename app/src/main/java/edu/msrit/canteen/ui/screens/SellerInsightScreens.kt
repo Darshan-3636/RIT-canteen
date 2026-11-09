@@ -206,9 +206,12 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                         onNavigate: (SellerInsightPage) -> Unit, onTicket: (String) -> Unit,
                         canRespond: Boolean = false) {
     val today = LocalDate.now(RIT_TIME_ZONE)
-    var range by remember(page) { mutableStateOf(if (page == SellerInsightPage.OVERVIEW || page == SellerInsightPage.FORECAST)
-        InsightRange(today.minusDays(29), today) else InsightPeriod.MONTH.range(today)) }
-    var overviewDays by remember(page) { mutableIntStateOf(30) }
+    var range by remember(page) { mutableStateOf(when (page) {
+        SellerInsightPage.OVERVIEW -> InsightRange(today, today)
+        SellerInsightPage.FORECAST -> InsightRange(today.minusDays(29), today)
+        else -> InsightPeriod.MONTH.range(today)
+    }) }
+    var overviewDays by remember(page) { mutableIntStateOf(1) }
     var cloudSummary by remember(sellerId, page) { mutableStateOf<SellerCloudAnalytics?>(null) }
     var cloudError by remember(sellerId, page) { mutableStateOf<String?>(null) }
     var cloudLoading by remember(sellerId, page) { mutableStateOf(false) }
@@ -293,6 +296,25 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                     cloudSummary == null -> RitEmptyState("Analytics unavailable", "No server response was confirmed.")
                     else -> {
                         val current = cloudSummary!!
+                        if (page == SellerInsightPage.OVERVIEW) {
+                            val awaitingSeller = current.byStatus.filterKeys { it in setOf("SUBMITTED", "COUNTEROFFER") }.values.sum()
+                            val savedOrders = current.totalRequests + (current.savedIndividualOrderCount ?: 0)
+                            StatStrip(listOf(
+                                StatCell(if (overviewDays == 1) "Today's sales" else "Verified sales", displayPaise(0L),
+                                    "seller_cloud_verified_revenue"),
+                                StatCell("Saved orders & requests", "$savedOrders", "seller_cloud_saved_orders"),
+                                StatCell("Awaiting response", "$awaitingSeller", "seller_cloud_pending_orders"),
+                                StatCell("Verified items sold", "0", "seller_cloud_verified_items"),
+                            ))
+                            RitText("No payment transition is verified by the backend. Sales and items sold are ₹0; demo and UAT records are shown separately below.",
+                                RitType.small, RitThemeTokens.colors.muted,
+                                Modifier.padding(top = 9.dp).testTag("seller_cloud_no_verified_sales"))
+                            Spacer(Modifier.height(8.dp))
+                            InsightCard("Unavailable menu items", current.unavailableItemCount?.let { "$it currently unavailable" }
+                                ?: "Current availability could not be loaded.")
+                        } else {
+                            RitEmptyState("No verified sales trend", "Trend charts will populate only after the backend records authoritative paid orders. Demo and UAT values are excluded.")
+                        }
                         RitText("${current.simulatedOrderCount} DEMO/SIMULATED orders · ${displayPaise(current.simulatedTotalPaise)} fictional total",
                             RitType.heading, modifier = Modifier.testTag("seller_cloud_simulated_sales"))
                         RitText("Synthetic/demo transactions only. Payment verified: false. Not real sales or revenue.",
@@ -305,6 +327,9 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                         Spacer(Modifier.height(12.dp))
                         RitText("${current.totalRequests} saved bulk requests", RitType.heading,
                             modifier = Modifier.testTag("seller_cloud_request_total"))
+                        InsightCard("Saved individual checkouts", current.savedIndividualOrderCount?.let {
+                            "$it demo-only checkouts · payment not verified"
+                        } ?: "Saved individual checkout count is unavailable.")
                         RitText("${range.start} to ${range.end} · ${current.status.replace('_', ' ').lowercase()}",
                             RitType.small, RitThemeTokens.colors.muted)
                         Spacer(Modifier.height(12.dp))
@@ -315,7 +340,7 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                                 "$count saved requests", tag = "seller_cloud_status_${status.lowercase()}")
                         }
                         Spacer(Modifier.height(10.dp))
-                        RitText("Verified revenue and forecasts are unavailable: no payment provider is connected.",
+                        RitText("Revenue and item-sales reports remain at zero until a verified payment source is connected.",
                             RitType.small, RitThemeTokens.colors.muted)
                     }
                 }
@@ -413,7 +438,7 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                 RitEmptyState("Open customer tickets","Use the support list to reply or escalate customer requests.")
                 RitSecondaryButton("Open support list",{ onNavigate(SellerInsightPage.SUPPORT) },Modifier.fillMaxWidth())
             } else if (page == SellerInsightPage.REPORT_BUILDER) {
-                RitText("Export stored request and support counts. Verified revenue is unavailable.",
+                RitText("Export saved bulk requests, unverified individual checkouts, and support counts. Verified revenue is unavailable.",
                     RitType.body, RitThemeTokens.colors.muted)
                 PeriodPicker { range = it }
                 Spacer(Modifier.height(12.dp))

@@ -121,13 +121,17 @@ object DebugServerCatalog {
             "Catalog price cannot be represented in this UI"
         }
         val id = row.getString("id")
+        val imageKey = row.getString("imageKey")
         return MenuItem(id = id, sellerId = row.getString("sellerId"),
             categoryId = row.getString("categoryId"), name = row.getString("name"),
             description = row.getString("description"), price = Price((paise / 100L).toInt()),
             kind = FoodKind.valueOf(row.getString("kind")),
             dietary = Dietary.valueOf(row.getString("dietary")),
             availability = ItemAvailability.valueOf(row.getString("availability")),
-            published = row.getBoolean("published"), photo = CatalogArtwork.itemPhoto(row.getString("imageKey")),
-            orderEligibility = OrderEligibility.valueOf(row.optString("orderEligibility", "BULK_ONLY")))
+            published = row.getBoolean("published"), photo = CatalogArtwork.itemPhoto(imageKey),
+            orderEligibility = OrderEligibility.valueOf(row.optString("orderEligibility", "BULK_ONLY")),
+            remoteImageUrl = imageKey.takeIf { it.startsWith("custom-") }
+                ?.let { DebugBackendApi.publicUrl("/api/v1/catalog/images/$it") },
+            imageKey = imageKey)
     }
 }

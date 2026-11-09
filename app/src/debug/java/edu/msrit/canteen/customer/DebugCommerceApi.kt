@@ -235,7 +235,9 @@ object DebugCommerceApi {
             pickupReference = row.optString("pickupReference"),
             pickupCode = row.optString("pickupCode").takeUnless { it.isBlank() || it == "null" },
             handedOverAt = row.optString("handedOverAt").takeUnless { it.isBlank() || it == "null" },
-            sellerId = row.getString("sellerId"))
+            sellerId = row.getString("sellerId"),
+            customerName = row.optString("customerName").takeUnless { it.isBlank() || it == "null" },
+            customerPhone = row.optString("customerPhone").takeUnless { it.isBlank() || it == "null" })
     }
 
     private fun parseBulk(row: JSONObject): BulkRequestRecord {

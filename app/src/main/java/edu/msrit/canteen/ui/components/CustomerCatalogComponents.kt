@@ -20,7 +20,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +37,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.net.URL
 import edu.msrit.canteen.R
 import edu.msrit.canteen.customer.Dietary
 import edu.msrit.canteen.customer.FoodKind
@@ -160,9 +169,12 @@ fun sellerPhotoResource(photo: SellerPhoto?): Int? = when (photo) {
 }
 
 @Composable
-fun FoodPhotoContent(photo: FoodPhoto?, description: String, modifier: Modifier = Modifier, localUri: String? = null) {
+fun FoodPhotoContent(photo: FoodPhoto?, description: String, modifier: Modifier = Modifier,
+                     localUri: String? = null, remoteUrl: String? = null) {
     val colors = RitThemeTokens.colors
-    val bitmap = rememberLocalBitmap(localUri)
+    val localBitmap = rememberLocalBitmap(localUri)
+    val remoteBitmap = rememberRemoteBitmap(if (localBitmap == null) remoteUrl else null)
+    val bitmap = localBitmap ?: remoteBitmap
     val image = foodPhotoResource(photo)
     if (bitmap != null) {
         Image(bitmap.asImageBitmap(), contentDescription = "$description · locally selected demo image",
@@ -174,6 +186,37 @@ fun FoodPhotoContent(photo: FoodPhoto?, description: String, modifier: Modifier 
             RitIcon(RitIconKind.Food, colors.accent, size = 34.dp)
         }
     }
+}
+
+@Composable
+private fun rememberRemoteBitmap(url: String?): android.graphics.Bitmap? {
+    var bitmap by remember(url) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    LaunchedEffect(url) {
+        bitmap = if (url == null) null else withContext(Dispatchers.IO) {
+            runCatching {
+                val connection = URL(url).openConnection().apply {
+                    connectTimeout = 4_000
+                    readTimeout = 6_000
+                }
+                connection.getInputStream().use { input -> input.readLimited(2 * 1024 * 1024)?.let {
+                    android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size)
+                } }
+            }.getOrNull()
+        }
+    }
+    return bitmap
+}
+
+private fun InputStream.readLimited(maxBytes: Int): ByteArray? {
+    val output = ByteArrayOutputStream()
+    val buffer = ByteArray(8192)
+    while (true) {
+        val count = read(buffer)
+        if (count < 0) break
+        if (output.size() + count > maxBytes) return null
+        output.write(buffer, 0, count)
+    }
+    return output.toByteArray().takeIf { it.isNotEmpty() }
 }
 
 @Composable
@@ -247,7 +290,8 @@ fun CatalogFoodCard(item: MenuItem, seller: Seller, onClick: () -> Unit, modifie
     ) {
         Box(Modifier.fillMaxWidth().height(158.dp)) {
             FoodPhotoContent(item.photo, item.name + " illustrative preview image",
-                Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = RitRadii.card, topEnd = RitRadii.card)), item.localImageUri)
+                Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = RitRadii.card, topEnd = RitRadii.card)),
+                item.localImageUri, item.remoteImageUrl)
             if (onFavoriteClick != null) {
                 Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
                     CatalogFavoriteButton(item.name, isFavorite, onFavoriteClick, "favorite_item_${item.id}")
@@ -260,6 +304,8 @@ fun CatalogFoodCard(item: MenuItem, seller: Seller, onClick: () -> Unit, modifie
                 RitText("${seller.name} · ${dietaryLabel(item)}", RitType.small, colors.muted, maxLines = 1)
                 Spacer(Modifier.height(5.dp))
                 RitText(item.description, RitType.small, colors.muted, maxLines = 2)
+                if (item.availability == edu.msrit.canteen.customer.ItemAvailability.UNAVAILABLE)
+                    RitText("Unavailable", RitType.small, colors.accent)
             }
             Spacer(Modifier.width(12.dp))
             RitText(item.price.display, RitType.label, colors.accent)

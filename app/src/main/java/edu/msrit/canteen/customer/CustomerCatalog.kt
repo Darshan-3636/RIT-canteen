@@ -147,6 +147,8 @@ data class MenuItem(
     val localImageUri: String? = null,
     val tags: Set<String> = emptySet(),
     val orderEligibility: OrderEligibility? = null,
+    val remoteImageUrl: String? = null,
+    val imageKey: String? = null,
 )
 
 enum class OrderEligibility { INDIVIDUAL_ONLY, BULK_ONLY, BOTH }

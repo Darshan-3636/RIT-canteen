@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -112,7 +113,7 @@ private fun BusinessCard(title: String, detail: String, onClick: (() -> Unit)? =
         .then(if (tag == null) Modifier else Modifier.testTag(tag)).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (food != null) FoodPhotoContent(food.photo, "${food.name} sample photo",
-                Modifier.size(64.dp), food.localImageUri)
+                Modifier.size(64.dp), food.localImageUri, food.remoteImageUrl)
             Column {
                 RitText(title, RitType.label)
                 RitText(detail, RitType.small, colors.muted)
@@ -241,6 +242,7 @@ fun SellerMenuManagementScreen(sellerId: String, userId: String, repo: SellerBus
 fun SellerItemEditorScreen(sellerId: String, userId: String, itemId: String?, repo: SellerBusinessRepository,
     onBack: () -> Unit, onSaved: () -> Unit) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val old = PreviewCatalog.items.find { it.id == itemId && it.sellerId == sellerId }
     val canChangeAvailability = SellerCapability.AVAILABILITY in repo.capabilities(userId, sellerId)
     var name by remember(itemId) { mutableStateOf(old?.name.orEmpty()) }
@@ -318,12 +320,13 @@ fun SellerItemEditorScreen(sellerId: String, userId: String, itemId: String?, re
         Spacer(Modifier.height(8.dp))
         RitTextField(tags, { tags = it }, "Optional tags", "Comma-separated discovery labels")
         Spacer(Modifier.height(12.dp))
-        FoodPhotoContent(old?.photo, "$name preview", Modifier.fillMaxWidth().height(150.dp), photoUri)
+        FoodPhotoContent(old?.photo, "$name preview", Modifier.fillMaxWidth().height(150.dp),
+            photoUri, old?.remoteImageUrl)
         Spacer(Modifier.height(9.dp))
-        RitSecondaryButton(if (photoUri == null) "Choose local preview photo" else "Replace local preview photo", {
+        RitSecondaryButton(if (photoUri == null) "Choose item photo" else "Replace item photo", {
             picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         }, Modifier.fillMaxWidth().testTag("seller_pick_photo"))
-        RitText("Photo remains a local debug preview; it is not uploaded.", RitType.small, RitThemeTokens.colors.muted)
+        RitText("JPEG or PNG · up to 5 MB · uploads when you save.", RitType.small, RitThemeTokens.colors.muted)
         Spacer(Modifier.height(14.dp))
         if (canChangeAvailability) {
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -355,11 +358,11 @@ fun SellerItemEditorScreen(sellerId: String, userId: String, itemId: String?, re
                         published, if (showUnavailable) UnavailableVisibility.SHOW else UnavailableVisibility.HIDE,
                         old?.photo, old?.featured ?: false, photoUri,
                         tags.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet(),
-                        orderEligibility)
+                        orderEligibility).copy(imageKey = old?.imageKey)
                     saving = true
                     scope.launch {
                         try {
-                            val result = withContext(Dispatchers.IO) { DebugSellerCatalogApi.saveItem(item) }
+                            val result = withContext(Dispatchers.IO) { DebugSellerCatalogApi.saveItem(item, context) }
                             if (result.success) {
                                 val snapshot = runCatching { withContext(Dispatchers.IO) {
                                     DebugServerCatalog.fetch(policySellerId = sellerId, force = true) } }.getOrNull()

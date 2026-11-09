@@ -885,8 +885,6 @@ fun RitAppNavigation(appearance: AppearancePreference,
                             val order = result.value
                             if (order != null) {
                                 DevelopmentIndividualOrders.upsertServer(order)
-                                individualCart.clear()
-                                refreshIndividualCart()
                                 val history = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
                                 history.value?.let(DevelopmentIndividualOrders::applyServer)
                                 withContext(Dispatchers.Main.immediate) {
@@ -1105,9 +1103,6 @@ fun RitAppNavigation(appearance: AppearancePreference,
                                     }
                                     submitting = false
                                     if (result.value != null) {
-                                        bulkDraft.clear()
-                                        saveBulkDraft()
-                                        loadBulk()
                                         withContext(Dispatchers.Main.immediate) {
                                             navController.navigate(Route.customerDemoDetail(result.value.reference))
                                         }

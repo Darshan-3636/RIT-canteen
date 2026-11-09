@@ -4,7 +4,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.time.LocalDateTime
-import java.util.UUID
 
 enum class CartMode { INDIVIDUAL, BULK }
 
@@ -26,18 +25,15 @@ class IndividualCartSession(private val catalog: CustomerCatalogSource = Preview
     var serverCart by mutableStateOf<IndividualServerCart?>(null)
         private set
     private var checkoutVersion: Long? = null
-    private var checkoutKey: String = UUID.randomUUID().toString()
 
     fun applyServer(cart: IndividualServerCart) {
         draft = IndividualDraft(cart.lines.map { IndividualLine(it.itemId, it.quantity) })
         serverCart = cart
-        if (checkoutVersion != cart.version) {
-            checkoutVersion = cart.version
-            checkoutKey = UUID.randomUUID().toString()
-        }
+        checkoutVersion = cart.version
     }
 
-    fun checkoutIdempotencyKey(): String = checkoutKey
+    /** Stable across process death; a new server cart version is a distinct checkout attempt. */
+    fun checkoutIdempotencyKey(): String = "individual-cart-version-${serverCart?.version ?: checkoutVersion ?: 0L}"
 
     fun setQuantity(item: MenuItem, quantity: Int): Boolean {
         val seller = catalog.sellers.find { it.id == item.sellerId } ?: return false
@@ -59,7 +55,6 @@ class IndividualCartSession(private val catalog: CustomerCatalogSource = Preview
         draft = IndividualDraft()
         serverCart = null
         checkoutVersion = null
-        checkoutKey = UUID.randomUUID().toString()
     }
 }
 
@@ -91,7 +86,9 @@ data class IndividualOrderPreview(val id: String, val placedAt: LocalDateTime,
                                   val pickupReference: String = "",
                                   val pickupCode: String? = null,
                                   val handedOverAt: String? = null,
-                                  val sellerId: String = "")
+                                  val sellerId: String = "",
+                                  val customerName: String? = null,
+                                  val customerPhone: String? = null)
 
 /** UAT metadata only. The server remains authoritative for amount and status. */
 data class SandboxPayment(val id: String, val sourceType: String, val sourceId: String,

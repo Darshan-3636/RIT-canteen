@@ -22,7 +22,7 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 
-private val reportMetrics = setOf("DEMO_REQUEST_COUNTS", "SUPPORT_TICKETS")
+private val reportMetrics = setOf("DEMO_REQUEST_COUNTS", "INDIVIDUAL_DEMO_CHECKOUTS", "SUPPORT_TICKETS")
 private val metricsSerializer = ListSerializer(String.serializer())
 
 /** Analytics never invent revenue: there is no verified payment source, so revenue is always null. */
@@ -119,6 +119,11 @@ internal fun Route.registerAnalyticsRoutes(context: BackendContext, commerce: Co
                     }
                 }
             }
+            if("INDIVIDUAL_DEMO_CHECKOUTS" in metrics) {
+                val count=commerce.savedIndividualOrderCount(sellerId,from,to)
+                if(count==null) lines += "individual_demo_checkouts,,count,UNAVAILABLE,$from,$to"
+                else lines += "individual_demo_checkouts,$count,count,DEMO_UNVERIFIED,$from,$to"
+            }
             if("SUPPORT_TICKETS" in metrics) context.read { db ->
                 db.query("""SELECT status,count(*) FROM support_tickets WHERE seller_id=?
                     AND (created_at AT TIME ZONE 'Asia/Kolkata')::date BETWEEN ? AND ? GROUP BY status ORDER BY status""",sellerId,from,to) {
@@ -149,6 +154,8 @@ internal fun analyticsSummary(call: ApplicationCall, commerce: CommerceReadPort,
         to = to?.toString(),
         demoRequestCounts = counts?.toDto(),
         demoRequestCountsStatus = countsStatus(counts),
+        savedIndividualOrderCount = commerce.savedIndividualOrderCount(sellerId, from, to),
+        unavailableItemCount = sellerId?.let(commerce::unavailableItemCount),
         simulatedSales = commerce.simulatedSales(sellerId, from, to)?.toDto(),
         sandboxSales = commerce.sandboxSales(sellerId, from, to)?.toSandboxDto(),
     )

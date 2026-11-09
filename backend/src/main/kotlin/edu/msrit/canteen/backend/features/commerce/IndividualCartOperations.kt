@@ -220,14 +220,8 @@ internal fun checkoutIndividualCart(context: BackendContext, principal: Authenti
             }
             query.executeBatch()
         }
-        db.prepareStatement("DELETE FROM individual_customer_cart_lines WHERE customer_user_id=?").use {
-            it.setObject(1, principal.userId)
-            it.executeUpdate()
-        }
-        db.prepareStatement("UPDATE individual_customer_carts SET version=version+1,updated_at=now() WHERE customer_user_id=?").use {
-            it.setObject(1, principal.userId)
-            it.executeUpdate()
-        }
+        // Creating this demo order is not a verified payment. Keep the versioned cart so
+        // failures, Back navigation, app restarts, and retrying the same checkout cannot lose it.
         notifyIndividualEvent(db, id, "DEMO_SAVED")
         loadDemoIndividual(db,id,true)!!
     }

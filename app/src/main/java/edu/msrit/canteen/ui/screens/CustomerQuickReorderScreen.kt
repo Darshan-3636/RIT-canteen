@@ -90,7 +90,7 @@ fun CustomerQuickReorderScreen(onBack: () -> Unit, onFood: (String) -> Unit, onS
                 items(history.orders, key = { it.id }) { order ->
                     Column(Modifier.padding(vertical = 10.dp)) {
                         RitMessageCard("Sample history · ${historyDate.format(order.completedAt)}",
-                            "Snapshot ${order.id}. Historic titles and prices are illustrative; current catalog rules always apply.")
+                            "Historic titles and prices are illustrative; current catalog rules always apply.")
                         Spacer(Modifier.height(12.dp))
                         order.lines.forEach { line ->
                             val state = currentItemState(catalog, line)

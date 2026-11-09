@@ -17,6 +17,12 @@ interface CommerceReadPort {
 
     /** PhonePe UAT-only successes, separate from click-through simulations and verified revenue. */
     fun sandboxSales(sellerId: String?, from: LocalDate?, to: LocalDate?): SimulatedSales? = null
+
+    /** Persisted demo checkout records, always kept separate from paid-order and revenue metrics. */
+    fun savedIndividualOrderCount(sellerId: String?, from: LocalDate?, to: LocalDate?): Int? = null
+
+    /** Current seller menu items marked unavailable, or null if the source is unavailable. */
+    fun unavailableItemCount(sellerId: String?): Int? = null
 }
 
 sealed interface ItemLookup {

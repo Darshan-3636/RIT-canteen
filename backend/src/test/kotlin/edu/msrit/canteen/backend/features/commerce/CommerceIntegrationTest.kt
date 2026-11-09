@@ -290,8 +290,9 @@ class CommerceIntegrationTest {
             assertEquals(HttpStatusCode.Conflict,place("cart-checkout-1",2).status)
             assertEquals(HttpStatusCode.Conflict,place("cart-checkout-2",1).status)
             val cart=client.get(path) { header(HttpHeaders.Authorization,"Bearer ${f.customer.token}") }
-            assertTrue(cart.bodyAsText().contains("\"version\":2"))
-            assertTrue(cart.bodyAsText().contains("\"lines\":[]"))
+            assertTrue(cart.bodyAsText().contains("\"version\":1"))
+            assertTrue(cart.bodyAsText().contains("\"itemId\":\"masala-dosa\""))
+            assertTrue(cart.bodyAsText().contains("\"quantity\":2"))
             val other=client.get("/api/v1/me/individual-demo-orders") {
                 header(HttpHeaders.Authorization,"Bearer ${f.stranger.token}")
             }
@@ -365,6 +366,9 @@ class CommerceIntegrationTest {
             val sellerQueue=client.get(sellerPath) { header(HttpHeaders.Authorization,"Bearer ${f.seller.token}") }
             assertEquals(HttpStatusCode.OK,sellerQueue.status)
             assertTrue(sellerQueue.bodyAsText().contains(id))
+            assertTrue(sellerQueue.bodyAsText().contains("\"customerName\":\"Commerce Integration customer\""))
+            assertTrue(sellerQueue.bodyAsText().contains("\"customerPhone\":null"))
+            assertFalse(sellerQueue.bodyAsText().contains("customer-${f.customer.user}@example.test"))
             assertFalse(sellerQueue.bodyAsText().contains(pickupCode))
             val otherSellerQueue=client.get("/api/v1/sellers/north-counter/individual-demo-orders") {
                 header(HttpHeaders.Authorization,"Bearer ${f.seller.token}")

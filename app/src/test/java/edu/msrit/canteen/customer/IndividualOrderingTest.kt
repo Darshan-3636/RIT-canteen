@@ -57,6 +57,8 @@ class IndividualOrderingTest {
         val key = cart.checkoutIdempotencyKey()
         cart.applyServer(first)
         assertEquals(key, cart.checkoutIdempotencyKey())
+        val afterRestart = IndividualCartSession().apply { applyServer(first) }
+        assertEquals(key, afterRestart.checkoutIdempotencyKey())
         cart.applyServer(first.copy(version = 5, readyForCheckout = false))
         assertFalse(cart.serverCart!!.readyForCheckout)
         assertFalse(key == cart.checkoutIdempotencyKey())

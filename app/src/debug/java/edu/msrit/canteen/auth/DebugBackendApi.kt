@@ -28,6 +28,11 @@ internal object DebugBackendApi {
         .build()
     private val jsonType = "application/json; charset=utf-8".toMediaType()
 
+    fun publicUrl(path: String): String {
+        require(path.startsWith("/") && !path.startsWith("//"))
+        return base + path
+    }
+
     data class Response(val status: Int, val body: JSONObject?, val array: JSONArray? = null,
                         val raw: String? = null) {
         val error: String? get() = body?.optJSONObject("error")?.optString("message")
@@ -46,6 +51,22 @@ internal object DebugBackendApi {
         client.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             if (response.code == 401 && token != null) DevelopmentDemoAccounts.invalidateIfCurrent(token)
+            return Response(response.code,
+                raw.takeIf { it.startsWith('{') }?.let(::JSONObject),
+                raw.takeIf { it.startsWith('[') }?.let(::JSONArray), raw)
+        }
+    }
+
+    fun uploadImage(path: String, bytes: ByteArray, mimeType: String, token: String): Response {
+        require(path.startsWith("/") && !path.startsWith("//"))
+        require(mimeType in setOf("image/jpeg", "image/png"))
+        val request = Request.Builder().url(base + path).header("Accept", "application/json")
+            .header("Authorization", "Bearer $token")
+            .post(bytes.toRequestBody(mimeType.toMediaType()))
+            .build()
+        client.newCall(request).execute().use { response ->
+            val raw = response.body?.string().orEmpty()
+            if (response.code == 401) DevelopmentDemoAccounts.invalidateIfCurrent(token)
             return Response(response.code,
                 raw.takeIf { it.startsWith('{') }?.let(::JSONObject),
                 raw.takeIf { it.startsWith('[') }?.let(::JSONArray), raw)

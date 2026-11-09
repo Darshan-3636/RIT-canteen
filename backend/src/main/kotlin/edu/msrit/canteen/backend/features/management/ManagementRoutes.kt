@@ -4,19 +4,55 @@ import edu.msrit.canteen.backend.api.requirePlatformAdmin
 import edu.msrit.canteen.backend.api.requireSellerCapability
 import edu.msrit.canteen.backend.core.BackendContext
 import edu.msrit.canteen.backend.features.engagement.*
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.request.contentType
+import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytes
 import io.ktor.server.routing.*
+import io.ktor.utils.io.jvm.javaio.toInputStream
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 internal fun Route.registerManagementRoutes(context: BackendContext) {
     registerManagementAnalytics(context)
     registerPromotionRoutes(context)
     val catalog=CatalogService(context)
+    val imageStorage=MenuImageStorage()
     val members=MembershipService(context)
     val admin=AdministrationService(context)
+    post("/sellers/{sellerId}/catalog/items/{itemId}/image") { call.handled {
+        val seller=call.parameters["sellerId"]!!
+        call.requireSellerCapability(context,seller,"catalog.edit") ?: return@handled
+        val itemId=call.parameters["itemId"].orEmpty()
+        if (!itemId.matches(Regex("[A-Za-z0-9_-]{1,100}")))
+            throw badRequest("INVALID_ITEM_ID","Invalid menu item identifier")
+        val exists=context.read { db -> db.queryOne("SELECT 1 FROM menu_items WHERE seller_id=? AND id=?",seller,itemId) { true } ?: false }
+        if (!exists && !itemId.matches(Regex("item-[0-9a-fA-F-]{36}"))) throw notFound()
+        val declaredMime=call.request.contentType().withoutParameters().toString()
+        val bytes=withContext(Dispatchers.IO) { call.receiveChannel().toInputStream().use { it.readNBytes(MAX_MENU_IMAGE_UPLOAD_BYTES+1) } }
+        val normalized=try { normalizeMenuImage(bytes,declaredMime) }
+            catch (failure: InvalidMenuImage) { throw badRequest("INVALID_MENU_IMAGE",failure.message ?: "Invalid menu image") }
+        val stored=try { withContext(Dispatchers.IO) { imageStorage.upload(seller,normalized) } }
+            catch (_: MenuImageStorageUnavailable) { throw ApiFailure(HttpStatusCode.ServiceUnavailable,"IMAGE_STORAGE_UNAVAILABLE",
+                "Menu image storage is not configured or is unavailable. The item was not saved.") }
+        call.respond(HttpStatusCode.Created,mapOf("imageKey" to stored.key,"width" to stored.width,"height" to stored.height))
+    } }
+    get("/catalog/images/{imageKey}") { call.handled {
+        val key=call.parameters["imageKey"].orEmpty()
+        if (!key.matches(Regex("custom-[0-9a-fA-F-]{36}"))) throw notFound()
+        val seller=context.read { db -> db.queryOne("""SELECT seller_id FROM menu_items WHERE image_key=?
+            AND published=TRUE AND archived_at IS NULL AND
+            (availability='AVAILABLE' OR unavailable_visibility='SHOW') LIMIT 1""",key) { it.getString(1) } } ?: throw notFound()
+        val bytes=try { withContext(Dispatchers.IO) { imageStorage.download(seller,key) } }
+            catch (_: MenuImageStorageUnavailable) { throw ApiFailure(HttpStatusCode.ServiceUnavailable,"IMAGE_STORAGE_UNAVAILABLE",
+                "Menu image storage is temporarily unavailable") }
+        call.respondBytes(bytes,ContentType.Image.JPEG,HttpStatusCode.OK)
+    } }
     get("/sellers/{sellerId}/catalog/items") { call.handled {
         val seller=call.parameters["sellerId"]!!
         call.requireSellerCapability(context,seller,"catalog.edit") ?: return@handled

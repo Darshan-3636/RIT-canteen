@@ -67,4 +67,27 @@ class PostgresCommerceReadPort(private val context: BackendContext) : CommerceRe
                 }
             }
         }
+
+    override fun savedIndividualOrderCount(sellerId: String?, from: LocalDate?, to: LocalDate?): Int? =
+        sellerId?.let { seller -> context.dataSource.connection.use { db ->
+            val clauses = mutableListOf("seller_id=?")
+            if (from != null) clauses += "(created_at AT TIME ZONE 'Asia/Kolkata')::date >= ?"
+            if (to != null) clauses += "(created_at AT TIME ZONE 'Asia/Kolkata')::date <= ?"
+            db.prepareStatement("SELECT count(*) FROM individual_demo_orders WHERE ${clauses.joinToString(" AND ")}").use { sql ->
+                var n = 1
+                sql.setString(n++, seller)
+                if (from != null) sql.setObject(n++, from)
+                if (to != null) sql.setObject(n, to)
+                sql.executeQuery().use { rows -> rows.next(); Math.toIntExact(rows.getLong(1)) }
+            }
+        } }
+
+    override fun unavailableItemCount(sellerId: String?): Int? =
+        sellerId?.let { seller -> context.dataSource.connection.use { db ->
+            db.prepareStatement("""SELECT count(*) FROM menu_items
+                WHERE seller_id=? AND availability='UNAVAILABLE' AND archived_at IS NULL""").use { sql ->
+                sql.setString(1, seller)
+                sql.executeQuery().use { rows -> rows.next(); Math.toIntExact(rows.getLong(1)) }
+            }
+        } }
 }

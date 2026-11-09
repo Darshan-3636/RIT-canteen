@@ -1,14 +1,17 @@
 package edu.msrit.canteen.customer
 
+import android.content.Context
+import android.net.Uri
 import edu.msrit.canteen.auth.DebugBackendApi
 import edu.msrit.canteen.auth.DevelopmentDemoAccounts
 import org.json.JSONObject
 import org.json.JSONArray
+import java.io.ByteArrayOutputStream
 import java.time.LocalDate
 
 /** Seller catalog commands. Invoke on Dispatchers.IO; server permissions and versions are authoritative. */
 object DebugSellerCatalogApi {
-    data class Result(val success: Boolean, val message: String)
+    data class Result(val success: Boolean, val message: String, val imageKey: String? = null)
 
     fun saveProfile(sellerId: String, name: String, description: String): Result {
         val token = DevelopmentDemoAccounts.token() ?: return Result(false, "Sign in again.")
@@ -36,7 +39,7 @@ object DebugSellerCatalogApi {
         } catch (_: Exception) { Result(false, "Server unavailable.") }
     }
 
-    fun saveItem(item: MenuItem): Result {
+    fun saveItem(item: MenuItem, context: Context): Result {
         val original = PreviewCatalog.items.find { it.id == item.id && it.sellerId == item.sellerId }
         val token = DevelopmentDemoAccounts.token() ?: return Result(false, "Sign in again.")
         return try {
@@ -45,12 +48,39 @@ object DebugSellerCatalogApi {
             if (current != null && current.status != 200)
                 return Result(false, current.error ?: "Could not load the latest item version.")
             val version = current?.body?.getLong("version")
+            var imageKey = item.imageKey ?: item.id
+            item.localImageUri?.let { selectedUri ->
+                val uri = Uri.parse(selectedUri)
+                val mime = when (context.contentResolver.getType(uri)?.lowercase()) {
+                    "image/jpeg", "image/jpg" -> "image/jpeg"
+                    "image/png" -> "image/png"
+                    else -> return Result(false, "Choose a JPEG or PNG image.")
+                }
+                val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+                    val output = ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        if (output.size() + count > 5 * 1024 * 1024)
+                            return Result(false, "Choose an image up to 5 MB.")
+                        output.write(buffer, 0, count)
+                    }
+                    output.toByteArray()
+                } ?: return Result(false, "Could not read the selected image.")
+                val uploaded = DebugBackendApi.uploadImage(
+                    "/api/v1/sellers/${item.sellerId}/catalog/items/${item.id}/image", bytes, mime, token)
+                if (uploaded.status != 201)
+                    return Result(false, uploaded.error ?: "Photo upload failed (${uploaded.status}).")
+                imageKey = uploaded.body?.optString("imageKey")?.takeIf { it.startsWith("custom-") }
+                    ?: return Result(false, "Photo upload was not confirmed. Retry before saving the item.")
+            }
             val body = JSONObject().put("name", item.name).put("description", item.description)
                 .put("pricePaise", item.price.rupees.toLong() * 100L)
                 .put("published", item.published).put("dietary", item.dietary.name)
                 .put("unavailableVisibility", item.unavailableVisibility.name)
                 .put("categoryId", item.categoryId).put("kind", item.kind.name)
-                .put("imageKey", item.id)
+                .put("imageKey", imageKey)
                 .put("orderEligibility", item.orderEligibility?.name ?: "BULK_ONLY")
             val response = if (original == null) DebugBackendApi.request("POST", path,
                 body.put("id", item.id).put("availability", item.availability.name), token)
@@ -62,9 +92,9 @@ object DebugSellerCatalogApi {
                     "/api/v1/sellers/" + item.sellerId + "/menu/items/" + item.id + "/availability",
                     JSONObject().put("availability", item.availability.name)
                         .put("expectedVersion", version!! + 1), token)
-                if (availability.status == 200) Result(true, "Item and availability saved on server.")
+                if (availability.status == 200) Result(true, "Item and availability saved on server.", imageKey)
                 else Result(false, availability.error ?: "Item details saved, but availability failed. Refresh the menu.")
-            } else Result(true, "Item saved on server.")
+            } else Result(true, "Item saved on server.", imageKey)
         } catch (_: Exception) { Result(false, "Server unavailable.") }
     }
 

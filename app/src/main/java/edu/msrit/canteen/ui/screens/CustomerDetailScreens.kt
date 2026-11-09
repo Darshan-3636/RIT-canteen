@@ -149,7 +149,9 @@ fun FoodDetailsScreen(itemId: String, onBack: () -> Unit, onAddBulk: ((String) -
         CatalogHeader("Food Details", onBack)
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 18.dp)) {
             item {
-                FoodPhotoContent(item.photo, item.name + " illustrative preview image", Modifier.fillMaxWidth().height(250.dp).clip(RoundedCornerShape(RitRadii.hero)), item.localImageUri)
+                FoodPhotoContent(item.photo, item.name + " illustrative preview image",
+                    Modifier.fillMaxWidth().height(250.dp).clip(RoundedCornerShape(RitRadii.hero)),
+                    item.localImageUri, item.remoteImageUrl)
                 Spacer(Modifier.height(18.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     RitText(item.name, RitType.heading, modifier = Modifier.weight(1f))
@@ -177,7 +179,7 @@ fun FoodDetailsScreen(itemId: String, onBack: () -> Unit, onAddBulk: ((String) -
                     Modifier.testTag("food_added_feedback"))
                 if (addFailed) RitText("Could not update your cart. Please retry.", RitType.small, colors.accent,
                     Modifier.testTag("food_add_error"))
-                RitPrimaryButton(if (adding) "Adding…" else "Add to Order", ::addToOrder,
+                RitPrimaryButton(if (adding) "Adding…" else "Add to Cart", ::addToOrder,
                     Modifier.fillMaxWidth().testTag("food_add_order"),
                     enabled = !adding && (onAddIndividual != null || onAddBulk != null))
                 if (added && onViewCart != null) RitSecondaryButton("View Cart", onViewCart,

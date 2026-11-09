@@ -42,6 +42,8 @@ object DebugSellerAnalyticsApi {
             row.optString("from").takeUnless { it.isBlank() || it == "null" },
             row.optString("to").takeUnless { it.isBlank() || it == "null" },
             simulated?.optInt("orderCount") ?: 0, simulated?.optLong("totalPaise") ?: 0L,
-            sandbox?.optInt("orderCount") ?: 0, sandbox?.optLong("totalPaise") ?: 0L)
+            sandbox?.optInt("orderCount") ?: 0, sandbox?.optLong("totalPaise") ?: 0L,
+            row.optInt("savedIndividualOrderCount").takeUnless { row.isNull("savedIndividualOrderCount") },
+            row.optInt("unavailableItemCount").takeUnless { row.isNull("unavailableItemCount") })
     }
 }

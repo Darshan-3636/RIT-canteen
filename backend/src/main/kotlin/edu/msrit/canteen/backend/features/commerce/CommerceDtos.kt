@@ -101,6 +101,9 @@ import kotlinx.serialization.Serializable
     val pickupReference: String = "",
     val pickupCode: String? = null,
     val handedOverAt: String? = null,
+    /** Seller-only public profile fields. Email and authentication identifiers are never included. */
+    val customerName: String? = null,
+    val customerPhone: String? = null,
 )
 @Serializable data class IndividualDemoOrderListDto(val orders: List<IndividualDemoOrderDto>)
 @Serializable data class PickupScheduleDto(val confirmed: List<BulkRequestDto>, val note: String)
