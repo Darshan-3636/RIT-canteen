@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -50,6 +51,7 @@ import edu.msrit.canteen.customer.QuoteStage
 import edu.msrit.canteen.customer.QuoteThread
 import edu.msrit.canteen.customer.RIT_TIME_ZONE
 import edu.msrit.canteen.customer.SellerRequestStatus
+import edu.msrit.canteen.customer.SellerDisplayPreferences
 import edu.msrit.canteen.customer.compareQuotes
 import edu.msrit.canteen.customer.operationalStatus
 import edu.msrit.canteen.ui.components.CatalogHeader
@@ -159,7 +161,6 @@ fun SellerDailyOperationsOverview(
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RitStatusIndicator("Demo workspace · sample requests only")
                     RitText(sellerName, RitType.heading)
                     RitText("$roleLabel · seller operations", RitType.small, colors.muted)
                 }
@@ -209,9 +210,9 @@ fun SellerDailyOperationsOverview(
                 Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                     horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
                     DailyFocusCard("New requests", newBulk + newIndividual,
-                        "$newBulk bulk · $newIndividual individual demo", "Open orders", onOpenRequests,
+                        "$newBulk bulk · $newIndividual individual", "Open orders", onOpenRequests,
                         Modifier.weight(1f).fillMaxHeight().testTag("seller_dashboard_new_summary"), RitIconKind.Orders)
-                    DailyFocusCard("Waiting", waiting, "Customer reply or demo payment",
+                    DailyFocusCard("Waiting", waiting, "Customer response or payment",
                         "Review orders", onOpenRequests,
                         Modifier.weight(1f).fillMaxHeight().testTag("seller_dashboard_waiting_summary"), RitIconKind.Bulk)
                 }
@@ -219,8 +220,8 @@ fun SellerDailyOperationsOverview(
 
             if (onOpenIndividual != null) item {
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    RitText("Individual demo orders", RitType.title)
-                    RitText("$newIndividual new · local requests, not kitchen tickets", RitType.body, colors.muted)
+                    RitText("Individual orders", RitType.title)
+                    RitText("$newIndividual new", RitType.body, colors.muted)
                     RitSecondaryButton("Review individual requests", onOpenIndividual,
                         Modifier.fillMaxWidth().testTag("seller_dashboard_individual"))
                 }
@@ -407,6 +408,10 @@ fun SellerDailyRequestDetailPresentation(
     actionBusy: Boolean = false,
 ) {
     val colors = RitThemeTokens.colors
+    val context = LocalContext.current
+    val showJourney = remember(record.thread.sellerId) {
+        SellerDisplayPreferences.showRequestJourney(context, record.thread.sellerId)
+    }
     var rejectionReason by remember(record.reference) { mutableStateOf("") }
     val quoteExpired = isRequestQuoteExpired(record, now)
     val currentState = sellerDetailState(record, now)
@@ -518,14 +523,16 @@ fun SellerDailyRequestDetailPresentation(
                 }
             }
 
-            item {
-                SellerSectionHeading(
-                    "Request journey",
-                    "See who has responded to the current revision.",
-                    "seller_detail_journey_heading",
-                )
+            if (showJourney) {
+                item {
+                    SellerSectionHeading(
+                        "Request journey",
+                        "See who has responded to the current revision.",
+                        "seller_detail_journey_heading",
+                    )
+                }
+                item { SellerRequestJourney(record, canRespond, now) }
             }
-            item { SellerRequestJourney(record, canRespond, now) }
 
             item {
                 SellerSectionHeading(
@@ -790,7 +797,7 @@ private fun SellerDetailSummaryCard(
                 localUri = firstItem?.localImageUri,
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                RitText(record.reference, RitType.label, colors.muted)
+                RitText(record.customerLabel, RitType.label, maxLines = 2)
                 RitText(
                     state,
                     RitType.title,
@@ -1651,7 +1658,6 @@ private fun SellerDailyRequestCard(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 RitText(statusLabel, RitType.label, colors.accent, maxLines = 2)
                 RitText(record.customerLabel, RitType.body, maxLines = 2)
-                RitText(record.reference, RitType.small, colors.muted, maxLines = 1)
             }
         }
         RitText(

@@ -8,7 +8,7 @@ class AuthEntryIntentTest {
     @Test fun welcomeActionsKeepDistinctIntentButShareEmailOtpBoundary() {
         assertNotEquals(AuthEntryIntent.GetStarted.routeValue, AuthEntryIntent.Login.routeValue)
         assertEquals("Register", AuthEntryIntent.fromRoute("get-started").heading)
-        assertEquals("Login", AuthEntryIntent.fromRoute("login").heading)
+        assertEquals("Welcome back", AuthEntryIntent.fromRoute("login").heading)
         assertEquals(AuthEntryIntent.Login, AuthEntryIntent.fromRoute("unexpected"))
     }
 }

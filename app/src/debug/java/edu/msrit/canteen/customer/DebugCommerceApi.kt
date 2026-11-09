@@ -261,8 +261,9 @@ object DebugCommerceApi {
         val thread = QuoteThread(sellerId, row.getString("id"), listOf(revision), status,
             if (sellerApproved) version else null, if (customerApproved) version else null,
             local(row.getString("expiresAt")), if (specialApproved == true) version else null)
+        val customerName = row.optString("customerName").takeIf { it.isNotBlank() && it != "null" } ?: "Customer"
         return BulkRequestRecord(thread, DevelopmentDemoAccounts.serverIdentity?.userId.orEmpty(),
-            "Customer", BulkDraft(sellerId, lines.map { BulkLine(it.itemId, it.quantity) }, pickup,
+            customerName, BulkDraft(sellerId, lines.map { BulkLine(it.itemId, it.quantity) }, pickup,
                 reason.isNotBlank(), reason, row.optString("instructions")), row.getInt("minimumUnits"), LocalDateTime.now(RIT_TIME_ZONE))
     }
 

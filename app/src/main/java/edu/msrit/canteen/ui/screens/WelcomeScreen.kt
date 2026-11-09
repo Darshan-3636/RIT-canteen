@@ -42,7 +42,6 @@ fun WelcomeScreen(onGetStarted: () -> Unit, onLogin: () -> Unit) {
         )
         Spacer(Modifier.height(11.dp))
         RitText("RIT Canteen", RitType.heading)
-        RitText("Are you craving for food?", RitType.title, colors.muted)
         Spacer(Modifier.height(24.dp))
         RitPrimaryButton("Log In", onLogin, Modifier.fillMaxWidth().testTag("welcome_login"),
             trailingIcon = RitIconKind.Arrow)

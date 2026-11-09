@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import edu.msrit.canteen.customer.BulkTimeWindow
@@ -57,6 +58,7 @@ import edu.msrit.canteen.customer.PromotionKind
 import edu.msrit.canteen.customer.RIT_TIME_ZONE
 import edu.msrit.canteen.customer.SellerBulkPolicy
 import edu.msrit.canteen.customer.SellerBusinessRepository
+import edu.msrit.canteen.customer.SellerDisplayPreferences
 import edu.msrit.canteen.customer.SellerCapability
 import edu.msrit.canteen.customer.SellerClosure
 import edu.msrit.canteen.customer.SellerEmployee
@@ -93,9 +95,6 @@ private fun BusinessPage(title: String, tag: String, onBack: () -> Unit, content
     Column(Modifier.fillMaxSize().background(colors.background).testTag(tag)) {
         CatalogHeader(title, onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
-            RitText(if (BuildConfig.RIT_CLOUD_DEMO) "Server-backed demo · unsupported changes are unavailable"
-                else "Local backend demo · unsupported changes are not saved", RitType.small, colors.muted)
-            Spacer(Modifier.height(14.dp))
             content()
             Spacer(Modifier.height(40.dp))
         }
@@ -142,7 +141,7 @@ fun SellerBusinessHomeScreen(sellerId: String, userId: String, repo: SellerBusin
         Spacer(Modifier.height(20.dp))
         RitText("Orders & pickup", RitType.title)
         Spacer(Modifier.height(8.dp))
-        BusinessCard("Bulk requests", "Review current demo requests", onRequests, "seller_manage_requests")
+        BusinessCard("Bulk requests", "Review customer requests", onRequests, "seller_manage_requests")
         BusinessCard("Schedule", "Pickup requests and operational times", onSchedule, "seller_manage_schedule")
         Spacer(Modifier.height(12.dp))
         RitText("Menu & catalog", RitType.title)
@@ -275,13 +274,6 @@ fun SellerItemEditorScreen(sellerId: String, userId: String, itemId: String?, re
     fun back() { if (dirty) confirmDiscard = true else onBack() }
     BackHandler { back() }
     BusinessPage(if (old == null) "Add food item" else "Edit food item", "seller_item_editor", ::back) {
-        if (confirmDiscard) {
-            BusinessCard("Discard unsaved changes?", "Changes on this screen have not been saved.")
-            RitSecondaryButton("Keep editing", { confirmDiscard = false }, Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
-            RitPrimaryButton("Discard changes", onBack, Modifier.fillMaxWidth())
-            Spacer(Modifier.height(18.dp))
-        }
         RitTextField(name, { name = it }, "Item name", "Required", inputTag = "seller_item_name")
         Spacer(Modifier.height(9.dp))
         RitTextField(description, { description = it }, "Description", "What is included?", singleLine = false)
@@ -405,6 +397,21 @@ fun SellerItemEditorScreen(sellerId: String, userId: String, itemId: String?, re
             }
         }
     }
+    if (confirmDiscard) {
+        val colors = RitThemeTokens.colors
+        Dialog(onDismissRequest = { confirmDiscard = false }) {
+            Column(Modifier.fillMaxWidth().background(colors.card, RoundedCornerShape(RitRadii.card))
+                .padding(22.dp).testTag("seller_discard_dialog")) {
+                RitText("Discard unsaved changes?", RitType.title)
+                Spacer(Modifier.height(8.dp))
+                RitText("Changes on this screen have not been saved.", RitType.body, colors.muted)
+                Spacer(Modifier.height(18.dp))
+                RitSecondaryButton("Keep editing", { confirmDiscard = false }, Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
+                RitPrimaryButton("Discard changes", { confirmDiscard = false; onBack() }, Modifier.fillMaxWidth())
+            }
+        }
+    }
 }
 
 @Composable
@@ -525,6 +532,8 @@ fun SellerBusinessSettingsScreen(sellerId: String, userId: String, repo: SellerB
     onClosures: () -> Unit, onMinimum: () -> Unit, onEmployees: () -> Unit,
     onPromotions: () -> Unit, onNotifications: () -> Unit) {
     val caps = repo.capabilities(userId, sellerId)
+    val context = LocalContext.current
+    var showJourney by remember(sellerId) { mutableStateOf(SellerDisplayPreferences.showRequestJourney(context, sellerId)) }
     BusinessPage("Business settings", "seller_business_settings", onBack) {
         RitText(PreviewCatalog.sellers.find { it.id == sellerId }?.name ?: "Seller", RitType.heading)
         Spacer(Modifier.height(12.dp))
@@ -537,6 +546,9 @@ fun SellerBusinessSettingsScreen(sellerId: String, userId: String, repo: SellerB
         }
         if (SellerCapability.EMPLOYEES in caps)
             BusinessCard("Team & permissions", "Manage seller membership access", onEmployees)
+        BusinessCard("Show Request Journey", if (showJourney) "On · show the request timeline on details" else "Off · keep request details concise",
+            { showJourney = !showJourney; SellerDisplayPreferences.setShowRequestJourney(context, sellerId, showJourney) },
+            "seller_request_journey_preference")
         if (SellerCapability.PROMOTIONS in caps)
             BusinessCard("Promotions", "Manage offers for eligible menu items", onPromotions)
         BusinessCard("Notifications", "Your in-app order and quote updates", onNotifications)

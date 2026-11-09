@@ -73,11 +73,11 @@ private fun SellerRequestCard(record: BulkRequestRecord, onOpen: () -> Unit) {
         .background(colors.card, RoundedCornerShape(RitRadii.card))
         .clickable(onClick = onOpen).testTag("seller_request_${record.reference}").padding(15.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            RitText(record.reference, RitType.label)
+            RitText(record.customerLabel, RitType.label, modifier = Modifier.weight(1f), maxLines = 2)
             SellerStatus(record)
         }
         Spacer(Modifier.height(5.dp))
-        RitText("${record.customerLabel} · ${record.latest.lines.sumOf { it.quantity }} units", RitType.body)
+        RitText("${record.latest.lines.sumOf { it.quantity }} units", RitType.body)
         RitText(record.latest.lines.joinToString { "${it.title} × ${it.quantity}" }, RitType.small, colors.muted,
             maxLines = 2)
         RitText("${displayPickup(record.latest.pickup)} · ${displayPaise(record.latest.totalPaise)}",
@@ -186,10 +186,8 @@ fun SellerInboxScreen(records: List<BulkRequestRecord>, sellerId: String, onBack
         LazyColumn(modifier = Modifier.weight(1f).testTag("seller_inbox_list"),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
-                RitStatusIndicator("Seller-scoped demo backend · payment unverified")
-                Spacer(Modifier.height(12.dp))
                 if (onIndividual != null) {
-                    RitSecondaryButton("Individual demo orders · $newIndividualCount new", onIndividual,
+                    RitSecondaryButton("Individual orders · $newIndividualCount new", onIndividual,
                         Modifier.fillMaxWidth().testTag("seller_orders_individual"))
                     Spacer(Modifier.height(8.dp))
                 }
@@ -211,10 +209,10 @@ fun SellerInboxScreen(records: List<BulkRequestRecord>, sellerId: String, onBack
                     }
                 }
                 Spacer(Modifier.height(14.dp))
-                RitText("${visible.size} demonstration records", RitType.small, colors.muted)
+                RitText("${visible.size} requests", RitType.small, colors.muted)
                 Spacer(Modifier.height(10.dp))
             }
-            if (visible.isEmpty()) item { RitEmptyState("No matching requests", "Try another status or reference.") }
+            if (visible.isEmpty()) item { RitEmptyState("No matching requests", "Try another status or customer or item name.") }
             items(visible, key = { it.reference }) { record -> SellerRequestCard(record) { onRequest(record.reference) } }
         }
     }
