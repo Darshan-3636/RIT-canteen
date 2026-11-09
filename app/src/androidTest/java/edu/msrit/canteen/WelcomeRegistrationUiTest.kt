@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import org.junit.Rule
 import org.junit.Test
 
@@ -30,9 +31,24 @@ class WelcomeRegistrationUiTest {
         rule.onNodeWithTag("welcome_get_started").assertExists().performScrollTo().performClick()
         rule.onNodeWithTag("demo_signup_screen").assertExists()
         rule.onNodeWithTag("demo_signup_student").assertExists()
-        rule.onNodeWithTag("demo_signup_faculty").assertExists().performScrollTo().performClick()
+        rule.onNodeWithTag("demo_signup_staff").assertExists().performScrollTo().performClick()
+        rule.onNodeWithText("Register").assertExists()
         rule.onNodeWithText("Choose how you want\nto use the app").assertDoesNotExist()
         rule.onNodeWithTag("customer_home").assertDoesNotExist()
+    }
+
+    @Test fun registerValidatesNameAndEmailAndOffersDepartmentDropdown() {
+        reachWelcome()
+        rule.onNodeWithTag("welcome_get_started").performScrollTo().performClick()
+        rule.onNodeWithTag("demo_signup_name").performTextInput("Ada 4")
+        rule.onNodeWithTag("demo_signup_email").performTextInput("not-an-email")
+        rule.onNodeWithTag("demo_signup_submit").performScrollTo().performClick()
+        rule.onNodeWithTag("demo_signup_name_error").assertExists()
+        rule.onNodeWithTag("demo_signup_email_error").assertExists()
+
+        rule.onNodeWithTag("demo_signup_department").performScrollTo().performClick()
+        rule.onNodeWithText("Aerospace Engineering").assertExists().performClick()
+        rule.onNodeWithText("Aerospace Engineering").assertExists()
     }
 
     @Test fun sellerSignupForkIsAbsentAndSharedLoginIsProminent() {

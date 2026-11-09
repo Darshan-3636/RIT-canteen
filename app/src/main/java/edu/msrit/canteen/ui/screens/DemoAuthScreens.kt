@@ -48,6 +48,7 @@ import edu.msrit.canteen.ui.components.RitText
 import edu.msrit.canteen.ui.components.RitTextField
 import edu.msrit.canteen.ui.components.RitIcon
 import edu.msrit.canteen.ui.components.RitIconKind
+import edu.msrit.canteen.ui.components.RitDropdownField
 import edu.msrit.canteen.ui.theme.RitThemeTokens
 import edu.msrit.canteen.ui.theme.RitType
 import kotlinx.coroutines.Dispatchers
@@ -71,13 +72,7 @@ fun DemoLoginScreen(onBack: () -> Unit, onCreateAccount: () -> Unit,
         CatalogHeader("Welcome back", onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 20.dp)) {
-            RitText("Sign in to RIT Canteen", RitType.heading)
-            RitText("Your food, orders and campus seller in one place.", RitType.body, colors.muted)
-            Spacer(Modifier.height(10.dp))
-            RitText(
-                if (BuildConfig.RIT_CLOUD_DEMO) "Cloud demo · the service may need a moment to wake up."
-                else "Local backend demo · requires USB connection",
-                RitType.small, colors.accent)
+            RitText("Are you craving for food?", RitType.heading)
             Spacer(Modifier.height(28.dp))
             RitTextField(email, { email = it.take(254); error = null }, "Email address", "you@example.com",
                 Modifier.fillMaxWidth(), KeyboardType.Email, "demo_login_email")
@@ -106,7 +101,7 @@ fun DemoLoginScreen(onBack: () -> Unit, onCreateAccount: () -> Unit,
             }, Modifier.fillMaxWidth().testTag("demo_login_submit"),
                 enabled = !busy && email.isNotBlank() && password.isNotBlank())
             Spacer(Modifier.height(12.dp))
-            RitSecondaryButton("Create customer account", onCreateAccount,
+            RitSecondaryButton("Register", onCreateAccount,
                 Modifier.fillMaxWidth().testTag("demo_login_create"))
             Spacer(Modifier.height(12.dp))
             RitSecondaryButton("Forgot password?", { forgot = !forgot },
@@ -115,7 +110,7 @@ fun DemoLoginScreen(onBack: () -> Unit, onCreateAccount: () -> Unit,
                 if (BuildConfig.RIT_CLOUD_DEMO) "Password reset unavailable"
                 else "Demo passwords",
                 if (BuildConfig.RIT_CLOUD_DEMO) "Password reset is not available yet. No reset email is sent."
-                else "No reset email is sent. For a seeded demo account, use its supplied test password. For a locally created customer account, create another local demo account with a different email.")
+                else "No reset email is sent. For a seeded demo account, use its supplied test password. For a locally registered account, register another email.")
         }
     }
 }
@@ -131,36 +126,47 @@ fun DemoSignupScreen(onBack: () -> Unit, onRegistered: () -> Unit) {
     var visible by remember { mutableStateOf(false) }
     var affiliation by rememberSaveable { mutableStateOf(CustomerAffiliation.STUDENT) }
     var department by rememberSaveable { mutableStateOf("") }
+    var validationAttempted by rememberSaveable { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().background(colors.background).imePadding().testTag("demo_signup_screen")) {
-        CatalogHeader("Create account", onBack)
+        CatalogHeader("Register", onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 20.dp)) {
-            RitText("Join RIT Canteen", RitType.heading)
-            RitText(if (BuildConfig.RIT_CLOUD_DEMO) "Create a Student or Faculty account for the cloud demo."
-                else "Create a Student or Faculty account on the local demo server.", RitType.body, colors.muted)
-            Spacer(Modifier.height(8.dp))
-            RitText("Email and Student/Faculty status are self-declared, not verified. Seller accounts are invitation-only.",
-                RitType.small, colors.accent)
+            RitText("Are you craving for food?", RitType.heading)
             Spacer(Modifier.height(22.dp))
             RitTextField(name, { name = it.take(100); error = null }, "Full name", "First and last name",
                 Modifier.fillMaxWidth(), inputTag = "demo_signup_name")
+            if ((validationAttempted || name.isNotBlank()) && !AuthInput.isRegistrationNameValid(name)) {
+                RitText(if (name.isBlank()) "Enter your full name." else "Use letters and spaces only; enter first and last name.",
+                    RitType.small, colors.accent, Modifier.padding(top = 6.dp).testTag("demo_signup_name_error"))
+            }
             Spacer(Modifier.height(10.dp))
             RitTextField(email, { email = it.take(254); error = null }, "Email address", "you@example.com",
                 Modifier.fillMaxWidth(), KeyboardType.Email, "demo_signup_email")
+            if ((validationAttempted || email.isNotBlank()) && !AuthInput.isEmailValid(email)) {
+                RitText("Enter a valid email address.", RitType.small, colors.accent,
+                    Modifier.padding(top = 6.dp).testTag("demo_signup_email_error"))
+            }
             Spacer(Modifier.height(16.dp))
             RitText("I am a…", RitType.title)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CustomerAffiliation.entries.forEach { option ->
-                    RitChip(option.name.lowercase().replaceFirstChar { it.uppercase() }, affiliation == option,
-                        { affiliation = option }, Modifier.testTag("demo_signup_${option.name.lowercase()}"))
+                listOf(CustomerAffiliation.STUDENT to "Student", CustomerAffiliation.FACULTY to "Staff").forEach { (option, label) ->
+                    RitChip(label, affiliation == option,
+                        { affiliation = option }, Modifier.testTag("demo_signup_${label.lowercase()}"))
                 }
             }
             Spacer(Modifier.height(12.dp))
-            RitTextField(department, { department = it.take(100) }, "Department (optional)", "Your department",
-                Modifier.fillMaxWidth(), inputTag = "demo_signup_department")
+            RitDropdownField(
+                value = department,
+                onValueChange = { department = it },
+                label = "Department (optional)",
+                placeholder = "Select a department",
+                options = registrationDepartments,
+                modifier = Modifier.fillMaxWidth(),
+                inputTag = "demo_signup_department",
+            )
             Spacer(Modifier.height(10.dp))
             RitTextField(password, { password = it; error = null }, "Password", "At least 10 characters",
                 Modifier.fillMaxWidth(), KeyboardType.Password, "demo_signup_password",
@@ -174,14 +180,16 @@ fun DemoSignupScreen(onBack: () -> Unit, onRegistered: () -> Unit) {
             error?.let { RitText(it, RitType.body, colors.accent,
                 Modifier.padding(vertical = 10.dp).testTag("demo_signup_error")) }
             Spacer(Modifier.height(16.dp))
-            RitPrimaryButton(if (busy) "Creating…" else "Create account", {
+            RitPrimaryButton(if (busy) "Registering…" else "Register", {
                 if (!busy) {
-                    val submittedName = name
-                    val submittedEmail = email
+                    validationAttempted = true
+                    if (!AuthInput.isRegistrationNameValid(name) || !AuthInput.isEmailValid(email)) return@RitPrimaryButton
+                    val submittedName = AuthInput.normalizeName(name)
+                    val submittedEmail = AuthInput.normalizeEmail(email)
                     val submittedPassword = password
                     val submittedConfirmation = confirmation
                     val submittedAffiliation = affiliation
-                    val submittedDepartment = department
+                    val submittedDepartment = department.trim()
                     password = ""; confirmation = ""
                     busy = true
                     scope.launch {
@@ -198,6 +206,33 @@ fun DemoSignupScreen(onBack: () -> Unit, onRegistered: () -> Unit) {
         }
     }
 }
+
+private val registrationDepartments = listOf(
+    "Aerospace Engineering",
+    "Architecture",
+    "Artificial Intelligence & Data Science",
+    "Artificial Intelligence & Machine Learning",
+    "Biotechnology",
+    "Chemical Engineering",
+    "Chemistry",
+    "Civil Engineering",
+    "Computer Science & Engineering",
+    "Computer Science & Engineering (AI & ML)",
+    "Computer Science & Engineering (Cyber Security)",
+    "Electronics & Communication Engineering",
+    "Electronics & Instrumentation Engineering",
+    "Electrical & Electronics Engineering",
+    "Electronics & Telecommunication Engineering",
+    "Humanities",
+    "Industrial Engineering & Management",
+    "Information Science & Engineering",
+    "Mathematics",
+    "Master of Computer Applications (MCA)",
+    "Management Studies (MBA)",
+    "Mechanical Engineering",
+    "Medical Electronics Engineering",
+    "Physics",
+)
 
 @Composable
 private fun PasswordVisibility(visible: Boolean, onClick: () -> Unit, tag: String) {

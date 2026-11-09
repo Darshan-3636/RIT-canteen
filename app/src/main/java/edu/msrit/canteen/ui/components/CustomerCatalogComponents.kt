@@ -37,12 +37,10 @@ import edu.msrit.canteen.R
 import edu.msrit.canteen.customer.Dietary
 import edu.msrit.canteen.customer.FoodKind
 import edu.msrit.canteen.customer.FoodPhoto
-import edu.msrit.canteen.customer.ItemEligibility
 import edu.msrit.canteen.customer.MenuCategory
 import edu.msrit.canteen.customer.MenuItem
 import edu.msrit.canteen.customer.Seller
 import edu.msrit.canteen.customer.SellerPhoto
-import edu.msrit.canteen.customer.itemEligibility
 import edu.msrit.canteen.ui.theme.RitRadii
 import edu.msrit.canteen.ui.theme.RitThemeTokens
 import edu.msrit.canteen.ui.theme.RitType
@@ -220,21 +218,11 @@ fun CatalogPill(label: String, modifier: Modifier = Modifier) {
     }
 }
 
-fun eligibilityLabel(seller: Seller, item: MenuItem): String = when (itemEligibility(seller, item)) {
-    ItemEligibility.UNAVAILABLE -> "Unavailable"
-    ItemEligibility.BULK_ONLY -> if (item.kind == FoodKind.PACKAGED) "Packaged · bulk only" else "Bulk only"
-    ItemEligibility.INDIVIDUAL_ONLY -> "Individual only"
-    ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK -> "Individual or bulk"
-}
-
 fun dietaryLabel(item: MenuItem): String = when (item.dietary) {
     Dietary.VEGETARIAN -> "Vegetarian"
     Dietary.NON_VEGETARIAN -> "Non-vegetarian"
     Dietary.NOT_SPECIFIED -> "Dietary info not provided"
 }
-
-fun sellerOrderingBadge(seller: Seller): String =
-    if (seller.capabilities.futureIndividualPrepared) "Individual & Bulk" else "Bulk Only"
 
 @Composable
 fun CatalogFavoriteButton(name: String, selected: Boolean, onClick: () -> Unit, tag: String) {
@@ -260,7 +248,6 @@ fun CatalogFoodCard(item: MenuItem, seller: Seller, onClick: () -> Unit, modifie
         Box(Modifier.fillMaxWidth().height(158.dp)) {
             FoodPhotoContent(item.photo, item.name + " illustrative preview image",
                 Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = RitRadii.card, topEnd = RitRadii.card)), item.localImageUri)
-            CatalogPill(eligibilityLabel(seller, item), Modifier.align(Alignment.BottomStart).padding(10.dp))
             if (onFavoriteClick != null) {
                 Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
                     CatalogFavoriteButton(item.name, isFavorite, onFavoriteClick, "favorite_item_${item.id}")
@@ -298,9 +285,7 @@ fun CatalogSellerCard(seller: Seller, categoryNames: String, onClick: () -> Unit
                 if (onFavoriteClick != null) CatalogFavoriteButton(seller.name, isFavorite, onFavoriteClick, "favorite_seller_${seller.id}")
             }
             Spacer(Modifier.height(3.dp))
-            RitText(seller.description, RitType.body, colors.muted, maxLines = 2)
-            Spacer(Modifier.height(8.dp))
-            CatalogPill(sellerOrderingBadge(seller))
+            RitText(seller.description.replace(" for group requests.", "."), RitType.body, colors.muted, maxLines = 2)
             Spacer(Modifier.height(8.dp))
             RitText(categoryNames, RitType.small, colors.muted, maxLines = 2)
             RitText(seller.hours?.display?.let { "Demo hours: $it · live status unverified" }

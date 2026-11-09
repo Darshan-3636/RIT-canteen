@@ -110,7 +110,7 @@ fun EmailEntryScreen(entryIntent: AuthEntryIntent, onBack: () -> Unit,
             "About verification",
             if (entryIntent == AuthEntryIntent.Login)
                 "After verified sign-in, the server will provide authorized customer, seller or administrator roles. Choosing Login does not grant a role."
-            else "After verified email OTP, customer profile setup will collect your full name and one Student or Faculty selection. Affiliation remains self-declared until institutional integration is approved.",
+            else "After email verification, customer profile setup will collect your full name and a Student or Staff selection.",
         )
         if (entryIntent == AuthEntryIntent.GetStarted && onProfilePreview != null) {
             Spacer(Modifier.height(14.dp))

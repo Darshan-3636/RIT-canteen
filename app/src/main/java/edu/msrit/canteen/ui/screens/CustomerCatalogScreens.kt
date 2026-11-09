@@ -31,6 +31,7 @@ import edu.msrit.canteen.ui.components.CatalogHeader
 import edu.msrit.canteen.ui.components.CatalogSellerCard
 import edu.msrit.canteen.ui.components.RitBottomItem
 import edu.msrit.canteen.ui.components.RitBottomNavigation
+import edu.msrit.canteen.ui.components.RitDropdownField
 import edu.msrit.canteen.ui.components.RitEmptyState
 import edu.msrit.canteen.ui.components.RitLoadingIndicator
 import edu.msrit.canteen.ui.components.RitSearchField
@@ -68,14 +69,12 @@ fun CustomerMenuScreen(
         Column(Modifier.padding(horizontal = 20.dp)) {
             RitText(seller?.name ?: if (BuildConfig.RIT_CLOUD_DEMO) "Across campus sellers" else "Across preview sellers", RitType.heading)
             RitText(when {
-                preparedOnly -> "Prepared dishes · individual ordering is not live"
-                seller != null -> "${if (seller.capabilities.futureIndividualPrepared) "Prepared food demo + bulk" else "Bulk orders only"} · server catalog"
-                else -> if (BuildConfig.RIT_CLOUD_DEMO) "Category results across server sellers" else "Category results across sellers · preview data"
+                preparedOnly -> "Meals from the main canteen"
+                seller != null -> "Browse this canteen's menu"
+                else -> "Browse campus canteen menus"
             }, RitType.body, colors.muted)
             Spacer(Modifier.height(12.dp))
-            RitStatusIndicator(if (BuildConfig.RIT_CLOUD_DEMO) "Server catalog · demo checkout is not verified payment"
-                else "Sample catalog · no orders can be placed")
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(4.dp))
             RitSearchField(query, { query = it }, hint = "Search these items…")
             Spacer(Modifier.height(14.dp))
         }
@@ -110,13 +109,26 @@ fun ExploreSellersScreen(
     val colors = RitThemeTokens.colors
     var query by rememberSaveable { mutableStateOf("") }
     var categoryId by rememberSaveable { mutableStateOf<String?>(null) }
-    val sellers = catalog.visibleSellers(query, categoryId)
+    var selectedCanteen by rememberSaveable { mutableStateOf(ALL_CANTEENS) }
+    val sellers = catalog.visibleSellers(query, categoryId).filter { seller ->
+        selectedCanteen == ALL_CANTEENS || seller.name.startsWith(selectedCanteen, ignoreCase = true)
+    }
     Column(Modifier.fillMaxSize().background(colors.background).testTag("explore_sellers")) {
         CatalogHeader("Explore Sellers", onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
             RitText("Campus sellers", RitType.heading)
             RitText(if (BuildConfig.RIT_CLOUD_DEMO) "Browse menus from participating sellers"
                 else "Browse menus from independent preview sellers", RitType.body, colors.muted)
+            Spacer(Modifier.height(8.dp))
+            RitDropdownField(
+                value = selectedCanteen,
+                onValueChange = { selectedCanteen = it },
+                label = "Canteen",
+                placeholder = ALL_CANTEENS,
+                options = listOf(ALL_CANTEENS) + RIT_CANTEEN_OPTIONS,
+                modifier = Modifier.fillMaxWidth(),
+                inputTag = "explore_canteen_selector",
+            )
             Spacer(Modifier.height(8.dp))
             RitStatusIndicator(if (BuildConfig.RIT_CLOUD_DEMO) "Server listings · availability can change"
                 else "Seller identities and hours unverified")

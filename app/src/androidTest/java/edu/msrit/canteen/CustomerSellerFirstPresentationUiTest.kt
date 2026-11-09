@@ -30,13 +30,18 @@ class CustomerSellerFirstPresentationUiTest {
         }
 
         rule.onNodeWithTag("choose_seller").assertExists()
-        rule.onNodeWithText("Individual & Bulk").assertExists()
+        rule.onNodeWithTag("canteen_selector").performClick()
+        rule.onNodeWithTag("canteen_selector_option_2").performClick()
+        rule.onNodeWithTag("choose_seller_card_campus-pantry").assertExists()
+        rule.onNodeWithTag("choose_seller_card_main-canteen").assertDoesNotExist()
+        rule.onNodeWithTag("canteen_selector").performClick()
+        rule.onNodeWithTag("canteen_selector_option_0").performClick()
         rule.onNodeWithTag("choose_seller_card_main-canteen").performScrollTo().performClick()
         assertEquals("main-canteen", chosenSellerId.get())
 
         rule.onNodeWithTag("search_input").performTextInput("North")
         rule.onNodeWithTag("choose_seller_card_north-counter").performScrollTo().assertExists()
-        rule.onNodeWithText("Bulk Only").assertExists()
+        rule.onNodeWithText("Bulk Only").assertDoesNotExist()
         rule.onNodeWithTag("choose_seller_card_coffee-corner").assertDoesNotExist()
     }
 
@@ -62,7 +67,7 @@ class CustomerSellerFirstPresentationUiTest {
             }
         }
 
-        rule.onNodeWithText("Bulk Only").assertExists()
+        rule.onNodeWithText("Bulk Only").assertDoesNotExist()
         rule.onNodeWithTag("seller_menu_item_north-lunch").performScrollTo().assertExists()
         rule.onNodeWithTag("seller_menu_item_masala-dosa").assertDoesNotExist()
     }

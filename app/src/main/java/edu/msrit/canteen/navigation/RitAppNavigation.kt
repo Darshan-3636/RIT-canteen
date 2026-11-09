@@ -727,24 +727,13 @@ fun RitAppNavigation(appearance: AppearancePreference,
                 ) } }
             }
             composable(Route.SellerProfile, arguments = listOf(navArgument("sellerId") { type = NavType.StringType })) { entry ->
-                var pendingSeller by remember { mutableStateOf<String?>(null) }
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) { SellerProfileScreen(entry.arguments?.getString("sellerId").orEmpty(),
                     onBack = { navController.popBackStack() }, onMenu = {
                         selectedCustomerSellerId = it
                         navController.navigate(Route.sellerMenu(it))
                     },
                     onFood = { navController.navigate(Route.foodDetails(it)) },
-                    onBulk = { sellerId ->
-                        if (bulkDraft.selectSeller(sellerId)) navController.navigate(Route.BulkCart)
-                        else pendingSeller = sellerId
-                    },
                     favorites = demoFavorites, customerId = demoCustomerId) } }
-                pendingSeller?.let { target -> RitConfirmDialog("Switch seller?",
-                    "Your bulk cart contains items from another seller. Clear only the bulk cart to start with this seller?",
-                    { pendingSeller = null }, {
-                        bulkDraft.clear(); bulkDraft.selectSeller(target); pendingSeller = null
-                        navController.navigate(Route.BulkCart)
-                    }) }
             }
             composable(Route.SellerMenu, arguments = listOf(navArgument("sellerId") { type = NavType.StringType })) { entry ->
                 val sellerId = entry.arguments?.getString("sellerId").orEmpty()
