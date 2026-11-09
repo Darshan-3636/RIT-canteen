@@ -39,6 +39,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+        manifestPlaceholders["appLabel"] = "RIT Canteen"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "RIT_API_BASE_URL", "\"$apiBaseUrl\"")
         buildConfigField("boolean", "RIT_CLOUD_DEMO", cloudDemoRequested.toString())
@@ -46,6 +47,7 @@ android {
 
     buildTypes {
         getByName("debug") {
+            manifestPlaceholders["appLabel"] = if (cloudDemoRequested) "RIT Canteen Cloud" else "RIT Canteen Local"
             if (sideBySideCloudInstall) applicationIdSuffix = ".cloudtest"
         }
     }

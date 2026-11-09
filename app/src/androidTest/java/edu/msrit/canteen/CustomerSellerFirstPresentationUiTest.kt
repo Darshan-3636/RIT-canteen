@@ -30,8 +30,10 @@ class CustomerSellerFirstPresentationUiTest {
         }
 
         rule.onNodeWithTag("choose_seller").assertExists()
+        rule.onNodeWithTag("customer_home_greeting").assertExists()
+        rule.onNodeWithTag("choose_seller_card_main-canteen").assertDoesNotExist()
         rule.onNodeWithTag("canteen_selector").performClick()
-        rule.onNodeWithTag("canteen_selector_option_2").performClick()
+        rule.onNodeWithTag("canteen_selector_option_3").performClick()
         rule.onNodeWithTag("choose_seller_card_campus-pantry").assertExists()
         rule.onNodeWithTag("choose_seller_card_main-canteen").assertDoesNotExist()
         rule.onNodeWithTag("canteen_selector").performClick()
@@ -39,10 +41,8 @@ class CustomerSellerFirstPresentationUiTest {
         rule.onNodeWithTag("choose_seller_card_main-canteen").performScrollTo().performClick()
         assertEquals("main-canteen", chosenSellerId.get())
 
-        rule.onNodeWithTag("search_input").performTextInput("North")
-        rule.onNodeWithTag("choose_seller_card_north-counter").performScrollTo().assertExists()
-        rule.onNodeWithText("Bulk Only").assertDoesNotExist()
-        rule.onNodeWithTag("choose_seller_card_coffee-corner").assertDoesNotExist()
+        rule.onNodeWithTag("choose_seller_card_north-counter").assertDoesNotExist()
+        rule.onNodeWithText("Are you craving for food?").assertExists()
     }
 
     @Test fun sellerMenuSearchStaysWithinTheSelectedSeller() {

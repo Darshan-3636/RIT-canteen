@@ -18,8 +18,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.test.core.app.ApplicationProvider
 import edu.msrit.canteen.customer.DemoBulkScenario
 import edu.msrit.canteen.customer.PreviewCatalog
+import edu.msrit.canteen.customer.SellerDisplayPreferences
 import edu.msrit.canteen.customer.QuoteActor
 import edu.msrit.canteen.ui.screens.SellerCounterofferPreviewPresentation
 import edu.msrit.canteen.ui.screens.SellerDailyOperationsOverview
@@ -123,6 +125,7 @@ class SellerDailyOperationsPresentationUiTest {
 
     @Test fun requestDetailShowsHumanJourneyAndRevisionBoundApprovals() {
         val record = records.first { it.reference == "DEMO-NC-CUSTOMER" }
+        SellerDisplayPreferences.setShowRequestJourney(ApplicationProvider.getApplicationContext(), record.thread.sellerId, true)
         val continued = AtomicBoolean(false)
         renderDetail(record, canRespond = true, onPrimaryAction = { continued.set(true) })
 
@@ -140,6 +143,14 @@ class SellerDailyOperationsPresentationUiTest {
             .performScrollToNode(hasTestTag("seller_detail_primary_action"))
         rule.onNodeWithTag("seller_detail_primary_action").performScrollTo().performClick()
         assertEquals(true, continued.get())
+    }
+
+    @Test fun requestJourneyIsHiddenByDefault() {
+        val record = records.first { it.reference == "DEMO-NC-CUSTOMER" }
+        SellerDisplayPreferences.setShowRequestJourney(ApplicationProvider.getApplicationContext(), record.thread.sellerId, false)
+        renderDetail(record, canRespond = true)
+        rule.onNodeWithTag("seller_detail_journey_heading").assertDoesNotExist()
+        rule.onNodeWithTag("seller_detail_journey").assertDoesNotExist()
     }
 
     @Test fun waitingAndUnpaidStatesHaveNoSellerReplyAction() {

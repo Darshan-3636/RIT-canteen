@@ -244,14 +244,14 @@ private fun expire(c:Connection,id:UUID,version:Int) {
     c.prepareStatement("UPDATE bulk_quote_revisions SET status='EXPIRED' WHERE request_id=? AND version=?").use { s -> s.setObject(1,id);s.setInt(2,version);s.executeUpdate() }
 }
 
-internal fun loadBulk(c:Connection,id:UUID):BulkRequestDto? = c.prepareStatement("""SELECT r.id,r.seller_id,r.current_version,r.status,r.instructions,q.pickup_at,q.special_pickup_reason,q.subtotal_paise,q.expires_at,p.bulk_minimum_units
-    FROM bulk_requests r JOIN bulk_quote_revisions q ON q.request_id=r.id AND q.version=r.current_version LEFT JOIN seller_ordering_policies p ON p.seller_id=r.seller_id WHERE r.id=?""").use { s ->
+internal fun loadBulk(c:Connection,id:UUID):BulkRequestDto? = c.prepareStatement("""SELECT r.id,r.seller_id,r.current_version,r.status,r.instructions,u.full_name AS customer_name,q.pickup_at,q.special_pickup_reason,q.subtotal_paise,q.expires_at,p.bulk_minimum_units
+    FROM bulk_requests r JOIN users u ON u.id=r.customer_user_id JOIN bulk_quote_revisions q ON q.request_id=r.id AND q.version=r.current_version LEFT JOIN seller_ordering_policies p ON p.seller_id=r.seller_id WHERE r.id=?""").use { s ->
     s.setObject(1,id);s.executeQuery().use { r -> if(!r.next()) null else {
         val version=r.getInt("current_version")
         val approvals=c.prepareStatement("SELECT actor_kind FROM bulk_quote_approvals WHERE request_id=? AND version=?").use { q -> q.setObject(1,id);q.setInt(2,version);q.executeQuery().use { rs -> buildSet { while(rs.next()) add(rs.getString(1)) } } }
         val special=c.prepareStatement("SELECT approved FROM bulk_special_pickup_decisions WHERE request_id=? AND version=?").use { q -> q.setObject(1,id);q.setInt(2,version);q.executeQuery().use { rs -> if(rs.next()) rs.getBoolean(1) else null } }
         val lines=c.prepareStatement("SELECT item_id,item_name_snapshot,quantity,unit_price_paise FROM bulk_quote_lines WHERE request_id=? AND version=? ORDER BY item_id").use { q -> q.setObject(1,id);q.setInt(2,version);q.executeQuery().use { rs -> buildList { while(rs.next()) add(BulkQuoteLineDto(rs.getString(1),rs.getString(2),rs.getInt(3),rs.getLong(4))) } } }
-        BulkRequestDto(id.toString(),r.getString("seller_id"),version,r.getString("status"),r.getTimestamp("pickup_at").toInstant().toString(),r.getString("special_pickup_reason"),r.getLong("subtotal_paise"),r.getInt("bulk_minimum_units").takeIf { it>0 } ?: 8,r.getTimestamp("expires_at").toInstant().toString(),"CUSTOMER" in approvals,"SELLER" in approvals,special,lines,r.getString("instructions"))
+        BulkRequestDto(id.toString(),r.getString("seller_id"),version,r.getString("status"),r.getTimestamp("pickup_at").toInstant().toString(),r.getString("special_pickup_reason"),r.getLong("subtotal_paise"),r.getInt("bulk_minimum_units").takeIf { it>0 } ?: 8,r.getTimestamp("expires_at").toInstant().toString(),"CUSTOMER" in approvals,"SELLER" in approvals,special,lines,r.getString("instructions"),r.getString("customer_name"))
     } }
 }
 

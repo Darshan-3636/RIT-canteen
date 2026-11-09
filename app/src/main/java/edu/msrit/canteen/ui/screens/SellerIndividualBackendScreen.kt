@@ -69,11 +69,10 @@ fun SellerIndividualBackendScreen(orders: List<IndividualOrderPreview>, canRespo
         CatalogHeader("Individual orders", onBack)
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
             item {
-                RitStatusIndicator("Demo queue · payment is never verified")
                 if (!feedback.isNullOrBlank()) RitText(feedback, RitType.body, colors.accent,
                     Modifier.padding(vertical = 12.dp).testTag("seller_individual_feedback"))
                 Spacer(Modifier.height(8.dp))
-                RitSearchField(query, { query = it }, hint = "Search reference, customer, or item")
+                RitSearchField(query, { query = it }, hint = "Search customer or item")
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -82,18 +81,18 @@ fun SellerIndividualBackendScreen(orders: List<IndividualOrderPreview>, canRespo
                 Spacer(Modifier.height(12.dp))
             }
             if (visibleOrders.isEmpty()) item {
-                if (orders.isEmpty()) RitEmptyState("No orders", "New saved demo checkouts appear here after refresh.")
+                if (orders.isEmpty()) RitEmptyState("No orders found", "New orders will appear here after refresh.")
                 else RitEmptyState("No matching orders", "Try another status or search term.")
             }
             items(visibleOrders, key = { it.id }) { order ->
                 var expanded by rememberSaveable(order.id) { mutableStateOf(false) }
                 Column(Modifier.fillMaxWidth().padding(bottom = 18.dp).testTag("seller_individual_${order.id}")) {
-                    RitText("Order #${order.pickupReference}", RitType.title)
+                    RitText(order.customerName ?: "Customer order", RitType.title, maxLines = 2)
                     RitText(orderStatus(order.status), RitType.label, colors.accent)
                     RitText("Customer: ${order.customerName ?: "Not provided"}", RitType.body)
                     RitText("Phone: ${order.customerPhone ?: "Not provided"}", RitType.body)
                     RitText("Ordered: ${order.lines.joinToString { "${it.quantity} ${it.title}" }}", RitType.body)
-                    RitText("Unverified demo amount: ${displayPaise(order.totalPaise)}", RitType.body)
+                    RitText("Total: ${displayPaise(order.totalPaise)}", RitType.body)
                     RitText("Time: ${sellerOrderTime.format(order.placedAt)}", RitType.small, colors.muted)
                     RitText("Order type: Individual", RitType.small, colors.muted)
                     RitText("Payment: ${paymentLabel(order)}", RitType.small, colors.muted)
@@ -133,14 +132,14 @@ fun SellerIndividualBackendScreen(orders: List<IndividualOrderPreview>, canRespo
 }
 
 private fun orderStatus(status: String): String = when (status) {
-    "DEMO_SAVED" -> "New · payment not attempted"
+    "DEMO_SAVED" -> "New · payment not confirmed"
     "DEMO_PAYMENT_PENDING" -> "New · payment pending"
     "DEMO_PAYMENT_FAILED" -> "New · payment failed"
-    "DEMO_PAYMENT_SIMULATED" -> "New · simulated payment only"
-    "DEMO_ACCEPTED" -> "Preparing · demo"
-    "DEMO_READY" -> "Ready · demo"
-    "DEMO_COMPLETED" -> "Completed · demo handover"
-    "DEMO_REJECTED" -> "Cancelled · demo"
+    "DEMO_PAYMENT_SIMULATED" -> "New · test payment"
+    "DEMO_ACCEPTED" -> "Preparing"
+    "DEMO_READY" -> "Ready"
+    "DEMO_COMPLETED" -> "Completed · test handover"
+    "DEMO_REJECTED" -> "Cancelled"
     else -> status.removePrefix("DEMO_").replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase)
 }
 

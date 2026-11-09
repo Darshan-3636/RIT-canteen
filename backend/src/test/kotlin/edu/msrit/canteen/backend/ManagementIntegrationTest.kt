@@ -233,6 +233,9 @@ class ManagementIntegrationTest {
 
     @Test fun bulkRejectionAndIndividualTransitionsEnforceSellerAndState()=scenario { f ->
         val id=f.bulk();val body="""{"expectedVersion":1,"reason":"Cannot supply"}"""
+        val sellerList=api(HttpMethod.Get,"/sellers/main-canteen/bulk/requests",f.owner).obj()
+        val sellerRequest=sellerList.getValue("requests").jsonArray.single().jsonObject
+        assertEquals("customer",sellerRequest.str("customerName"))
         assertEquals(HttpStatusCode.Forbidden,api(HttpMethod.Post,"/sellers/main-canteen/bulk/requests/$id/reject",f.other,body).status)
         assertEquals(HttpStatusCode.NotFound,api(HttpMethod.Post,"/sellers/other-counter/bulk/requests/$id/reject",f.other,body).status)
         assertEquals(HttpStatusCode.Conflict,api(HttpMethod.Post,"/sellers/main-canteen/bulk/requests/$id/reject",f.owner,"""{"expectedVersion":2,"reason":"stale"}""").status)

@@ -119,8 +119,8 @@ private fun InsightPage(title: String, tag: String, onBack: () -> Unit,
     Column(Modifier.fillMaxSize().background(colors.background).testTag(tag)) {
         CatalogHeader(title, onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
-            RitText(if (BuildConfig.RIT_CLOUD_DEMO) "SERVER DEMO REQUESTS · NOT VERIFIED SALES"
-                else if (hasSample) "DEMO DATA · not live sales"
+            RitText(if (BuildConfig.RIT_CLOUD_DEMO) "SALES NOT YET VERIFIED"
+                else if (hasSample) "SAMPLE DATA · not live sales"
                 else "NO VERIFIED APP SALES · preview state only", RitType.small, colors.accent)
             Spacer(Modifier.height(14.dp))
             content()
@@ -286,7 +286,7 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                 AnalyticsRangeSelector(overviewDays, { days -> overviewDays = days; range = lastDays(days, today) })
                 Spacer(Modifier.height(14.dp))
                 when {
-                    cloudLoading -> RitText("Loading saved request counts…", RitType.body,
+                    cloudLoading -> RitText("Loading sales and order counts…", RitType.body,
                         modifier = Modifier.testTag("seller_cloud_analytics_loading"))
                     cloudError != null -> {
                         RitEmptyState("Could not load analytics", cloudError!!)
@@ -306,29 +306,29 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                                 StatCell("Awaiting response", "$awaitingSeller", "seller_cloud_pending_orders"),
                                 StatCell("Verified items sold", "0", "seller_cloud_verified_items"),
                             ))
-                            RitText("No payment transition is verified by the backend. Sales and items sold are ₹0; demo and UAT records are shown separately below.",
+                            RitText("No payments are verified yet. Verified sales and items sold remain ₹0.",
                                 RitType.small, RitThemeTokens.colors.muted,
                                 Modifier.padding(top = 9.dp).testTag("seller_cloud_no_verified_sales"))
                             Spacer(Modifier.height(8.dp))
                             InsightCard("Unavailable menu items", current.unavailableItemCount?.let { "$it currently unavailable" }
                                 ?: "Current availability could not be loaded.")
                         } else {
-                            RitEmptyState("No verified sales trend", "Trend charts will populate only after the backend records authoritative paid orders. Demo and UAT values are excluded.")
+                            RitEmptyState("No verified sales yet", "Sales trends will appear after a payment is confirmed.")
                         }
-                        RitText("${current.simulatedOrderCount} DEMO/SIMULATED orders · ${displayPaise(current.simulatedTotalPaise)} fictional total",
+                        RitText("${current.simulatedOrderCount} test orders · ${displayPaise(current.simulatedTotalPaise)} test total",
                             RitType.heading, modifier = Modifier.testTag("seller_cloud_simulated_sales"))
-                        RitText("Synthetic/demo transactions only. Payment verified: false. Not real sales or revenue.",
+                        RitText("Test transactions are not real sales or revenue.",
                             RitType.small, RitThemeTokens.colors.muted)
                         Spacer(Modifier.height(10.dp))
-                        RitText("${current.sandboxOrderCount} PhonePe UAT sandbox orders · ${displayPaise(current.sandboxTotalPaise)} test total",
+                        RitText("${current.sandboxOrderCount} PhonePe test payments · ${displayPaise(current.sandboxTotalPaise)} test total",
                             RitType.body, modifier = Modifier.testTag("seller_cloud_uat_sales"))
-                        RitText("Separate sandbox metric · payment verified: false · no real money or settlement.",
+                        RitText("Test payments use no real money and do not settle.",
                             RitType.small, RitThemeTokens.colors.muted)
                         Spacer(Modifier.height(12.dp))
-                        RitText("${current.totalRequests} saved bulk requests", RitType.heading,
+                        RitText("${current.totalRequests} bulk requests", RitType.heading,
                             modifier = Modifier.testTag("seller_cloud_request_total"))
                         InsightCard("Saved individual checkouts", current.savedIndividualOrderCount?.let {
-                            "$it demo-only checkouts · payment not verified"
+                            "$it orders · payment not confirmed"
                         } ?: "Saved individual checkout count is unavailable.")
                         RitText("${range.start} to ${range.end} · ${current.status.replace('_', ' ').lowercase()}",
                             RitType.small, RitThemeTokens.colors.muted)

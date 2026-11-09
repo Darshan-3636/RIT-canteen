@@ -44,13 +44,7 @@ import edu.msrit.canteen.ui.theme.RitType
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 
-internal const val ALL_CANTEENS = "All canteens"
-internal val RIT_CANTEEN_OPTIONS = listOf(
-    "M.S.R.I.T Canteen",
-    "M.S.R.I.T Condiments",
-    "Cafe Da Costa",
-    "Ramaiah's Cafeteria",
-)
+internal const val SELECT_CANTEEN = "Select a canteen"
 
 /** Seller-first customer entry. The caller owns routing and supplies the seller-selection callback. */
 @Composable
@@ -66,22 +60,23 @@ fun ChooseSellerScreen(
 ) {
     val colors = RitThemeTokens.colors
     var query by rememberSaveable { mutableStateOf("") }
-    var selectedCanteen by rememberSaveable { mutableStateOf(ALL_CANTEENS) }
-    val sellers = catalog.visibleSellers(query, null).filter { seller ->
-        selectedCanteen == ALL_CANTEENS || seller.name.startsWith(selectedCanteen, ignoreCase = true)
-    }
+    var selectedCanteen by rememberSaveable { mutableStateOf("") }
+    val availableSellers = catalog.visibleSellers(query, null)
+    val selectedSeller = availableSellers.firstOrNull { it.id == selectedCanteen }
 
     Column(Modifier.fillMaxSize().background(colors.background).testTag("choose_seller")) {
         CatalogHeader("Choose Canteen", onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
+            RitText("Are you craving for food?", RitType.heading, modifier = Modifier.testTag("customer_home_greeting"))
+            Spacer(Modifier.height(6.dp))
             RitText("Browse campus canteen menus.", RitType.body, colors.muted)
             Spacer(Modifier.height(10.dp))
             RitDropdownField(
-                value = selectedCanteen,
-                onValueChange = { selectedCanteen = it },
-                label = "Canteen",
-                placeholder = ALL_CANTEENS,
-                options = listOf(ALL_CANTEENS) + RIT_CANTEEN_OPTIONS,
+                value = selectedSeller?.name.orEmpty(),
+                onValueChange = { name -> selectedCanteen = availableSellers.firstOrNull { it.name == name }?.id.orEmpty() },
+                label = "Choose Canteen",
+                placeholder = SELECT_CANTEEN,
+                options = availableSellers.map { it.name },
                 modifier = Modifier.fillMaxWidth(),
                 inputTag = "canteen_selector",
             )
@@ -91,12 +86,12 @@ fun ChooseSellerScreen(
         }
         when {
             isLoading -> RitLoadingIndicator(Modifier.padding(24.dp))
-            sellers.isEmpty() -> RitEmptyState("No sellers match", "Try another seller name.")
+            selectedSeller == null -> RitEmptyState("Choose a canteen", "Select a canteen to see its details and menu.")
             else -> LazyColumn(
                 modifier = Modifier.weight(1f).testTag("choose_seller_results"),
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp),
             ) {
-                items(sellers, key = { it.id }) { seller ->
+                items(listOf(selectedSeller), key = { it.id }) { seller ->
                     val visibleCategoryIds = catalog.visibleItems(seller.id).mapTo(hashSetOf()) { it.categoryId }
                     val categoryNames = catalog.categories.filter { it.id in seller.categoryIds && it.id in visibleCategoryIds }
                         .joinToString(" · ") { it.name }

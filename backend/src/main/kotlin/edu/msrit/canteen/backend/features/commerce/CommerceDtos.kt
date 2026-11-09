@@ -51,6 +51,7 @@ import kotlinx.serialization.Serializable
     val specialPickupReason: String? = null, val subtotalPaise: Long, val minimumUnits: Int,
     val expiresAt: String, val customerApproved: Boolean, val sellerApproved: Boolean,
     val specialPickupApproved: Boolean?, val lines: List<BulkQuoteLineDto>, val instructions: String = "",
+    val customerName: String? = null,
 )
 @Serializable data class BulkRequestListDto(val requests: List<BulkRequestDto>)
 @Serializable data class CustomerDemoOrderRequest(val lines: List<DraftLine>)
