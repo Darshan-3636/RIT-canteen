@@ -33,6 +33,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /** Real PostgreSQL and HTTP readback, isolated in a unique schema of a disposable test database. */
@@ -287,6 +288,73 @@ class CloudDemoDataSeedTest {
                 }
             } finally { opened.close() }
         }
+    }
+
+    @Test fun cloudDemoIdentitySeedReusesCanonicalOwnerAndRejectsNameCollision() {
+        val config = localConfig()
+        val opened = BackendBootstrap.open(config)
+        try {
+            val context = cloud(opened)
+            seed(context)
+
+            val expectedOwnerId = UUID.nameUUIDFromBytes(
+                "rit-canteen-cloud-demo:user:$ownerEmail".toByteArray(Charsets.UTF_8))
+            val expectedMembershipId = UUID.nameUUIDFromBytes(
+                "rit-canteen-cloud-demo:membership:$ownerEmail".toByteArray(Charsets.UTF_8))
+
+            fun ownerSnapshot(): Pair<List<Any?>, List<Any?>> = context.dataSource.connection.use { db ->
+                val owner = db.prepareStatement(
+                    "SELECT id,status,is_platform_admin,full_name,affiliation,password_hash FROM users WHERE email=?"
+                ).use { stmt ->
+                    stmt.setString(1, ownerEmail)
+                    stmt.executeQuery().use { rows ->
+                        assertTrue(rows.next(), "Cloud demo owner must exist")
+                        listOf(rows.getObject("id", UUID::class.java), rows.getString("status"),
+                            rows.getBoolean("is_platform_admin"), rows.getString("full_name"),
+                            rows.getString("affiliation"), rows.getString("password_hash"))
+                    }
+                }
+                val membership = db.prepareStatement(
+                    "SELECT id,seller_id,role,active,supervisor_membership_id FROM seller_memberships WHERE user_id=?"
+                ).use { stmt ->
+                    stmt.setObject(1, expectedOwnerId)
+                    stmt.executeQuery().use { rows ->
+                        assertTrue(rows.next(), "Cloud demo owner membership must exist")
+                        val row = listOf(rows.getObject("id", UUID::class.java), rows.getString("seller_id"),
+                            rows.getString("role"), rows.getBoolean("active"),
+                            rows.getObject("supervisor_membership_id", UUID::class.java))
+                        assertTrue(!rows.next(), "Owner must have exactly one seller membership")
+                        row
+                    }
+                }
+                owner to membership
+            }
+
+            val original = ownerSnapshot()
+            assertEquals(expectedOwnerId, original.first[0])
+            assertEquals("ACTIVE", original.first[1])
+            assertEquals(false, original.first[2])
+            assertEquals("Demo Main Canteen Owner", original.first[3])
+            assertEquals(null, original.first[4])
+            assertEquals(expectedMembershipId, original.second[0])
+            assertEquals("main-canteen", original.second[1])
+            assertEquals("OWNER", original.second[2])
+            assertEquals(true, original.second[3])
+            assertEquals(null, original.second[4])
+
+            CloudDemoIdentitySeed.seed(context)
+            assertEquals(original, ownerSnapshot(), "A compatible existing identity must be reused unchanged")
+
+            context.dataSource.connection.use { db ->
+                db.prepareStatement("UPDATE users SET full_name='Unexpected identity' WHERE id=?").use { stmt ->
+                    stmt.setObject(1, expectedOwnerId)
+                    assertEquals(1, stmt.executeUpdate())
+                }
+            }
+            assertFailsWith<IllegalStateException> { CloudDemoIdentitySeed.seed(context) }
+            assertEquals("Unexpected identity", ownerSnapshot().first[3],
+                "A colliding identity must be rejected, not silently repaired")
+        } finally { opened.close() }
     }
 
     @Test fun uatBoundaryUsesServerPriceAndReconcilesFakeProviderWithoutVerifiedRevenue() {
