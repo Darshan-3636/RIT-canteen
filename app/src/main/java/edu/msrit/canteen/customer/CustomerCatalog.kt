@@ -112,6 +112,13 @@ data class Price(val rupees: Int) {
 }
 
 data class OrderingCapabilities(val futureIndividualPrepared: Boolean, val bulk: Boolean)
+
+/**
+ * The canteen customers order from. Today only one canteen uses the app, so customers go straight to
+ * its menu; if more join, this picks the main canteen and the canteen picker can be brought back.
+ */
+fun primaryCanteenId(sellers: List<Seller>): String? =
+    sellers.singleOrNull()?.id ?: sellers.firstOrNull { it.isMainCanteen }?.id ?: sellers.firstOrNull()?.id
 data class SellerHours(val display: String)
 data class MenuCategory(val id: String, val name: String)
 data class Seller(

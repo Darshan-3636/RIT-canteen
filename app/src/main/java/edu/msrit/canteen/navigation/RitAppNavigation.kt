@@ -29,7 +29,6 @@ import edu.msrit.canteen.auth.DevelopmentDemoAccounts
 import edu.msrit.canteen.onboarding.OnboardingFlow
 import edu.msrit.canteen.onboarding.SharedPreferencesOnboardingPreference
 import edu.msrit.canteen.ui.screens.CustomerMenuScreen
-import edu.msrit.canteen.ui.screens.ChooseSellerScreen
 import edu.msrit.canteen.ui.screens.SellerScopedMenuScreen
 import edu.msrit.canteen.ui.screens.ExploreSellersScreen
 import edu.msrit.canteen.ui.screens.SellerProfileScreen
@@ -694,17 +693,16 @@ fun RitAppNavigation(appearance: AppearancePreference,
             }
             composable(Route.CustomerPreview) {
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
-                    ChooseSellerScreen(
-                        onSellerChosen = { sellerId ->
-                            selectedCustomerSellerId = sellerId
-                            navController.navigate(Route.sellerMenu(sellerId))
-                        },
+                    // One canteen uses the app, so customers land directly on its menu (no canteen picker).
+                    val canteenId = edu.msrit.canteen.customer.primaryCanteenId(
+                        edu.msrit.canteen.customer.PreviewCatalog.sellers) ?: edu.msrit.canteen.customer.PreviewCatalog.MAIN_ID
+                    androidx.compose.runtime.SideEffect { selectedCustomerSellerId = canteenId }
+                    SellerScopedMenuScreen(canteenId,
                         onBack = null,
-                        onBottom = ::openCustomerBottom,
-                        cartCount = cartCount,
-                        favorites = demoFavorites,
-                        customerId = demoCustomerId,
-                    )
+                        onFood = { navController.navigate(Route.foodDetails(it)) },
+                        favorites = demoFavorites, customerId = demoCustomerId,
+                        onOffers = { navController.navigate(Route.Promotions) },
+                        onBottom = ::openCustomerBottom, cartCount = cartCount)
                 } }
             }
             composable(Route.OrderFood) {
@@ -741,9 +739,6 @@ fun RitAppNavigation(appearance: AppearancePreference,
                         onBack = { navController.popBackStack() },
                         onFood = { navController.navigate(Route.foodDetails(it)) },
                         favorites = demoFavorites, customerId = demoCustomerId,
-                        onChooseSeller = {
-                            if (!navController.popBackStack(Route.CustomerPreview, false)) navController.navigate(Route.CustomerPreview)
-                        },
                         onOffers = {
                             selectedCustomerSellerId = sellerId
                             navController.navigate(Route.Promotions)
@@ -1037,7 +1032,17 @@ fun RitAppNavigation(appearance: AppearancePreference,
             }
             composable(Route.BulkSellers) {
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
-                    BulkSellerPickerScreen(bulkDraft, DevelopmentBulkPreview,
+                    // One canteen: pick it automatically. The picker is shown only if that fails
+                    // (for example the bulk cart already holds another canteen's items).
+                    var showPicker by remember { mutableStateOf(false) }
+                    androidx.compose.runtime.LaunchedEffect(Unit) {
+                        val canteenId = edu.msrit.canteen.customer.primaryCanteenId(
+                            edu.msrit.canteen.customer.PreviewCatalog.sellers.filter { it.capabilities.bulk })
+                        if (canteenId != null && bulkDraft.selectSeller(canteenId)) navController.navigate(Route.BulkCart) {
+                            popUpTo(Route.BulkSellers) { inclusive = true }
+                        } else showPicker = true
+                    }
+                    if (showPicker) BulkSellerPickerScreen(bulkDraft, DevelopmentBulkPreview,
                         onBack = { navController.popBackStack() }, onSelected = { navController.navigate(Route.BulkCart) })
                 } }
             }

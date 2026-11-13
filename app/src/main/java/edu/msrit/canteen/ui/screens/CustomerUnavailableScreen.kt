@@ -38,7 +38,7 @@ fun CustomerUnavailableScreen(section: String, onBack: () -> Unit) {
                 "profile" -> "Sign in to see your profile."
                 "access" -> "Sign in with your customer account to continue."
                 "payment" -> "Payment isn't available right now. Please try again later."
-                else -> "This feature is not connected yet."
+                else -> "This isn't available right now."
             })
         }
     }

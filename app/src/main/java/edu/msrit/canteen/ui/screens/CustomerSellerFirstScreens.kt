@@ -114,7 +114,7 @@ fun ChooseSellerScreen(
 @Composable
 fun SellerScopedMenuScreen(
     sellerId: String,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
     onFood: (String) -> Unit,
     favorites: FavoritesRepository? = null,
     customerId: String? = null,

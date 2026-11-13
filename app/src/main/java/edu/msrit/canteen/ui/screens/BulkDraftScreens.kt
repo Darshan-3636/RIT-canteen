@@ -112,11 +112,9 @@ fun BulkSellerPickerScreen(
     val colors = RitThemeTokens.colors
     var blockedSeller by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().background(colors.background).testTag("bulk_seller_picker")) {
-        CatalogHeader("Choose a seller", onBack)
+        CatalogHeader("Choose a canteen", onBack)
         LazyColumn(Modifier.testTag("bulk_seller_list"), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp)) {
             item {
-                RitStatusIndicator("Development catalog · no request will be sent")
-                Spacer(Modifier.height(12.dp))
                 BulkInfoCard("One seller per request", "Prepared and packaged items can be combined only when they belong to the same seller. Each seller has its own total-unit minimum.")
                 Spacer(Modifier.height(18.dp))
             }
