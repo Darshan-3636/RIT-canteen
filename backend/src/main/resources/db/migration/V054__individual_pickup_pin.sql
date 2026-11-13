@@ -13,19 +13,20 @@ BEGIN
     -- Serialise PIN choice per seller so two concurrent orders cannot pick the same PIN.
     PERFORM pg_advisory_xact_lock(hashtext('individual_pickup_pin:' || p_seller_id));
     FOR attempt IN 1..50 LOOP
-        candidate := lpad(floor(random() * 10000)::INT::TEXT, 4, '0');
+        -- gen_random_uuid() draws from a cryptographic source; random() is predictable.
+        candidate := lpad((('x' || substr(md5(gen_random_uuid()::TEXT), 1, 8))::BIT(32)::BIGINT % 10000)::TEXT, 4, '0');
         IF NOT EXISTS (SELECT 1 FROM individual_demo_orders
                        WHERE seller_id = p_seller_id AND pickup_code = candidate AND id <> p_order_id
                          AND status NOT IN ('DEMO_COMPLETED', 'DEMO_REJECTED')) THEN
             RETURN candidate;
         END IF;
     END LOOP;
-    -- Nearly full: take the first free PIN instead of guessing.
+    -- Nearly full: pick a random free PIN instead of guessing again.
     SELECT lpad(n::TEXT, 4, '0') INTO candidate FROM generate_series(0, 9999) AS n
     WHERE NOT EXISTS (SELECT 1 FROM individual_demo_orders
                       WHERE seller_id = p_seller_id AND pickup_code = lpad(n::TEXT, 4, '0') AND id <> p_order_id
                         AND status NOT IN ('DEMO_COMPLETED', 'DEMO_REJECTED'))
-    LIMIT 1;
+    ORDER BY gen_random_uuid() LIMIT 1;
     IF candidate IS NULL THEN
         RAISE EXCEPTION 'No free pickup PIN for seller %', p_seller_id;
     END IF;
