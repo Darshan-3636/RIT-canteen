@@ -245,18 +245,19 @@ class CloudDemoDataSeedTest {
                     assertEquals(HttpStatusCode.Created, retriedCheckout.status)
                     assertEquals(orderId, Json.parseToJsonElement(retriedCheckout.bodyAsText()).jsonObject
                         .getValue("id").jsonPrimitive.content)
-                    suspend fun simulate() = client.post("/api/v1/me/individual-demo-orders/$orderId/simulate-payment") {
+                    // The cloud server refuses simulated payment (only PhonePe can mark an order paid),
+                    // so record the paid state directly to exercise the seller view and analytics.
+                    assertEquals(HttpStatusCode.NotFound, client.post("/api/v1/me/individual-demo-orders/$orderId/simulate-payment") {
                         header(HttpHeaders.Authorization, "Bearer $registeredToken")
                         header(HttpHeaders.ContentType, "application/json")
                         setBody("""{"outcome":"SUCCESS"}""")
+                    }.status)
+                    context.dataSource.connection.use { db ->
+                        db.prepareStatement("UPDATE individual_demo_orders SET status='DEMO_PAYMENT_SIMULATED',demo_payment_outcome='SUCCESS' WHERE id=?::uuid").use { sql ->
+                            sql.setString(1, orderId); assertEquals(1, sql.executeUpdate())
+                        }
                     }
-                    val payment = simulate()
-                    assertEquals(HttpStatusCode.OK, payment.status, payment.bodyAsText())
-                    val paid = Json.parseToJsonElement(payment.bodyAsText()).jsonObject
-                    assertEquals("DEMO_PAYMENT_SIMULATED", paid.getValue("status").jsonPrimitive.content)
-                    assertEquals("false", paid.getValue("paymentVerified").jsonPrimitive.content)
-                    assertEquals("SUCCESS", paid.getValue("demoPaymentOutcome").jsonPrimitive.content)
-                    assertEquals(HttpStatusCode.OK, simulate().status, "A retried demo payment must be idempotent")
+                    val paid = Json.parseToJsonElement(firstCheckout.bodyAsText()).jsonObject
                     val studentHistory = client.get("/api/v1/me/individual-demo-orders") {
                         header(HttpHeaders.Authorization, "Bearer $registeredToken")
                     }

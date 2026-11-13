@@ -309,12 +309,7 @@ class CommerceIntegrationTest {
 
     @Test fun demoPaymentAndSellerProcessingArePersistentScopedAndNeverVerified() {
         val f=fixture()
-        val cloud=f.context.copy(config=f.context.config.copy(environment=RuntimeEnvironment.CLOUD_DEMO,
-            httpHost="0.0.0.0",databaseUrl="jdbc:postgresql://pool.example:5432/postgres?sslmode=require",
-            demoSeedEnabled=false,cloudDemoSeedEnabled=true,
-            cloudDemoCustomerEmail="customer@example.test",cloudDemoCustomerPassword="Unique-Customer-Password-2048!",
-            cloudDemoOwnerEmail="owner@example.test",cloudDemoOwnerPassword="Unique-Owner-Password-2048!"))
-        try { app(f,cloud) {
+        try { app(f) {
             f.context.dataSource.connection.use { db ->
                 db.prepareStatement("INSERT INTO seller_memberships(id,user_id,seller_id,role) VALUES (?,?,?,'OWNER')").use { q ->
                     q.setObject(1,UUID.randomUUID());q.setObject(2,f.seller.user);q.setString(3,"main-canteen");q.executeUpdate()
@@ -401,9 +396,15 @@ class CommerceIntegrationTest {
         } } finally { cleanup(f) }
     }
 
-    @Test fun paymentSimulationIsUnavailableOutsideCloudDemo() {
+    @Test fun paymentSimulationIsUnavailableOutsideLocalDevelopment() {
         val f=fixture()
-        try { app(f) {
+        // A customer must not be able to mark an order paid on the cloud server; only PhonePe can.
+        val cloud=f.context.copy(config=f.context.config.copy(environment=RuntimeEnvironment.CLOUD_DEMO,
+            httpHost="0.0.0.0",databaseUrl="jdbc:postgresql://pool.example:5432/postgres?sslmode=require",
+            demoSeedEnabled=false,cloudDemoSeedEnabled=true,
+            cloudDemoCustomerEmail="customer@example.test",cloudDemoCustomerPassword="Unique-Customer-Password-2048!",
+            cloudDemoOwnerEmail="owner@example.test",cloudDemoOwnerPassword="Unique-Owner-Password-2048!"))
+        try { app(f,cloud) {
             val created=client.post("/api/v1/me/individual-demo-orders") {
                 header(HttpHeaders.Authorization,"Bearer ${f.customer.token}")
                 contentType(ContentType.Application.Json)

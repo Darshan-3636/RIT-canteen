@@ -87,11 +87,14 @@ internal fun sellerIndividual(context: BackendContext, sellerId: String): Indivi
         })
     }
 
-/** Explicitly fictional payment; payment_verified remains false and no provider is contacted. */
+/**
+ * Local-development stand-in for a payment; payment_verified stays false and no provider is contacted.
+ * Orders are prepaid, so outside local development only a PhonePe confirmation may mark an order paid.
+ */
 internal fun simulateIndividualPayment(context: BackendContext, principal: AuthenticatedPrincipal,
                                        id: UUID, outcome: String): IndividualDemoOrderDto = context.transaction { db ->
-    if (context.config.environment != RuntimeEnvironment.CLOUD_DEMO)
-        throw CommerceFault(404, "DEMO_ONLY", "Demo payment simulation is unavailable")
+    if (context.config.environment != RuntimeEnvironment.LOCAL)
+        throw CommerceFault(404, "DEMO_ONLY", "Payment simulation is only available in local development")
     if (outcome !in setOf("SUCCESS", "FAILURE", "PENDING"))
         throw CommerceFault(400, "INVALID_DEMO_OUTCOME", "Choose SUCCESS, FAILURE or PENDING")
     val state = db.prepareStatement("""SELECT o.status,o.demo_payment_outcome FROM individual_demo_orders o
