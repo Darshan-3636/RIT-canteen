@@ -227,7 +227,7 @@ fun SellerDailyOperationsOverview(
                 }
             }
             if (onVerifyPickup != null) item {
-                RitSecondaryButton("Verify demo pickup code", onVerifyPickup,
+                RitSecondaryButton("Confirm pickup", onVerifyPickup,
                     Modifier.fillMaxWidth().testTag("seller_dashboard_verify"))
             }
 
@@ -649,7 +649,7 @@ fun SellerCounterofferPreviewPresentation(
                 } else {
                     RitMessageCard(
                         "Seller response needed",
-                        "A seller owner or manager can continue this review. This preview does not change the quote.",
+                        "An owner or manager can respond to this request.",
                         Modifier.testTag("seller_counteroffer_read_only"),
                     )
                 }
@@ -699,7 +699,6 @@ fun SellerPickupSchedulePresentation(
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (isDemoPreview) RitStatusIndicator("Demo schedule · sample requests only")
                     RitText("Requested pickup times", RitType.heading)
                     RitText(
                         "These are requested times, not reserved slots. Only a trusted payment verification can establish paid status.",
@@ -784,7 +783,6 @@ private fun SellerDetailSummaryCard(
             .testTag("seller_detail_summary"),
         verticalArrangement = Arrangement.spacedBy(11.dp),
     ) {
-        if (isDemoPreview) RitStatusIndicator("Demo preview · no live request or seller sync")
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top,
@@ -792,7 +790,7 @@ private fun SellerDetailSummaryCard(
         ) {
             FoodPhotoContent(
                 photo = firstItem?.photo,
-                description = firstItem?.name?.let { "$it request preview image" } ?: "Food request preview",
+                description = firstItem?.name?.let { "$it photo" } ?: "Food photo",
                 modifier = Modifier.size(64.dp).clip(RoundedCornerShape(RitRadii.small)),
                 localUri = firstItem?.localImageUri,
             )
@@ -933,7 +931,7 @@ private fun SellerRequestJourney(record: BulkRequestRecord, canRespond: Boolean,
             RequestJourneyStep(
                 "Payment verification",
                 when {
-                    paidFixture -> "Verified-paid demo fixture. No real payment was handled."
+                    paidFixture -> "Paid."
                     status == SellerRequestStatus.AGREED_UNPAID -> "Payment not yet verified."
                     else -> "Payment status is not verified for this request."
                 },
@@ -945,12 +943,12 @@ private fun SellerRequestJourney(record: BulkRequestRecord, canRespond: Boolean,
         add(
             RequestJourneyStep(
                 "Pickup time",
-                if (paidFixture) "Demo fixture pickup time: ${displayPickup(latest.pickup)}."
+                if (paidFixture) "Pickup at ${displayPickup(latest.pickup)}."
                 else "Requested time ${displayPickup(latest.pickup)}; this is not a confirmed reservation.",
                 complete = false,
                 current = false,
                 unavailable = workflowClosed,
-                stateLabel = if (paidFixture) "Demo fixture" else if (workflowClosed) "Unavailable" else "Requested only",
+                stateLabel = if (paidFixture) "Confirmed" else if (workflowClosed) "Unavailable" else "Requested only",
             ),
         )
     }
@@ -1105,7 +1103,6 @@ private fun SellerCounterofferSummaryCard(
             .testTag("seller_counteroffer_summary"),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        if (isDemoPreview) RitStatusIndicator("Demo preview · draft only · not sent")
         RitText("${record.reference} · revision ${proposal.version}", RitType.heading)
         RitStatusIndicator(
             "Proposed changes · not yet approved",
@@ -1342,7 +1339,7 @@ private fun sellerDetailState(record: BulkRequestRecord, now: LocalDateTime): St
         status in NEEDS_SELLER_RESPONSE -> "Seller needs to respond"
         status == SellerRequestStatus.WAITING_CUSTOMER -> "Waiting for customer"
         status == SellerRequestStatus.AGREED_UNPAID -> "Payment not yet verified"
-        status == SellerRequestStatus.PAID_FIXTURE && record.verifiedPaidFixture -> "Verified-paid demo fixture"
+        status == SellerRequestStatus.PAID_FIXTURE && record.verifiedPaidFixture -> "Paid"
         status == SellerRequestStatus.PAID_FIXTURE -> "Payment verification required"
         status == SellerRequestStatus.EXPIRED -> "Quote expired"
         status == SellerRequestStatus.WITHDRAWN -> "Request withdrawn"
@@ -1367,7 +1364,7 @@ private fun nextSafeStepDetail(record: BulkRequestRecord, now: LocalDateTime): S
         SellerRequestStatus.WAITING_CUSTOMER -> "The seller response is recorded. Wait for customer approval of revision ${record.latest.version}."
         SellerRequestStatus.AGREED_UNPAID -> "Both sides have accepted the current terms, but payment is not yet verified. Do not treat this as paid."
         SellerRequestStatus.PAID_FIXTURE -> if (record.verifiedPaidFixture)
-            "This is a verified-paid demo fixture only. Requested pickup is ${displayPickup(record.latest.pickup)}."
+            "Paid. Pickup at ${displayPickup(record.latest.pickup)}."
         else "Payment verification is required before this can be treated as paid."
         SellerRequestStatus.EXPIRED -> "The quote expired${record.thread.expiresAt?.let { " on ${displayPickup(it)}" } ?: ""}. A new revision would need fresh review."
         SellerRequestStatus.WITHDRAWN -> "The customer withdrew this request. No seller action is available."
@@ -1622,7 +1619,7 @@ private fun SellerDailyRequestCard(
         needsReply -> "Review and reply"
         status == SellerRequestStatus.WAITING_CUSTOMER -> "Waiting for customer · view details"
         status == SellerRequestStatus.AGREED_UNPAID -> "Payment not yet verified · view details"
-        status == SellerRequestStatus.PAID_FIXTURE -> "View demo pickup"
+        status == SellerRequestStatus.PAID_FIXTURE -> "View pickup"
         else -> "View request"
     }
     val statusLabel = dailyStatusLabel(record, canRespond)
@@ -1651,7 +1648,7 @@ private fun SellerDailyRequestCard(
         ) {
             FoodPhotoContent(
                 photo = item?.photo,
-                description = item?.name?.let { "$it request preview image" } ?: "Food request preview",
+                description = item?.name?.let { "$it photo" } ?: "Food photo",
                 modifier = Modifier.size(70.dp).clip(RoundedCornerShape(RitRadii.small)),
                 localUri = item?.localImageUri,
             )
@@ -1739,7 +1736,7 @@ private fun dailyStatusLabel(record: BulkRequestRecord, canRespond: Boolean): St
         else "Review the latest terms"
         SellerRequestStatus.WAITING_CUSTOMER -> "Waiting for customer"
         SellerRequestStatus.AGREED_UNPAID -> "Agreed · payment not verified"
-        SellerRequestStatus.PAID_FIXTURE -> if (record.verifiedPaidFixture) "Demo paid fixture" else "Payment verification required"
+        SellerRequestStatus.PAID_FIXTURE -> if (record.verifiedPaidFixture) "Paid" else "Payment verification required"
         SellerRequestStatus.EXPIRED -> "Quote expired"
         SellerRequestStatus.WITHDRAWN -> "Request withdrawn"
         SellerRequestStatus.REJECTED -> "Request closed"

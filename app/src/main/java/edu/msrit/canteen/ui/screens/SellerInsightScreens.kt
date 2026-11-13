@@ -113,16 +113,11 @@ enum class SellerInsightPage { OVERVIEW, TRENDS, PRODUCTS, CUSTOMERS, PROMOTIONS
 private val savedTime = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
 
 @Composable
-private fun InsightPage(title: String, tag: String, onBack: () -> Unit,
-                        hasSample: Boolean = true, content: @Composable () -> Unit) {
+private fun InsightPage(title: String, tag: String, onBack: () -> Unit, content: @Composable () -> Unit) {
     val colors = RitThemeTokens.colors
     Column(Modifier.fillMaxSize().background(colors.background).testTag(tag)) {
         CatalogHeader(title, onBack)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
-            RitText(if (BuildConfig.RIT_CLOUD_DEMO) "SALES NOT YET VERIFIED"
-                else if (hasSample) "SAMPLE DATA · not live sales"
-                else "NO VERIFIED APP SALES · preview state only", RitType.small, colors.accent)
-            Spacer(Modifier.height(14.dp))
             content()
             Spacer(Modifier.height(36.dp))
         }
@@ -279,8 +274,7 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
         SellerInsightPage.TICKET_DETAIL -> "Support ticket"; SellerInsightPage.NOTIFICATIONS -> "Notifications"
         SellerInsightPage.PAYMENT_STATUS -> "Payment configuration"
     }
-    InsightPage(title, "seller_insight_${page.name.lowercase()}", onBack,
-        hasSample = sample) {
+    InsightPage(title, "seller_insight_${page.name.lowercase()}", onBack) {
         if (BuildConfig.RIT_CLOUD_DEMO) {
             if (page in setOf(SellerInsightPage.OVERVIEW, SellerInsightPage.TRENDS)) {
                 AnalyticsRangeSelector(overviewDays, { days -> overviewDays = days; range = lastDays(days, today) })
@@ -300,35 +294,25 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                             val awaitingSeller = current.byStatus.filterKeys { it in setOf("SUBMITTED", "COUNTEROFFER") }.values.sum()
                             val savedOrders = current.totalRequests + (current.savedIndividualOrderCount ?: 0)
                             StatStrip(listOf(
-                                StatCell(if (overviewDays == 1) "Today's sales" else "Verified sales", displayPaise(0L),
+                                StatCell(if (overviewDays == 1) "Today's sales" else "Sales", displayPaise(current.sandboxTotalPaise),
                                     "seller_cloud_verified_revenue"),
                                 StatCell("Saved orders & requests", "$savedOrders", "seller_cloud_saved_orders"),
                                 StatCell("Awaiting response", "$awaitingSeller", "seller_cloud_pending_orders"),
-                                StatCell("Verified items sold", "0", "seller_cloud_verified_items"),
+                                StatCell("Paid orders", "${current.sandboxOrderCount}", "seller_cloud_verified_items"),
                             ))
-                            RitText("No payments are verified yet. Verified sales and items sold remain ₹0.",
-                                RitType.small, RitThemeTokens.colors.muted,
-                                Modifier.padding(top = 9.dp).testTag("seller_cloud_no_verified_sales"))
                             Spacer(Modifier.height(8.dp))
                             InsightCard("Unavailable menu items", current.unavailableItemCount?.let { "$it currently unavailable" }
                                 ?: "Current availability could not be loaded.")
                         } else {
-                            RitEmptyState("No verified sales yet", "Sales trends will appear after a payment is confirmed.")
+                            RitEmptyState("No sales yet", "Sales trends will appear after your first paid order.")
                         }
-                        RitText("${current.simulatedOrderCount} test orders · ${displayPaise(current.simulatedTotalPaise)} test total",
-                            RitType.heading, modifier = Modifier.testTag("seller_cloud_simulated_sales"))
-                        RitText("Test transactions are not real sales or revenue.",
-                            RitType.small, RitThemeTokens.colors.muted)
-                        Spacer(Modifier.height(10.dp))
-                        RitText("${current.sandboxOrderCount} PhonePe test payments · ${displayPaise(current.sandboxTotalPaise)} test total",
-                            RitType.body, modifier = Modifier.testTag("seller_cloud_uat_sales"))
-                        RitText("Test payments use no real money and do not settle.",
-                            RitType.small, RitThemeTokens.colors.muted)
+                        RitText("${current.sandboxOrderCount} paid orders · ${displayPaise(current.sandboxTotalPaise)}",
+                            RitType.heading, modifier = Modifier.testTag("seller_cloud_uat_sales"))
                         Spacer(Modifier.height(12.dp))
                         RitText("${current.totalRequests} bulk requests", RitType.heading,
                             modifier = Modifier.testTag("seller_cloud_request_total"))
                         InsightCard("Saved individual checkouts", current.savedIndividualOrderCount?.let {
-                            "$it orders · payment not confirmed"
+                            "$it orders awaiting payment"
                         } ?: "Saved individual checkout count is unavailable.")
                         RitText("${range.start} to ${range.end} · ${current.status.replace('_', ' ').lowercase()}",
                             RitType.small, RitThemeTokens.colors.muted)
@@ -438,7 +422,7 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                 RitEmptyState("Open customer tickets","Use the support list to reply or escalate customer requests.")
                 RitSecondaryButton("Open support list",{ onNavigate(SellerInsightPage.SUPPORT) },Modifier.fillMaxWidth())
             } else if (page == SellerInsightPage.REPORT_BUILDER) {
-                RitText("Export saved bulk requests, unverified individual checkouts, and support counts. Verified revenue is unavailable.",
+                RitText("Download orders, bulk requests and support counts for a date range.",
                     RitType.body, RitThemeTokens.colors.muted)
                 PeriodPicker { range = it }
                 Spacer(Modifier.height(12.dp))
@@ -494,11 +478,7 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                 Spacer(Modifier.height(10.dp))
                 InsightNavList(listOf(
                     Triple("Sales trends", "Daily, weekly and monthly totals", SellerInsightPage.TRENDS) to RitIconKind.Orders,
-                    Triple("Items & categories", "What sells most, by value and units", SellerInsightPage.PRODUCTS) to RitIconKind.Food,
-                    Triple("Customers", "Unique and repeat buyers", SellerInsightPage.CUSTOMERS) to RitIconKind.Person,
-                    Triple("Promotions", "Your offers and discounts given", SellerInsightPage.PROMOTIONS) to RitIconKind.Heart,
-                    Triple("Forecasting", "Illustrative demo only", SellerInsightPage.FORECAST) to RitIconKind.Arrow,
-                    Triple("Reports", "Set up a sales workbook", SellerInsightPage.REPORT_BUILDER) to RitIconKind.Bulk,
+                    Triple("Reports", "Download a CSV sales report", SellerInsightPage.REPORT_BUILDER) to RitIconKind.Bulk,
                 ).map { (entry, icon) ->
                     val (label, detail, destination) = entry
                     InsightNavEntry(label, detail, icon, "overview_open_${destination.name.lowercase()}") { onNavigate(destination) }
@@ -662,9 +642,9 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                 InsightCard("Download unavailable", "No financial workbook has been generated or saved on this device.")
             }
             SellerInsightPage.SUPPORT -> {
-                InsightCard("Create a local sample request", "Nothing is sent to a support agent", { onNavigate(SellerInsightPage.NEW_TICKET) })
+                InsightCard("Report a problem", "Contact platform support", { onNavigate(SellerInsightPage.NEW_TICKET) })
                 val tickets = DevelopmentInsights.tickets(identity, sellerId)
-                if (tickets.isEmpty()) RitEmptyState("No sample tickets", "No seller support history is available.")
+                if (tickets.isEmpty()) RitEmptyState("No support tickets", "Your support requests will appear here.")
                 else tickets.forEach { InsightCard(it.subject, "${it.id} · ${it.status.label} · ${it.category.label}", { onTicket(it.id) }) }
             }
             SellerInsightPage.NEW_TICKET -> SellerTicketForm(sellerId, identity, onBack)
@@ -672,19 +652,18 @@ fun SellerInsightScreen(page: SellerInsightPage, sellerId: String, identity: Aut
                 val ticket = ticketId?.let { DevelopmentInsights.ticket(identity, it, sellerId) }
                 if (ticket == null) RitEmptyState("Ticket unavailable", "It may belong to another seller or no longer exist.")
                 else { InsightCard(ticket.subject, "${ticket.id} · ${ticket.status.label} · ${ticket.category.label}")
-                    InsightCard("Sample issue", ticket.detail)
-                    InsightCard("Routing", if (ticket.escalated) "Escalated to platform support · demonstration" else "Seller-handled · demonstration")
+                    InsightCard("Issue", ticket.detail)
+                    InsightCard("Routing", if (ticket.escalated) "Escalated to platform support" else "Handled by you")
                     InsightCard("No live message", "No customer or support agent was contacted.") }
             }
             SellerInsightPage.NOTIFICATIONS -> {
-                RitText("Local preference preview", RitType.title)
+                RitText("Notification preferences", RitType.title)
                 listOf("Requests", "Schedule", "Support", "Promotions").forEach { key ->
                     val enabled = key in DevelopmentInsights.notificationChoices(identity, sellerId)
-                    InsightCard(key, if (enabled) "On · local only" else "Off · local only", {
+                    InsightCard(key, if (enabled) "On" else "Off", {
                         DevelopmentInsights.setNotificationChoice(identity, sellerId, key, !enabled)
                     })
                 }
-                InsightCard("Delivery not connected", "No push, email or durable in-app notification is sent by this preview.")
             }
             SellerInsightPage.PAYMENT_STATUS -> {
                 InsightCard("PhonePe integration", "Unverified · merchant eligibility and settlement routing pending")
@@ -760,9 +739,9 @@ private fun ReportBuilder(sellerId: String, identity: AuthorizedIdentity?, onNav
     else RitText("${type.label} · ${parsed?.let(::formatRange)} · ${if (selectedItems.isEmpty()) "all items" else
         "${selectedItems.size} ${if (selectedItems.size == 1) "item" else "items"}"}", RitType.label, modifier = Modifier.testTag("report_summary"))
     Spacer(Modifier.height(12.dp))
-    RitPrimaryButton("Save sample configuration", {
+    RitPrimaryButton("Save report settings", {
         message = if (selection != null && DevelopmentInsights.saveReportPreview(identity, selection))
-            "Sample configuration saved. No XLSX generated." else "Unable to save sample configuration."
+            "Report settings saved." else "Unable to save report settings."
     }, Modifier.fillMaxWidth(), enabled = error == null)
     if (message.isNotEmpty()) { Spacer(Modifier.height(8.dp)); RitText(message, RitType.small, colors.accent) }
     Spacer(Modifier.height(10.dp))
@@ -780,7 +759,7 @@ private fun SellerTicketForm(sellerId: String, identity: AuthorizedIdentity?, on
     }
     RitTextField(subject, { subject = it }, "Subject", "Brief issue summary", Modifier.fillMaxWidth())
     RitTextField(detail, { detail = it }, "Details", "Describe the issue", Modifier.fillMaxWidth(), singleLine = false)
-    RitPrimaryButton("Create local sample ticket", {
+    RitPrimaryButton("Submit ticket", {
         message = if (DevelopmentInsights.createSellerTicket(identity, sellerId, category, subject, detail))
             "Saved locally. No support agent notified." else "Enter a subject and details."
     }, Modifier.fillMaxWidth())

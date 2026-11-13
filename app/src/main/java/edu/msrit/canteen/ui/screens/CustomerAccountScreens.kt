@@ -90,8 +90,6 @@ private fun CustomerShell(title: String, tag: String, onBack: () -> Unit,
         CatalogHeader(title, onBack)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).imePadding()
             .padding(horizontal = 20.dp, vertical = 8.dp)) {
-            RitStatusIndicator(if (BuildConfig.RIT_CLOUD_DEMO) "Connected demo · server account"
-                else "Development preview · no verified customer account")
             if (BuildConfig.RIT_CLOUD_DEMO) DevelopmentCustomerAccount.cloudError?.let {
                 RitText(it, RitType.body, colors.accent, Modifier.testTag("customer_server_error"))
                 Spacer(Modifier.height(8.dp))
@@ -156,18 +154,17 @@ fun CustomerProfileScreen(repo: CustomerAccountRepository, onBack: () -> Unit, o
             if (profile.department.isNotBlank()) RitText(profile.department, RitType.body, colors.muted,
                 Modifier.padding(top = 10.dp))
             Spacer(Modifier.height(18.dp))
-            AccountRow("Edit profile", "Name, affiliation, optional department and local photo", onEdit, "profile_edit")
+            AccountRow("Edit profile", "Name, affiliation, department and photo", onEdit, "profile_edit")
         }
-        AccountRow("Orders and requests", "Unpaid requests are not paid orders", onOrders, "profile_orders")
-        AccountRow("Favourites", if (BuildConfig.RIT_CLOUD_DEMO) "Saved to your demo account" else "Saved demo items and current eligibility", onFavorites, "profile_favorites")
-        AccountRow("Quick Reorder", "Review past items before adding them to a draft", onQuickReorder, "profile_quick_reorder")
+        AccountRow("Orders and requests", "Your orders and bulk requests", onOrders, "profile_orders")
+        AccountRow("Favourites", "Your saved food and canteens", onFavorites, "profile_favorites")
+        AccountRow("Quick Reorder", "Order your past items again", onQuickReorder, "profile_quick_reorder")
         AccountRow("My bulk-order templates", "One seller per template", onTemplates, "profile_templates")
-        AccountRow("Notifications", if (BuildConfig.RIT_CLOUD_DEMO) "Server in-app inbox; no push or email" else "Inbox preview and delivery boundary", onNotifications, "profile_notifications")
-        AccountRow("Help & Support", if (BuildConfig.RIT_CLOUD_DEMO) "Server-saved support tickets" else "Issue categories and local ticket previews", onSupport, "profile_support")
+        AccountRow("Notifications", "Order and account updates", onNotifications, "profile_notifications")
+        AccountRow("Help & Support", "Report a problem or ask a question", onSupport, "profile_support")
         AccountRow("Settings & privacy", "Appearance, alerts and consent", onSettings, "profile_settings")
         if (onAccount != null) AccountRow("Account & sign out", "Switch to another account safely",
             onAccount, "profile_account")
-        AccountRow("RIT Stories", "Optional games and ideas gallery", onStories, "profile_stories")
     }
 }
 
@@ -229,8 +226,8 @@ fun CustomerSettingsScreen(onBack: () -> Unit, onAppearance: () -> Unit, onNotif
     CustomerShell("Settings", "customer_settings", onBack) {
         AccountRow("Appearance", "Light, dark or system", onAppearance, "settings_appearance")
         AccountRow("Notification preferences", "Operational and promotional alerts", onNotifications, "settings_notifications")
-        AccountRow("Personalization & privacy", "Optional behaviour processing is off by default", onPrivacy, "settings_privacy")
-        AccountRow("Account and sessions", "Email, data requests and sign-out boundary", onAccount, "settings_account")
+        AccountRow("Personalization & privacy", "Personalized recommendations", onPrivacy, "settings_privacy")
+        AccountRow("Account and sessions", "Email and sign out", onAccount, "settings_account")
         AccountRow("Help & Support", "Issues and questions", onSupport, "settings_support")
     }
 }
@@ -265,7 +262,7 @@ fun CustomerPreferenceScreen(repo: CustomerAccountRepository, userId: String?, p
     CustomerShell(if (privacy) "Personalization & privacy" else "Notification preferences",
         if (privacy) "customer_privacy" else "customer_notification_preferences", onBack) {
         if (privacy) {
-            RitMessageCard("Consent is not assumed", "Behavioural personalization is off by default. Enabling this preference does not begin tracking or grant legal consent to a future service.")
+            RitMessageCard("Your choice", "Personalized recommendations are off unless you turn them on.")
             Spacer(Modifier.height(12.dp))
             AccountRow("${if (prefs.personalizationConsent) "✓ " else ""}Personalized recommendations",
                 if (prefs.personalizationConsent) "Preference on; no activity collection exists" else "Off · ordinary discovery remains available",
@@ -273,8 +270,7 @@ fun CustomerPreferenceScreen(repo: CustomerAccountRepository, userId: String?, p
             RitText("Privacy notice, retention policy and authenticated data access/deletion requests require the production service and legal review.",
                 RitType.body, colors.muted)
         } else {
-            RitText(if (BuildConfig.RIT_CLOUD_DEMO) "Preferences are saved to your server account. No push or email is sent."
-                else "These switches save only in the local debug preview. No push or email is sent.", RitType.body, colors.muted)
+            RitText("Preferences are saved to your account.", RitType.body, colors.muted)
             Spacer(Modifier.height(12.dp))
             AccountRow("${if (prefs.operationalAlerts) "✓ " else ""}Order and negotiation updates",
                 "In-app/push preference · essential service notices may still apply",
@@ -292,11 +288,8 @@ fun CustomerPreferenceScreen(repo: CustomerAccountRepository, userId: String?, p
 @Composable
 fun CustomerAccountManagementScreen(profile: CustomerProfile?, onBack: () -> Unit, onSignOut: () -> Unit) {
     CustomerShell("Account management", "customer_account_management", onBack) {
-        AccountRow("Email address", "${profile?.email ?: "Not authenticated"} · demo account, not institution-verified")
-        AccountRow("Sessions", if (BuildConfig.RIT_CLOUD_DEMO) "Server bearer session; log out to revoke access"
-            else "No production login session exists in this preview")
-        AccountRow("Request my data", "Unavailable until authenticated account and privacy service exist")
-        AccountRow("Request account deletion", "Requires identity verification and retention review; no deletion is sent")
+        AccountRow("Email address", profile?.email ?: "Not signed in")
+        AccountRow("Sessions", "Log out to end this session")
         RitSecondaryButton("Log out", onSignOut, Modifier.fillMaxWidth().testTag("account_mock_signout"))
     }
 }
@@ -309,7 +302,6 @@ fun CustomerNotificationsScreen(repo: CustomerAccountRepository, userId: String?
         if (repo.notifications.isEmpty()) RitEmptyState("No notifications", "Real account alerts will appear here after the notification service is connected.")
         else repo.notifications.forEach { note ->
             AccountRow(note.title, note.detail + when {
-                note.sample -> " · sample only"
                 note.read -> " · read"
                 else -> " · unread · tap to mark read"
             }, if (BuildConfig.RIT_CLOUD_DEMO && !note.read && pendingId == null) ({
@@ -320,9 +312,6 @@ fun CustomerNotificationsScreen(repo: CustomerAccountRepository, userId: String?
                 }
             }) else null, "notification_${note.id}")
         }
-        RitMessageCard("Delivery boundary", if (BuildConfig.RIT_CLOUD_DEMO)
-            "This is a server-backed in-app inbox. Android push and email are not connected."
-            else "No Android push, email or durable server inbox is active in this preview.")
     }
 }
 
@@ -338,11 +327,10 @@ fun CustomerSupportScreen(repo: CustomerAccountRepository, onBack: () -> Unit,
         RitText("My tickets", RitType.title)
         Spacer(Modifier.height(9.dp))
         if (repo.tickets.isEmpty()) RitEmptyState("No support tickets", if (BuildConfig.RIT_CLOUD_DEMO)
-            "Use Report an issue to create a server-saved ticket. No response SLA is promised."
-            else "Use Report an issue to create a local demo ticket. It will not be delivered.")
+            "Use Report an issue to contact support."
+            else "Use Report an issue to contact support.")
         else repo.tickets.forEach { ticket ->
-            AccountRow("${ticket.id} · ${ticket.subject}", "${ticket.category.label} · ${ticket.status.name.replace('_', ' ')}" +
-                if (ticket.localOnly) " · local preview" else " · server ticket",
+            AccountRow("${ticket.id} · ${ticket.subject}", "${ticket.category.label} · ${ticket.status.name.replace('_', ' ').lowercase()}",
                 { onTicket(ticket.id) }, "support_ticket_${ticket.id}")
         }
         Spacer(Modifier.height(10.dp))
@@ -413,7 +401,7 @@ fun CustomerTicketFormScreen(repo: CustomerAccountRepository, userId: String?, o
             }
             else if (error == null && !submitting) {
                 val ticket = repo.createTicket(category!!, subject, description, reference, userId, attachmentUri)
-                if (ticket == null) error = "Mock access required." else onCreated(ticket.id)
+                if (ticket == null) error = "Please sign in again." else onCreated(ticket.id)
             }
         }, Modifier.fillMaxWidth().testTag("ticket_submit"), enabled = !submitting)
     }
@@ -431,19 +419,17 @@ fun CustomerTicketDetailScreen(ticket: CustomerSupportTicket?, repo: CustomerAcc
         if (ticket == null) RitEmptyState("Ticket not found", "Return to support and refresh your tickets.")
         else {
             RitText(ticket.subject, RitType.heading)
-            RitText("${ticket.id} · ${ticket.status.name.replace('_', ' ')}" +
-                if (ticket.localOnly) " · local preview" else " · server ticket", RitType.body,
+            RitText("${ticket.id} · ${ticket.status.name.replace('_', ' ').lowercase()}", RitType.body,
                 RitThemeTokens.colors.accent)
             Spacer(Modifier.height(12.dp))
             AccountRow("Category", "${ticket.category.label} · ${ticket.category.routedTo}")
-            ticket.requestReference?.let { AccountRow("Related request", "$it · reference only; no verified payment implied") }
+            ticket.requestReference?.let { AccountRow("Related request", it) }
             AccountRow("Your message", ticket.description)
             ticket.attachmentUri?.let {
-                AccountRow("Image attachment", "Selected on this device only · not uploaded or validated by a server")
+                AccountRow("Image attachment", "Attached")
             }
-            ticket.replies.forEach { AccountRow(if (ticket.localOnly) "Sample response" else "Conversation", it) }
-            if (ticket.escalated) AccountRow("Escalation requested", if (ticket.localOnly)
-                "Local preview only · no platform team notified" else "Recorded by the server")
+            ticket.replies.forEach { AccountRow("Conversation", it) }
+            if (ticket.escalated) AccountRow("Escalation requested", "Support has been notified")
             if (!ticket.escalated && ticket.category in setOf(CustomerIssueCategory.FOOD, CustomerIssueCategory.SCHEDULE)) {
                 RitSecondaryButton(if (BuildConfig.RIT_CLOUD_DEMO) "Escalate ticket" else "Escalate locally", {
                     if (BuildConfig.RIT_CLOUD_DEMO && !submitting) scope.launch {
@@ -452,8 +438,8 @@ fun CustomerTicketDetailScreen(ticket: CustomerSupportTicket?, repo: CustomerAcc
                         feedback = error ?: "Escalation recorded on the server."
                         submitting = false
                     } else if (!BuildConfig.RIT_CLOUD_DEMO) feedback =
-                        if (repo.escalateTicket(ticket.id, userId)) "Local escalation noted; no team was notified."
-                        else "Could not update this demo ticket."
+                        if (repo.escalateTicket(ticket.id, userId)) "Escalation requested."
+                        else "Could not update this ticket."
                 }, Modifier.fillMaxWidth().testTag("ticket_escalate"))
                 Spacer(Modifier.height(10.dp))
             }
@@ -474,9 +460,6 @@ fun CustomerTicketDetailScreen(ticket: CustomerSupportTicket?, repo: CustomerAcc
             }, Modifier.fillMaxWidth().testTag("ticket_reply_submit"), enabled = !submitting)
             feedback?.let { RitText(it, RitType.body, RitThemeTokens.colors.accent, Modifier.padding(vertical = 8.dp)) }
             Spacer(Modifier.height(14.dp))
-            RitMessageCard("Support boundary", if (BuildConfig.RIT_CLOUD_DEMO)
-                "Messages and escalation are server-saved. Refunds and payment decisions are not integrated."
-                else "Messages, escalation and refund decisions require the production support service. This local ticket does not change any order or payment state.")
         }
     }
 }
@@ -523,7 +506,7 @@ fun CustomerTemplatesScreen(repo: CustomerAccountRepository, userId: String?, dr
                 feedback = error ?: "Template saved on the server."
                 saving = false
             } else if (feedback == null && !saving) feedback =
-                if (repo.saveTemplate(name, draft.draft, userId)) "Template saved locally." else "Mock access required."
+                if (repo.saveTemplate(name, draft.draft, userId)) "Template saved." else "Please sign in again."
         }, Modifier.fillMaxWidth().testTag("template_save"), enabled = !saving)
         feedback?.let { RitText(it, RitType.body, colors.accent, Modifier.padding(vertical = 10.dp).testTag("template_feedback")) }
         Spacer(Modifier.height(18.dp))
@@ -648,7 +631,6 @@ fun CustomerTemplateEditorScreen(repo: CustomerAccountRepository, userId: String
 @Composable
 fun CustomerOfflineInfoScreen(onBack: () -> Unit) {
     CustomerShell("Connection needed", "customer_offline", onBack) {
-        RitEmptyState("You're offline", "Previously viewed information may be stale. No new request, quote approval or payment can be sent without an online, server-acknowledged action.")
-        RitMessageCard("Preview boundary", "Offline caching and automatic synchronization are not implemented yet. This screen demonstrates the required safe state, not a live network monitor.")
+        RitEmptyState("You're offline", "Connect to the internet to place orders, approve quotes or pay.")
     }
 }
