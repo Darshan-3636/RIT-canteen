@@ -59,8 +59,8 @@ private fun bulkPrimaryState(record: BulkRequestRecord): String = when (record.t
     QuoteStage.SUBMITTED -> "Waiting for seller review"
     QuoteStage.COUNTEROFFER -> if (record.latest.actor == edu.msrit.canteen.customer.QuoteActor.SELLER)
         "Review seller's updated offer" else "Waiting for seller's response"
-    QuoteStage.AGREED_AWAITING_PAYMENT -> "Agreed · payment unverified"
-    QuoteStage.PAID_CONFIRMED -> "Demo state · no actual payment"
+    QuoteStage.AGREED_AWAITING_PAYMENT -> "Agreed · awaiting payment"
+    QuoteStage.PAID_CONFIRMED -> "Paid"
     QuoteStage.EXPIRED -> "Offer expired"
     QuoteStage.REJECTED -> "Seller declined"
     QuoteStage.WITHDRAWN -> "Request withdrawn"
@@ -87,8 +87,6 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
             contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp)) {
             item {
                 RitText("Your activity", RitType.heading)
-                RitText("Stored on demo backend · no actual charges or fulfillment", RitType.small, colors.muted,
-                    Modifier.testTag("orders_demo_disclosure"))
                 Spacer(Modifier.height(14.dp))
             }
             if (tab != OrdersTab.BULK) {
@@ -97,7 +95,7 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                     key = { "demo_${it.reference}" }) { order ->
                     OrderCard("Individual · ${PreviewCatalog.sellers.find { it.id == order.sellerId }?.name ?: "Seller"}", order.state.name.lowercase().replace('_', ' '),
                         order.lines.joinToString { "${it.quantity}× ${it.title}" },
-                        "${order.reference} · ${displayPaise(order.totalPaise)} · local simulation",
+                        "${order.reference} · ${displayPaise(order.totalPaise)}",
                         { onDemoOrder(order.reference) }, "orders_demo_${order.reference}", order.lines.firstOrNull()?.itemId)
                 }
                 if (individual.isEmpty() && demoOrders.none {
@@ -105,8 +103,8 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                     item { RitEmptyState("No individual orders", "Choose an item eligible for individual ordering.") }
                 items(individual, key = { it.id }) { record ->
                     OrderCard("Individual · ${PreviewCatalog.sellers.find { seller -> seller.id == PreviewCatalog.items.find { it.id == record.lines.firstOrNull()?.itemId }?.sellerId }?.name ?: "Seller"}", if (record.locallySaved)
-                        record.status.removePrefix("DEMO_").lowercase().replace('_', ' ') + " · demo only"
-                        else "Sample history · not a real purchase",
+                        customerOrderStatus(record.status)
+                        else "Past order",
                         record.lines.joinToString { "${it.quantity}× ${it.title}" },
                         "${record.pickupReference.ifBlank { record.placedAt.format(orderDate) }} · ${displayPaise(record.totalPaise)}",
                         { onIndividual(record.id) }, "orders_individual_${record.id}", record.lines.firstOrNull()?.itemId)
@@ -119,7 +117,7 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                     OrderCard("Bulk · ${PreviewCatalog.sellers.find { it.id == order.sellerId }?.name ?: "Seller"}",
                         order.state.name.lowercase().replace('_', ' '),
                         order.lines.joinToString { "${it.quantity}× ${it.title}" },
-                        "${order.reference} · ${displayPaise(order.totalPaise)} · local simulation",
+                        "${order.reference} · ${displayPaise(order.totalPaise)}",
                         { onDemoOrder(order.reference) }, "orders_demo_${order.reference}", order.lines.firstOrNull()?.itemId)
                 }
                 if (bulkVisible.isEmpty() && demoOrders.none {
@@ -131,7 +129,7 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                     OrderCard("Bulk quote · $seller", simulated?.state?.name?.lowercase()?.replace('_', ' ')
                         ?: bulkPrimaryState(record),
                         "${record.latest.lines.sumOf { it.quantity }} items · pickup ${record.latest.pickup.format(orderDate)}",
-                        "${record.reference} · ${displayPaise(record.latest.totalPaise)} · Demo data",
+                        "${record.reference} · ${displayPaise(record.latest.totalPaise)}",
                         { onBulk(record.reference) }, "orders_bulk_${record.reference}", record.latest.lines.firstOrNull()?.itemId)
                 }
             }
@@ -149,7 +147,7 @@ private fun OrderCard(title: String, status: String, detail: String, foot: Strin
         RoundedCornerShape(RitRadii.card)).background(colors.card, RoundedCornerShape(RitRadii.card))
         .clickable(onClick = onClick).testTag(tag).padding(16.dp)) {
         PreviewCatalog.items.find { it.id == previewItemId }?.let { item ->
-            FoodPhotoContent(item.photo, "${item.name} order preview", Modifier.fillMaxWidth().height(110.dp), item.localImageUri)
+            FoodPhotoContent(item.photo, "${item.name} photo", Modifier.fillMaxWidth().height(110.dp), item.localImageUri)
             Spacer(Modifier.height(10.dp))
         }
         RitText(title, RitType.label)

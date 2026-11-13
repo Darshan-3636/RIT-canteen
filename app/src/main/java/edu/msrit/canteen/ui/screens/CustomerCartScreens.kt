@@ -36,6 +36,7 @@ import androidx.compose.ui.window.Dialog
 import edu.msrit.canteen.customer.BulkDraftSession
 import edu.msrit.canteen.customer.BulkPolicySource
 import edu.msrit.canteen.customer.CartMode
+import edu.msrit.canteen.customer.PREPARATION_TIME_LABEL
 import edu.msrit.canteen.customer.CustomerCatalogSource
 import edu.msrit.canteen.customer.DebugPromotionsApi
 import edu.msrit.canteen.customer.IndividualCartSession
@@ -162,14 +163,14 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
                     Spacer(Modifier.height(14.dp))
                     RitText("Subtotal  ${displayPaise(individual.serverCart?.subtotalPaise ?: individualCheck.subtotalPaise)}", RitType.title,
                         modifier = Modifier.testTag("individual_subtotal"))
-                    RitText("Current menu price when connected. Payment and kitchen submission are unavailable; demo review is available.", RitType.small, colors.muted)
+                    RitText(PREPARATION_TIME_LABEL + " after payment", RitType.small, colors.muted)
                     Spacer(Modifier.height(9.dp))
                     RitSecondaryButton("Clear individual cart", { clearMode = CartMode.INDIVIDUAL }, Modifier.fillMaxWidth())
                 }
             } else {
                 item {
                     RitText(bulkSeller?.name ?: "Choose a seller", RitType.title)
-                    RitText("One seller per bulk request · demo estimate only", RitType.small, colors.muted)
+                    RitText("One canteen per bulk request · estimate before the canteen's quote", RitType.small, colors.muted)
                     if (bulkSyncStatus != null) RitText(bulkSyncStatus, RitType.small,
                         if (bulkSyncStatus.startsWith("Not saved")) colors.accent else colors.muted,
                         Modifier.testTag("bulk_cart_sync_status"))
@@ -232,7 +233,7 @@ private fun CartLine(name: String, price: String, photo: edu.msrit.canteen.custo
     Row(Modifier.fillMaxWidth().padding(vertical = 5.dp).border(1.dp, colors.outline,
         RoundedCornerShape(RitRadii.card)).background(colors.card, RoundedCornerShape(RitRadii.card))
         .padding(12.dp).testTag("cart_line_$tag"), verticalAlignment = Alignment.CenterVertically) {
-        FoodPhotoContent(photo, "$name illustrative food photo",
+        FoodPhotoContent(photo, "$name photo",
             Modifier.width(84.dp).height(84.dp).clip(RoundedCornerShape(RitRadii.small)), localImageUri)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -314,13 +315,13 @@ fun IndividualReviewScreen(individual: IndividualCartSession, onBack: () -> Unit
             }
             if (offerError != null) RitText(offerError!!, RitType.small, colors.accent)
             Spacer(Modifier.height(15.dp))
-            BulkInfoCard("Saved demo history only", "This is stored by the backend. It is not a kitchen request, payment, reservation or pickup promise.")
+            BulkInfoCard("Prepaid", "Pay after placing your order. " + PREPARATION_TIME_LABEL + " once paid.")
             if (errorMessage != null) {
                 Spacer(Modifier.height(10.dp))
                 RitText(errorMessage, RitType.body, colors.accent)
             }
         }
-        RitPrimaryButton(if (saving) "Saving…" else "Save demo order", { onSaveDemo(selectedOfferId) },
+        RitPrimaryButton(if (saving) "Placing order…" else "Place order", { onSaveDemo(selectedOfferId) },
             Modifier.fillMaxWidth().padding(20.dp).testTag("individual_save_demo"),
             enabled = !saving && !quoting && (selectedOfferId == null || quote != null) &&
                 (individual.serverCart?.readyForCheckout ?: check.readyForReview))

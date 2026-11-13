@@ -371,9 +371,13 @@ class ManagementIntegrationTest {
             """{"lines":[{"itemId":"managed-meal","quantity":1}]}""")
         assertEquals(HttpStatusCode.Created,created.status)
         val orderId=created.obj().str("id")
-        assertEquals(1L,f.count("SELECT count(*) FROM notification_inbox WHERE user_id=? AND event_type='INDIVIDUAL_ORDER_UPDATE'",f.owner.id))
-        assertEquals(0L,f.count("SELECT count(*) FROM notification_inbox WHERE user_id=?",f.other.id))
+        // Orders are prepaid: the seller hears about an order only once it is paid.
+        assertEquals(0L,f.count("SELECT count(*) FROM notification_inbox WHERE user_id=? AND event_type='INDIVIDUAL_ORDER_UPDATE'",f.owner.id))
         f.sql("UPDATE individual_demo_orders SET status='DEMO_PAYMENT_SIMULATED',demo_payment_outcome='SUCCESS' WHERE id=?",UUID.fromString(orderId))
+        f.context.transaction { db -> edu.msrit.canteen.backend.features.commerce.notifyIndividualEvent(db,UUID.fromString(orderId),"DEMO_PAYMENT_SIMULATED") }
+        assertEquals(1L,f.count("SELECT count(*) FROM notification_inbox WHERE user_id=? AND event_key=?",
+            f.owner.id,"individual:$orderId:DEMO_PAYMENT_SIMULATED"))
+        assertEquals(0L,f.count("SELECT count(*) FROM notification_inbox WHERE user_id=?",f.other.id))
         val path="/sellers/main-canteen/individual-demo-orders/$orderId/demo-status"
         assertEquals(HttpStatusCode.OK,api(HttpMethod.Post,path,f.owner,"""{"status":"DEMO_ACCEPTED"}""").status)
         assertEquals(HttpStatusCode.OK,api(HttpMethod.Post,path,f.owner,"""{"status":"DEMO_ACCEPTED"}""").status)

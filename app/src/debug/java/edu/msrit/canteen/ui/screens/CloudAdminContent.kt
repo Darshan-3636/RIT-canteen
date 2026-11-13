@@ -144,7 +144,7 @@ fun CloudAdminContent(page: AdminPage, sellerId: String?, ticketId: String?,
             AdminInfoCard("Catalog items", row.optLong("catalogItems").toString())
             AdminInfoCard("Pending setup drafts", row.optLong("pendingSetupDrafts").toString())
             AdminInfoCard("Suspended users", row.optLong("suspendedUsers").toString())
-            RitText("Demo order counts are operational only. Verified revenue is unavailable.", RitType.small)
+            RitText("Order counts by status.", RitType.small)
             RitSecondaryButton(if(exportBusy) "Preparing report…" else "Save platform report CSV",{
                 if(!exportBusy) { exportBusy=true;exportFeedback=null;savePlatformReport.launch("platform-report.csv") }
             },Modifier.fillMaxWidth(),enabled=!exportBusy)

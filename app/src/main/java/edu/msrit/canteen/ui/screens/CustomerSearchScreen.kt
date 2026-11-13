@@ -76,7 +76,6 @@ fun CustomerSearchScreen(
     Column(Modifier.fillMaxSize().background(colors.background).testTag("customer_search")) {
         CatalogHeader("Search", onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
-            RitStatusIndicator("Preview catalog · not a live menu")
             Spacer(Modifier.height(12.dp))
             RitSearchField(query, { query = it }, Modifier.fillMaxWidth(),
                 hint = "Search food, categories or sellers…",
@@ -119,7 +118,7 @@ fun CustomerSearchScreen(
                 item {
                     Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp).testTag("search_filters_panel")) {
                         RitText("Advanced filters", RitType.title)
-                        RitText("Combine catalog facts; item availability is a demo flag, not live stock.", RitType.small, colors.muted)
+                        RitText("Combine filters to narrow the menu.", RitType.small, colors.muted)
                     }
                 }
                 item { FilterChoices("Seller", catalog.sellers.map { it.id to it.name }, filters.sellerId, "seller") {
@@ -142,7 +141,7 @@ fun CustomerSearchScreen(
                     OrderEligibilityFilter.BULK_REQUEST.name to "Bulk request"), filters.orderEligibility?.name, "mode") {
                     filters = filters.copy(orderEligibility = it?.let(OrderEligibilityFilter::valueOf))
                 } }
-                item { FilterChoices("Illustrative price", listOf("up-to-50" to "₹0–₹50", "over-50" to "₹51+"),
+                item { FilterChoices("Price", listOf("up-to-50" to "₹0–₹50", "over-50" to "₹51+"),
                     when { filters.maxPrice == 50 -> "up-to-50"; filters.minPrice == 51 -> "over-50"; else -> null }, "price") {
                     filters = when (it) {
                         "up-to-50" -> filters.copy(minPrice = null, maxPrice = 50)

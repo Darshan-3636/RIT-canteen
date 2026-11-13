@@ -263,7 +263,7 @@ fun RitSearchField(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier.weight(1f).then(inputModifier)
-                .semantics { contentDescription = "Search preview catalog" }.testTag("search_input"),
+                .semantics { contentDescription = "Search the menu" }.testTag("search_input"),
             textStyle = RitType.body.copy(color = colors.foreground),
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),

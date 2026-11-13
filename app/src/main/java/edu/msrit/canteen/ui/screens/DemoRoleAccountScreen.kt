@@ -63,7 +63,6 @@ fun DemoRoleAccountScreen(account: DemoAccount, appearance: AppearancePreference
             account.sellerId?.let { RitText("Seller: ${if (it == "main-canteen") "M.S.R.I.T Canteen" else "Ramaiah's Cafeteria"}",
                 RitType.body, colors.muted) }
             Spacer(Modifier.height(20.dp))
-            RitMessageCard("Demo account", "This is a local testing identity. Seller and platform actions are previews, not server-authorized changes.")
             Spacer(Modifier.height(16.dp))
             RitSecondaryButton("Open dashboard", onDashboard, Modifier.fillMaxWidth().testTag("role_account_dashboard"))
             Spacer(Modifier.height(9.dp))

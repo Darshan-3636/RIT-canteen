@@ -57,22 +57,21 @@ internal fun notifyIndividualEvent(db: Connection, orderId: UUID, status: String
     val customer = request.first
     val seller = request.second
     val title = when (status) {
-        "DEMO_SAVED" -> "New individual order"
-        "DEMO_PAYMENT_SIMULATED" -> "Demo payment state updated"
+        "DEMO_PAYMENT_SIMULATED" -> "New paid order"
         "DEMO_ACCEPTED" -> "Order accepted"
         "DEMO_REJECTED" -> "Order declined"
         "DEMO_READY" -> "Order ready for pickup"
-        "DEMO_COMPLETED" -> "Order handover recorded"
+        "DEMO_COMPLETED" -> "Order collected"
         else -> return
     }
     val body = when (status) {
-        "DEMO_SAVED" -> "A customer saved an individual order. Payment is not verified."
-        "DEMO_PAYMENT_SIMULATED" -> "A demo payment outcome was recorded. No real payment was verified."
-        "DEMO_READY" -> "Your order is ready. Show your order reference at the counter."
-        "DEMO_COMPLETED" -> "The seller recorded the handover of your order."
+        "DEMO_PAYMENT_SIMULATED" -> "A customer paid for an order. Mark it ready when it's prepared."
+        "DEMO_READY" -> "Your order is ready. Show your pickup QR code or PIN at the counter."
+        "DEMO_COMPLETED" -> "You collected your order. Enjoy your meal!"
         else -> "The individual order status changed. Open it for details."
     }
-    val recipients = if (status == "DEMO_SAVED") db.query(
+    // Orders are prepaid, so the canteen hears about an order once it is paid.
+    val recipients = if (status == "DEMO_PAYMENT_SIMULATED") db.query(
         """SELECT DISTINCT m.user_id FROM seller_memberships m JOIN users u ON u.id=m.user_id
            WHERE m.seller_id=? AND m.role='OWNER' AND m.active AND u.status='ACTIVE'""", seller,
     ) { it.getObject(1, UUID::class.java) } else listOf(customer)

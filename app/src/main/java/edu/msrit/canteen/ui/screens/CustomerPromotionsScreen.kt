@@ -138,7 +138,7 @@ internal fun PromotionCard(promotion: Promotion, sellerName: String, now: Instan
     Column(modifier.fillMaxWidth().border(1.dp, colors.outline, RoundedCornerShape(RitRadii.card))
         .background(colors.card, RoundedCornerShape(RitRadii.card))
         .clickable(role = Role.Button, onClick = onClick).padding(12.dp)) {
-        FoodPhotoContent(item?.photo, "${item?.name ?: promotion.title} illustrative offer image",
+        FoodPhotoContent(item?.photo, "${item?.name ?: promotion.title} photo",
             Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(RitRadii.small)), item?.localImageUri)
         Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
                 RitText(offerBenefit(promotion), RitType.heading, colors.accent,

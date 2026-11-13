@@ -158,7 +158,7 @@ data class OrderingAction(val label: String, val enabled: Boolean)
 
 /** Prompt 3 has no live transaction flow, regardless of catalog eligibility. */
 fun orderingAction(eligibility: ItemEligibility): OrderingAction = OrderingAction(
-    if (eligibility == ItemEligibility.UNAVAILABLE) "Item unavailable" else "Ordering unavailable in preview",
+    if (eligibility == ItemEligibility.UNAVAILABLE) "Item unavailable" else "Ordering unavailable",
     enabled = false,
 )
 
@@ -220,10 +220,10 @@ object PreviewCatalog : CustomerCatalogSource {
         MenuCategory("packs", "Packaged Snacks"),
     )
     private val initialSellers = listOf(
-        Seller(MAIN_ID, "M.S.R.I.T Canteen", "Campus South Indian breakfasts, rice and cooked meals · demo menu.", "RIT campus · exact location to be confirmed", OrderingCapabilities(true, true), linkedSetOf("dosa", "breakfast", "rice", "meals", "drinks"), isMainCanteen = true),
-        Seller("north-counter", "Ramaiah's Cafeteria · demo", "Savoury snacks, chaat and quick bites for group requests.", null, OrderingCapabilities(false, true), linkedSetOf("snacks", "chaat", "rolls", "sandwiches", "combos")),
-        Seller("coffee-corner", "Cafe Da Costa · Bakery · demo", "Bakery puffs, buns, pastries and coffee for group requests.", null, OrderingCapabilities(false, true), linkedSetOf("puffs", "breads", "cakes", "cookies", "drinks")),
-        Seller("campus-pantry", "M.S.R.I.T Condiments · demo", "Sealed drinks and grab-and-go packaged snacks.", null, OrderingCapabilities(false, true), linkedSetOf("drinks", "packs")),
+        Seller(MAIN_ID, "M.S.R.I.T Canteen", "Campus South Indian breakfasts, rice and cooked meals.", "RIT campus", OrderingCapabilities(true, true), linkedSetOf("dosa", "breakfast", "rice", "meals", "drinks"), isMainCanteen = true),
+        Seller("north-counter", "Ramaiah's Cafeteria", "Savoury snacks, chaat and quick bites for group requests.", null, OrderingCapabilities(false, true), linkedSetOf("snacks", "chaat", "rolls", "sandwiches", "combos")),
+        Seller("coffee-corner", "Cafe Da Costa · Bakery", "Bakery puffs, buns, pastries and coffee for group requests.", null, OrderingCapabilities(false, true), linkedSetOf("puffs", "breads", "cakes", "cookies", "drinks")),
+        Seller("campus-pantry", "M.S.R.I.T Condiments", "Sealed drinks and grab-and-go packaged snacks.", null, OrderingCapabilities(false, true), linkedSetOf("drinks", "packs")),
     ).map { it.copy(photo = CatalogArtwork.sellerPhoto(it.id)) }
     private val initialItems = listOf(
         MenuItem("masala-dosa", MAIN_ID, "dosa", "Masala Dosa", "Crisp dosa with spiced potato filling, sambar and chutney.", Price(50), FoodKind.PREPARED, Dietary.VEGETARIAN, featured = true),
@@ -244,7 +244,7 @@ object PreviewCatalog : CustomerCatalogSource {
         MenuItem("chapati-meal", MAIN_ID, "meals", "Chapati Meal", "Chapatis with a vegetable curry, dal and simple sides.", Price(80), FoodKind.PREPARED, Dietary.VEGETARIAN),
         MenuItem("veg-thali", MAIN_ID, "meals", "Veg Thali", "Rice, chapati and a selection of small vegetarian curries and sides.", Price(110), FoodKind.PREPARED, Dietary.VEGETARIAN),
         MenuItem("tomato-rice", MAIN_ID, "rice", "Tomato Rice", "Tangy tomato rice tempered with curry leaves and mustard.", Price(50), FoodKind.PREPARED, Dietary.VEGETARIAN),
-        MenuItem("north-lunch", "north-counter", "combos", "Ramaiah's Cafeteria Lunch Combo", "A sample quick lunch combo with savoury Ramaiah's Cafeteria bites.", Price(90), FoodKind.PREPARED, Dietary.NOT_SPECIFIED),
+        MenuItem("north-lunch", "north-counter", "combos", "Ramaiah's Cafeteria Lunch Combo", "A quick lunch combo with savoury Ramaiah's Cafeteria bites.", Price(90), FoodKind.PREPARED, Dietary.NOT_SPECIFIED),
         MenuItem("north-snack", "north-counter", "snacks", "Assorted Savoury Snack Box", "Assorted prepared savoury snacks for sharing.", Price(65), FoodKind.PREPARED, Dietary.NOT_SPECIFIED),
         MenuItem("veg-samosa", "north-counter", "snacks", "Veg Samosa", "Crisp pastry filled with spiced potato and peas.", Price(25), FoodKind.PREPARED, Dietary.VEGETARIAN),
         MenuItem("khasta-kachori", "north-counter", "snacks", "Khasta Kachori", "Flaky kachori with a spiced savoury filling.", Price(30), FoodKind.PREPARED, Dietary.NOT_SPECIFIED),
@@ -277,7 +277,7 @@ object PreviewCatalog : CustomerCatalogSource {
         MenuItem("chocolate-muffin", "coffee-corner", "cakes", "Chocolate Muffin", "Soft chocolate muffin with chocolate pieces.", Price(70), FoodKind.PREPARED, Dietary.NOT_SPECIFIED),
         MenuItem("fudge-brownie", "coffee-corner", "cakes", "Fudge Brownie", "Dense chocolate brownie square with a fudgy centre.", Price(85), FoodKind.PREPARED, Dietary.NOT_SPECIFIED),
         MenuItem("vanilla-pastry", "coffee-corner", "cakes", "Vanilla Pastry", "Layered vanilla cream pastry slice.", Price(90), FoodKind.PREPARED, Dietary.NOT_SPECIFIED),
-        MenuItem("eggless-chocolate-cake", "coffee-corner", "cakes", "Eggless Chocolate Cake Slice", "Chocolate cake slice made without egg in this demo description.", Price(95), FoodKind.PREPARED, Dietary.VEGETARIAN),
+        MenuItem("eggless-chocolate-cake", "coffee-corner", "cakes", "Eggless Chocolate Cake Slice", "Chocolate cake slice made without egg.", Price(95), FoodKind.PREPARED, Dietary.VEGETARIAN),
         MenuItem("shortbread-cookies", "coffee-corner", "cookies", "Shortbread Cookies", "Sealed pack of crumbly shortbread cookies.", Price(45), FoodKind.PACKAGED, Dietary.NOT_SPECIFIED),
         MenuItem("almond-cookies", "coffee-corner", "cookies", "Almond Cookies", "Sealed almond cookie pack with visible almond pieces.", Price(55), FoodKind.PACKAGED, Dietary.NOT_SPECIFIED),
         MenuItem("pantry-juice", "campus-pantry", "drinks", "Fruit Juice Carton", "Sealed unbranded fruit juice carton for group requests.", Price(30), FoodKind.PACKAGED, Dietary.NOT_SPECIFIED, tags = setOf("cold drinks", "drinks")),

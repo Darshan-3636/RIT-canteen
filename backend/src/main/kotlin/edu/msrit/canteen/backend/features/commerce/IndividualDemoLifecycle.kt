@@ -99,7 +99,7 @@ internal fun simulateIndividualPayment(context: BackendContext, principal: Authe
         WHERE o.id=? AND o.customer_user_id=? AND u.affiliation IN ('STUDENT','FACULTY') FOR UPDATE OF o""").use { query ->
         query.setObject(1, id); query.setObject(2, principal.userId)
         query.executeQuery().use { rows -> if (rows.next()) rows.getString(1) to rows.getString(2) else null }
-    } ?: throw CommerceFault(404, "ORDER_NOT_FOUND", "Demo order not found")
+    } ?: throw CommerceFault(404, "ORDER_NOT_FOUND", "Order not found")
     val (status, recordedOutcome) = state
     val sandboxAttempt = db.prepareStatement("""SELECT 1 FROM sandbox_payment_attempts
         WHERE source_type='INDIVIDUAL' AND source_id=?
@@ -147,7 +147,7 @@ internal fun transitionIndividualDemo(context: BackendContext, principal: Authen
             WHERE id=? AND seller_id=? FOR UPDATE""").use { query ->
             query.setObject(1, id); query.setString(2, sellerId)
             query.executeQuery().use { rows -> if (rows.next()) rows.getString(1) to rows.getString(2) else null }
-        } ?: throw CommerceFault(404, "ORDER_NOT_FOUND", "Demo order not found")
+        } ?: throw CommerceFault(404, "ORDER_NOT_FOUND", "Order not found")
         val current=state.first
         if(next !in setOf("DEMO_ACCEPTED","DEMO_REJECTED","DEMO_READY","DEMO_COMPLETED"))
             throw CommerceFault(409,"INVALID_DEMO_TRANSITION","Unknown seller transition")
@@ -159,11 +159,11 @@ internal fun transitionIndividualDemo(context: BackendContext, principal: Authen
             "DEMO_COMPLETED" -> current == "DEMO_READY"
             else -> false
         }
-        if (!allowed) throw CommerceFault(409, "INVALID_DEMO_TRANSITION", "Demo order cannot move to $next")
+        if (!allowed) throw CommerceFault(409, "INVALID_DEMO_TRANSITION", "This order has already moved on. Refresh to see its current status.")
         if(next=="DEMO_COMPLETED" && !MessageDigest.isEqual(
                 state.second.toByteArray(Charsets.US_ASCII),
                 pickupCode?.trim()?.uppercase()?.toByteArray(Charsets.US_ASCII) ?: byteArrayOf()))
-            throw CommerceFault(422,"INVALID_PICKUP_CODE","Ask the customer for their pickup code before confirming handover")
+            throw CommerceFault(422,"INVALID_PICKUP_CODE","That PIN doesn't match this order. Check it with the customer.")
         if(next=="DEMO_COMPLETED") db.prepareStatement("""UPDATE individual_demo_orders SET
             status=?,updated_at=?,handed_over_at=?,handed_over_by=? WHERE id=?""").use { query ->
             val now=Timestamp.from(context.clock.instant())

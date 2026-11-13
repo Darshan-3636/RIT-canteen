@@ -67,7 +67,7 @@ fun CustomerMenuScreen(
     Column(Modifier.fillMaxSize().background(colors.background).testTag("customer_menu")) {
         CatalogHeader(title, onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
-            RitText(seller?.name ?: if (BuildConfig.RIT_CLOUD_DEMO) "Across campus sellers" else "Across preview sellers", RitType.heading)
+            RitText(seller?.name ?: "All food", RitType.heading)
             RitText(when {
                 preparedOnly -> "Meals from the main canteen"
                 seller != null -> "Browse this canteen's menu"

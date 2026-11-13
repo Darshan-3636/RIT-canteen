@@ -158,7 +158,6 @@ fun CustomerProfileScreen(repo: CustomerAccountRepository, onBack: () -> Unit, o
         }
         AccountRow("Orders and requests", "Your orders and bulk requests", onOrders, "profile_orders")
         AccountRow("Favourites", "Your saved food and canteens", onFavorites, "profile_favorites")
-        AccountRow("Quick Reorder", "Order your past items again", onQuickReorder, "profile_quick_reorder")
         AccountRow("My bulk-order templates", "One seller per template", onTemplates, "profile_templates")
         AccountRow("Notifications", "Order and account updates", onNotifications, "profile_notifications")
         AccountRow("Help & Support", "Report a problem or ask a question", onSupport, "profile_support")

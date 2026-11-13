@@ -51,11 +51,8 @@ fun CustomerFavoritesScreen(
         CatalogHeader("Favourites", onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
             RitText("Saved for later", RitType.heading)
-            RitText(if (BuildConfig.RIT_CLOUD_DEMO) "Saved to your demo account on the server."
-                else "Only on this device in the debug preview.", RitType.body, colors.muted)
+            RitText("Food and canteens you've saved.", RitType.body, colors.muted)
             Spacer(Modifier.height(10.dp))
-            RitStatusIndicator(if (BuildConfig.RIT_CLOUD_DEMO) "Account-synced demo favourites"
-                else "Demo Customer favourites · not account-synced")
             if (BuildConfig.RIT_CLOUD_DEMO) (favorites as? DevelopmentFavoritesRepository)?.cloudError?.let {
                 RitText(it, RitType.body, colors.accent, Modifier.testTag("favorites_server_error"))
             }

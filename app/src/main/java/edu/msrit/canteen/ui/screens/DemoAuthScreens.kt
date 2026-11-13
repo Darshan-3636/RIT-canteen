@@ -65,7 +65,6 @@ fun DemoLoginScreen(onBack: () -> Unit, onCreateAccount: () -> Unit,
     var password by remember { mutableStateOf("") }
     var visible by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var forgot by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize().background(colors.background).imePadding().testTag("demo_login_screen")) {
@@ -103,14 +102,6 @@ fun DemoLoginScreen(onBack: () -> Unit, onCreateAccount: () -> Unit,
             Spacer(Modifier.height(12.dp))
             RitSecondaryButton("Register", onCreateAccount,
                 Modifier.fillMaxWidth().testTag("demo_login_create"))
-            Spacer(Modifier.height(12.dp))
-            RitSecondaryButton("Forgot password?", { forgot = !forgot },
-                Modifier.fillMaxWidth().testTag("demo_login_forgot"))
-            if (forgot) RitMessageCard(
-                if (BuildConfig.RIT_CLOUD_DEMO) "Password reset unavailable"
-                else "Demo passwords",
-                if (BuildConfig.RIT_CLOUD_DEMO) "Password reset is not available yet. No reset email is sent."
-                else "No reset email is sent. For a seeded demo account, use its supplied test password. For a locally registered account, register another email.")
         }
     }
 }

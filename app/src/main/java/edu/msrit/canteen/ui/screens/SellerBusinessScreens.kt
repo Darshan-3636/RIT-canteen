@@ -111,7 +111,7 @@ private fun BusinessCard(title: String, detail: String, onClick: (() -> Unit)? =
         .then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick))
         .then(if (tag == null) Modifier else Modifier.testTag(tag)).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (food != null) FoodPhotoContent(food.photo, "${food.name} sample photo",
+            if (food != null) FoodPhotoContent(food.photo, "${food.name} photo",
                 Modifier.size(64.dp), food.localImageUri, food.remoteImageUrl)
             Column {
                 RitText(title, RitType.label)
@@ -132,7 +132,7 @@ private fun BusinessMessage(text: String?) {
 fun SellerBusinessHomeScreen(sellerId: String, userId: String, repo: SellerBusinessRepository,
     onBack: () -> Unit, onRequests: () -> Unit, onSchedule: () -> Unit,
     onMenu: () -> Unit, onCategories: () -> Unit, onPromotions: () -> Unit,
-    onEmployees: () -> Unit, onSettings: () -> Unit, onInventory: () -> Unit) {
+    onSettings: () -> Unit, onInventory: () -> Unit) {
     val seller = PreviewCatalog.sellers.find { it.id == sellerId }
     val caps = repo.capabilities(userId, sellerId)
     BusinessPage("Seller management", "seller_management", onBack) {
@@ -155,8 +155,6 @@ fun SellerBusinessHomeScreen(sellerId: String, userId: String, repo: SellerBusin
         Spacer(Modifier.height(8.dp))
         if (SellerCapability.PROMOTIONS in caps)
             BusinessCard("Promotions", "Drafts, scheduled and expired placements", onPromotions, "seller_manage_promotions")
-        if (SellerCapability.EMPLOYEES in caps)
-            BusinessCard("Team and permissions", "Seller-scoped delegated access", onEmployees, "seller_manage_employees")
         Spacer(Modifier.height(12.dp))
         RitText("Business profile & settings", RitType.title)
         Spacer(Modifier.height(8.dp))
@@ -312,7 +310,7 @@ fun SellerItemEditorScreen(sellerId: String, userId: String, itemId: String?, re
         Spacer(Modifier.height(8.dp))
         RitTextField(tags, { tags = it }, "Optional tags", "Comma-separated discovery labels")
         Spacer(Modifier.height(12.dp))
-        FoodPhotoContent(old?.photo, "$name preview", Modifier.fillMaxWidth().height(150.dp),
+        FoodPhotoContent(old?.photo, "$name photo", Modifier.fillMaxWidth().height(150.dp),
             photoUri, old?.remoteImageUrl)
         Spacer(Modifier.height(9.dp))
         RitSecondaryButton(if (photoUri == null) "Choose item photo" else "Replace item photo", {
@@ -491,7 +489,7 @@ fun SellerCategoriesScreen(sellerId: String, userId: String, repo: SellerBusines
     var name by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     BusinessPage("Categories", "seller_categories", onBack) {
-        RitText("Changes update the customer demo menu. Hiding a category hides its items; removal is blocked while any item uses it.",
+        RitText("Changes update the customer menu. Hiding a category hides its items; a category in use can't be removed.",
             RitType.body)
         Spacer(Modifier.height(14.dp))
         ids.forEach { id ->
@@ -529,7 +527,7 @@ fun SellerCategoriesScreen(sellerId: String, userId: String, repo: SellerBusines
 @Composable
 fun SellerBusinessSettingsScreen(sellerId: String, userId: String, repo: SellerBusinessRepository,
     onBack: () -> Unit, onProfile: () -> Unit, onHours: () -> Unit,
-    onClosures: () -> Unit, onMinimum: () -> Unit, onEmployees: () -> Unit,
+    onClosures: () -> Unit, onMinimum: () -> Unit,
     onPromotions: () -> Unit, onNotifications: () -> Unit) {
     val caps = repo.capabilities(userId, sellerId)
     val context = LocalContext.current
@@ -538,14 +536,12 @@ fun SellerBusinessSettingsScreen(sellerId: String, userId: String, repo: SellerB
         RitText(PreviewCatalog.sellers.find { it.id == sellerId }?.name ?: "Seller", RitType.heading)
         Spacer(Modifier.height(12.dp))
         if (!BuildConfig.RIT_CLOUD_DEMO && SellerCapability.PROFILE in caps)
-            BusinessCard("Public profile", "Name, description, location and local preview image", onProfile)
+            BusinessCard("Public profile", "Name, description, location and photo", onProfile)
         if (SellerCapability.HOURS in caps) {
             BusinessCard("Working hours", "Weekly schedule in Asia/Kolkata", onHours, "seller_settings_hours")
             BusinessCard("Holidays & closures", "Special closed dates and reasons", onClosures)
             BusinessCard("Bulk-order minimum", "Combined eligible units from one seller", onMinimum, "seller_settings_minimum")
         }
-        if (SellerCapability.EMPLOYEES in caps)
-            BusinessCard("Team & permissions", "Manage seller membership access", onEmployees)
         BusinessCard("Show Request Journey", if (showJourney) "On · show the request timeline on details" else "Off · keep request details concise",
             { showJourney = !showJourney; SellerDisplayPreferences.setShowRequestJourney(context, sellerId, showJourney) },
             "seller_request_journey_preference")
@@ -579,10 +575,10 @@ fun SellerProfileEditorScreen(sellerId: String, userId: String, repo: SellerBusi
         Spacer(Modifier.height(12.dp))
         SellerPhotoContent(seller?.photo, Modifier.fillMaxWidth().height(150.dp), photoUri)
         Spacer(Modifier.height(8.dp))
-        RitSecondaryButton("Choose local preview image", {
+        RitSecondaryButton("Choose photo", {
             picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         }, Modifier.fillMaxWidth())
-        RitText(if (photoUri == null) "No local image selected." else "Local preview image selected; never uploaded.",
+        RitText(if (photoUri == null) "No photo selected." else "Photo selected.",
             RitType.small, RitThemeTokens.colors.muted)
         Spacer(Modifier.height(12.dp))
         BusinessCard("Protected business identity", "Legal identity, payout and merchant verification are not editable here.")
@@ -607,7 +603,7 @@ fun SellerProfileEditorScreen(sellerId: String, userId: String, repo: SellerBusi
                 }
             } else message = if (repo.saveProfile(userId, sellerId,
                     SellerPublicProfile(name, description, location, photoUri)))
-                "Saved in customer demo profile." else "Access denied or name invalid."
+                "Profile saved." else "Access denied or name invalid."
         }, Modifier.fillMaxWidth().testTag("seller_save_profile"), enabled = !saving)
     }
 }
@@ -653,7 +649,7 @@ fun SellerHoursScreen(sellerId: String, userId: String, repo: SellerBusinessRepo
         val conflicts = sellerPickupConflicts(DevelopmentSellerOperations.records, sellerId,
             proposed, LocalDateTime.now(RIT_TIME_ZONE))
         BusinessCard("Existing requests stay unchanged", if (conflicts.isEmpty())
-            "No current demo pickup time conflicts with this weekly schedule. Approved terms are never rewritten."
+            "No current pickup times conflict with this schedule. Approved terms are never changed."
             else "Review affected request(s): ${conflicts.joinToString()}. Original quote terms remain unchanged.")
         BusinessMessage(message)
         RitPrimaryButton("Save weekly hours", {
@@ -682,7 +678,7 @@ fun SellerClosuresScreen(sellerId: String, userId: String, repo: SellerBusinessR
         Spacer(Modifier.height(12.dp))
         knownDates.forEach { day ->
             val isHoliday = day in current.holidays
-            val detail = reasons.find { it.date == day }?.reason ?: "Sample closed date"
+            val detail = reasons.find { it.date == day }?.reason ?: "Closed"
             BusinessCard(day.toString(), "${if (isHoliday) "Holiday" else "Temporary closure"} · $detail")
             RitSecondaryButton("Restore ordinary availability for $day", {
                 val updated = current.copy(holidays = current.holidays - day, temporaryClosures = current.temporaryClosures - day)
@@ -949,7 +945,7 @@ fun SellerPromotionsScreen(sellerId: String, userId: String, repo: SellerBusines
                 RoundedCornerShape(RitRadii.card)).background(colors.card, RoundedCornerShape(RitRadii.card))
                 .padding(12.dp).testTag("seller_promotion_${promotion.id}")) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FoodPhotoContent(item?.photo, "${item?.name ?: promotion.title} sample promotion image",
+                    FoodPhotoContent(item?.photo, "${item?.name ?: promotion.title} photo",
                         Modifier.height(76.dp).weight(0.34f), item?.localImageUri)
                     Column(Modifier.weight(0.66f)) {
                         RitText(offerBenefit(promotion), RitType.title, colors.accent)

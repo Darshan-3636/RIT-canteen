@@ -889,7 +889,7 @@ fun RitAppNavigation(appearance: AppearancePreference,
                                 withContext(Dispatchers.Main.immediate) {
                                     navController.navigate(Route.individualOrderDetail(order.id))
                                 }
-                            } else submitError = result.error ?: "Could not save demo order."
+                            } else submitError = result.error ?: "Could not place your order."
                             submitting = false
                         }
                     }, errorMessage = submitError, saving = submitting)
@@ -1074,7 +1074,6 @@ fun RitAppNavigation(appearance: AppearancePreference,
                         onBack = { navController.popBackStack() },
                         onEditItems = { navController.navigate(Route.BulkCart) },
                         onEditPickup = { navController.navigate(Route.BulkPickup) },
-                        onDemoNegotiation = { navController.navigate(Route.BulkNegotiation) },
                         onSubmitLocalDemo = {
                             if (!submitting) {
                                 submitting = true
@@ -1431,7 +1430,7 @@ fun RitAppNavigation(appearance: AppearancePreference,
                         DevelopmentSellerBusiness, { navController.popBackStack() },
                         { navController.navigate(Route.SellerInbox) }, { navController.navigate(Route.SellerSchedule) },
                         { navController.navigate(Route.SellerManageMenu) }, { navController.navigate(Route.SellerManageCategories) },
-                        { navController.navigate(Route.SellerManagePromotions) }, { navController.navigate(Route.SellerManageEmployees) },
+                        { navController.navigate(Route.SellerManagePromotions) },
                         { navController.navigate(Route.SellerManageSettings) },
                         { navController.navigate(Route.SellerInventory) })
                 } }
@@ -1477,7 +1476,7 @@ fun RitAppNavigation(appearance: AppearancePreference,
                         DevelopmentSellerBusiness, { navController.popBackStack() },
                         { navController.navigate(Route.SellerManageProfile) }, { navController.navigate(Route.SellerManageHours) },
                         { navController.navigate(Route.SellerManageClosures) }, { navController.navigate(Route.SellerManageMinimum) },
-                        { navController.navigate(Route.SellerManageEmployees) }, { navController.navigate(Route.SellerManagePromotions) },
+                        { navController.navigate(Route.SellerManagePromotions) },
                         { navController.navigate(Route.sellerInsight(SellerInsightPage.NOTIFICATIONS)) })
                 } }
             }

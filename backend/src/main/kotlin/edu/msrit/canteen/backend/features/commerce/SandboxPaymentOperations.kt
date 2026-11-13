@@ -194,7 +194,9 @@ internal fun reconcileSandboxPayment(context: BackendContext, gateway: SandboxPa
                 db.prepareStatement("""UPDATE individual_demo_orders SET status='DEMO_PAYMENT_SIMULATED',updated_at=?
                     WHERE id=? AND status IN ('DEMO_SAVED','DEMO_PAYMENT_PENDING','DEMO_PAYMENT_FAILED')""").use { query ->
                     query.setTimestamp(1, Timestamp.from(context.clock.instant()))
-                    query.setObject(2, UUID.fromString(snapshot.sourceId)); query.executeUpdate()
+                    query.setObject(2, UUID.fromString(snapshot.sourceId))
+                    if (query.executeUpdate() == 1)
+                        notifyIndividualEvent(db, UUID.fromString(snapshot.sourceId), "DEMO_PAYMENT_SIMULATED")
                 }
             }
         }

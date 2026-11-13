@@ -66,7 +66,7 @@ object DebugCommerceApi {
             val response = DebugBackendApi.request("POST", "/api/v1/me/cart/individual/checkout",
                 JSONObject().put("expectedVersion", expectedVersion)
                     .put("promotionId", promotionId ?: JSONObject.NULL), token, idempotencyKey)
-            if (response.status !in 200..201) Result(error = response.error ?: "Could not save the demo order.")
+            if (response.status !in 200..201) Result(error = response.error ?: "Could not place your order.")
             else Result(value = parseIndividualOrder(response.body!!))
         }
 
@@ -88,27 +88,27 @@ object DebugCommerceApi {
 
     fun sellerIndividualOrders(sellerId: String): Result<List<IndividualOrderPreview>> = withToken { token ->
         val response = DebugBackendApi.request("GET", "/api/v1/sellers/$sellerId/individual-demo-orders", token = token)
-        if (response.status != 200) Result(error = response.error ?: "Could not load seller demo orders.")
+        if (response.status != 200) Result(error = response.error ?: "Could not load orders.")
         else Result(value = parseIndividualOrders(response.body!!.getJSONArray("orders")))
     }
 
     fun simulateIndividualPayment(id: String, outcome: String): Result<IndividualOrderPreview> = withToken { token ->
         val response = DebugBackendApi.request("POST", "/api/v1/me/individual-demo-orders/$id/simulate-payment",
             JSONObject().put("outcome", outcome), token)
-        if (response.status != 200) Result(error = response.error ?: "Demo payment simulation failed.")
+        if (response.status != 200) Result(error = response.error ?: "Payment could not be recorded.")
         else Result(value = parseIndividualOrder(response.body!!))
     }
 
     fun beginSandboxPayment(type: String, sourceId: String, key: String): Result<SandboxPayment> = withToken { token ->
         val response = DebugBackendApi.request("POST", "/api/v1/me/sandbox-payments/$type/$sourceId",
             token = token, idempotencyKey = key)
-        if (response.status !in 200..201) Result(error = response.error ?: "PhonePe UAT is unavailable.")
+        if (response.status !in 200..201) Result(error = response.error ?: "PhonePe is unavailable right now.")
         else Result(value = parseSandboxPayment(response.body!!))
     }
 
     fun sandboxPayments(): Result<List<SandboxPayment>> = withToken { token ->
         val response = DebugBackendApi.request("GET", "/api/v1/me/sandbox-payments", token = token)
-        if (response.status != 200) Result(error = response.error ?: "Could not load UAT attempts.")
+        if (response.status != 200) Result(error = response.error ?: "Could not load payments.")
         else {
             val rows = response.body!!.getJSONArray("payments")
             Result(value = (0 until rows.length()).map { parseSandboxPayment(rows.getJSONObject(it)) })
@@ -117,13 +117,13 @@ object DebugCommerceApi {
 
     fun sandboxPayment(id: String): Result<SandboxPayment> = withToken { token ->
         val response = DebugBackendApi.request("GET", "/api/v1/me/sandbox-payments/$id", token = token)
-        if (response.status != 200) Result(error = response.error ?: "Could not load UAT attempt.")
+        if (response.status != 200) Result(error = response.error ?: "Could not load this payment.")
         else Result(value = parseSandboxPayment(response.body!!))
     }
 
     fun reconcileSandboxPayment(id: String): Result<SandboxPayment> = withToken { token ->
         val response = DebugBackendApi.request("POST", "/api/v1/me/sandbox-payments/$id/reconcile", token = token)
-        if (response.status != 200) Result(error = response.error ?: "Could not verify PhonePe UAT status.")
+        if (response.status != 200) Result(error = response.error ?: "Could not check the payment status.")
         else Result(value = parseSandboxPayment(response.body!!))
     }
 
@@ -141,7 +141,7 @@ object DebugCommerceApi {
                              pickupCode: String? = null): Result<IndividualOrderPreview> = withToken { token ->
         val response = DebugBackendApi.request("POST", "/api/v1/sellers/$sellerId/individual-demo-orders/$id/demo-status",
             JSONObject().put("status", status).put("pickupCode",pickupCode ?: JSONObject.NULL), token)
-        if (response.status != 200) Result(error = response.error ?: "Demo order transition failed.")
+        if (response.status != 200) Result(error = response.error ?: "Could not update this order.")
         else Result(value = parseIndividualOrder(response.body!!))
     }
 
@@ -150,7 +150,7 @@ object DebugCommerceApi {
         draft.lines.forEach { lines.put(JSONObject().put("itemId", it.itemId).put("quantity", it.quantity)) }
         val response = DebugBackendApi.request("POST", "/api/v1/me/individual-demo-orders",
             JSONObject().put("lines", lines), token)
-        if (response.status !in 200..201) Result(error = response.error ?: "Could not save the demo order.")
+        if (response.status !in 200..201) Result(error = response.error ?: "Could not place your order.")
         else Result(value = parseIndividualOrder(response.body!!))
     }
 

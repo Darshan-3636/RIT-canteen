@@ -132,7 +132,7 @@ fun SellerScopedMenuScreen(
     Column(Modifier.fillMaxSize().background(colors.background).testTag("seller_scoped_menu")) {
         CatalogHeader(seller?.name ?: "Seller Menu", onBack)
         if (seller == null) {
-            RitEmptyState("Seller not found", "This seller is not in the current preview catalog.")
+            RitEmptyState("Seller not found", "This canteen isn't available.")
             return@Column
         }
 
@@ -158,11 +158,10 @@ fun SellerScopedMenuScreen(
                     RitText(seller.name, RitType.heading)
                     RitText(seller.description.replace(" for group requests.", "."), RitType.body, colors.muted, maxLines = 2)
                     Spacer(Modifier.height(9.dp))
-                    RitText(seller.location ?: "Location not verified", RitType.small, colors.muted)
-                    RitText(seller.hours?.display?.let { "Preview hours: $it · live status unverified" }
-                        ?: "Hours and live availability unverified", RitType.small, colors.muted)
+                    RitText(seller.location ?: "On campus", RitType.small, colors.muted)
+                    RitText(seller.hours?.display?.let { "Hours: $it" }
+                        ?: "Hours not set", RitType.small, colors.muted)
                     Spacer(Modifier.height(16.dp))
-                    RitStatusIndicator("Illustrative menu · prices and availability are preview data")
                     Spacer(Modifier.height(13.dp))
                     RitSearchField(
                         value = query,

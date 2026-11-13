@@ -52,9 +52,9 @@ object BackendBootstrap {
     private fun seedPreviewSellers(dataSource: DataSource) {
         val fixtures = listOf(
             SellerFixture("main-canteen", "M.S.R.I.T Canteen", "Campus meals and familiar favourites.", true),
-            SellerFixture("north-counter", "Ramaiah's Cafeteria · demo", "Prepared lunch and snacks for group requests.", false),
-            SellerFixture("coffee-corner", "Cafe Da Costa · demo", "Drinks and light bites for group requests.", false),
-            SellerFixture("campus-pantry", "M.S.R.I.T Condiments · demo", "Packaged snacks and drinks for group requests.", false),
+            SellerFixture("north-counter", "Ramaiah's Cafeteria", "Prepared lunch and snacks for group requests.", false),
+            SellerFixture("coffee-corner", "Cafe Da Costa", "Drinks and light bites for group requests.", false),
+            SellerFixture("campus-pantry", "M.S.R.I.T Condiments", "Packaged snacks and drinks for group requests.", false),
         )
         dataSource.connection.use { connection ->
             connection.autoCommit = false

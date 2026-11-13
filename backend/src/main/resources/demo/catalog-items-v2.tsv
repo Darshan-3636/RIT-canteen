@@ -16,7 +16,7 @@ bisi-bele-bath	main-canteen	rice	Bisi Bele Bath	Karnataka-style spiced lentil ri
 chapati-meal	main-canteen	meals	Chapati Meal	Chapatis with a vegetable curry, dal and simple sides.	8000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	chapati-meal
 veg-thali	main-canteen	meals	Veg Thali	Rice, chapati and a selection of small vegetarian curries and sides.	11000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	veg-thali
 tomato-rice	main-canteen	rice	Tomato Rice	Tangy tomato rice tempered with curry leaves and mustard.	5000	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	tomato-rice
-north-lunch	north-counter	combos	Ramaiah's Cafeteria Lunch Combo	A sample quick lunch combo with savoury Ramaiah's Cafeteria bites.	9000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	north-lunch
+north-lunch	north-counter	combos	Ramaiah's Cafeteria Lunch Combo	A quick lunch combo with savoury Ramaiah's Cafeteria bites.	9000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	north-lunch
 north-snack	north-counter	snacks	Assorted Savoury Snack Box	Assorted prepared savoury snacks for sharing.	6500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	north-snack
 veg-samosa	north-counter	snacks	Veg Samosa	Crisp pastry filled with spiced potato and peas.	2500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	veg-samosa
 khasta-kachori	north-counter	snacks	Khasta Kachori	Flaky kachori with a spiced savoury filling.	3000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	khasta-kachori
@@ -49,7 +49,7 @@ blueberry-muffin	coffee-corner	cakes	Blueberry Muffin	Bakery muffin studded with
 chocolate-muffin	coffee-corner	cakes	Chocolate Muffin	Soft chocolate muffin with chocolate pieces.	7000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	chocolate-muffin
 fudge-brownie	coffee-corner	cakes	Fudge Brownie	Dense chocolate brownie square with a fudgy centre.	8500	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	fudge-brownie
 vanilla-pastry	coffee-corner	cakes	Vanilla Pastry	Layered vanilla cream pastry slice.	9000	PREPARED	NOT_SPECIFIED	AVAILABLE	true	SHOW	vanilla-pastry
-eggless-chocolate-cake	coffee-corner	cakes	Eggless Chocolate Cake Slice	Chocolate cake slice made without egg in this demo description.	9500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	eggless-chocolate-cake
+eggless-chocolate-cake	coffee-corner	cakes	Eggless Chocolate Cake Slice	Chocolate cake slice made without egg.	9500	PREPARED	VEGETARIAN	AVAILABLE	true	SHOW	eggless-chocolate-cake
 shortbread-cookies	coffee-corner	cookies	Shortbread Cookies	Sealed pack of crumbly shortbread cookies.	4500	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	shortbread-cookies
 almond-cookies	coffee-corner	cookies	Almond Cookies	Sealed almond cookie pack with visible almond pieces.	5500	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	almond-cookies
 pantry-juice	campus-pantry	drinks	Fruit Juice Carton	Sealed unbranded fruit juice carton for group requests.	3000	PACKAGED	NOT_SPECIFIED	AVAILABLE	true	SHOW	pantry-juice

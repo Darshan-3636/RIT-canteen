@@ -133,7 +133,7 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
         LazyColumn(Modifier.weight(1f).testTag("demo_quote_editor_list"),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
-                RitStatusIndicator("Revision ${latest.version + 1} · local backend demo")
+                RitStatusIndicator("Revision ${latest.version + 1}")
                 Spacer(Modifier.height(12.dp))
                 BulkInfoCard("One seller: ${seller?.name ?: record.sellerId}",
                     "Only this seller's available items appear. Minimum snapshot: ${record.appliedMinimum} combined units.")
@@ -175,8 +175,8 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
                     }, initial.hour, initial.minute, false).show()
                 }, Modifier.fillMaxWidth().testTag("demo_quote_time"))
                 Spacer(Modifier.height(9.dp))
-                BulkInfoCard("Demo hours check", when (window) {
-                    PickupWindow.REGULAR -> "Inside fictional regular hours; still not a reserved slot."
+                BulkInfoCard("Opening hours", when (window) {
+                    PickupWindow.REGULAR -> "Within opening hours."
                     PickupWindow.SPECIAL_REQUIRED -> "Outside hours, holiday or closure: special flag and reason required."
                     PickupWindow.HOURS_UNVERIFIED -> "Hours unverified; cannot propose ordinary pickup."
                     PickupWindow.PAST -> "Choose a future pickup time."
@@ -216,7 +216,7 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
                         RitText("Change at least one term or add a message before sending a revision.", RitType.small, colors.muted)
                 }
                 Spacer(Modifier.height(10.dp))
-                BulkInfoCard("Revision integrity", "Sending creates a new immutable demo version and invalidates approvals on older versions. It does not create a real seller/customer message.")
+                BulkInfoCard("New version", "Sending creates a new quote version; earlier approvals no longer apply.")
                 if (feedback.isNotBlank()) RitText(feedback, RitType.small, colors.accent)
             }
         }

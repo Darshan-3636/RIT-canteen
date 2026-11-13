@@ -177,7 +177,7 @@ fun FoodPhotoContent(photo: FoodPhoto?, description: String, modifier: Modifier 
     val bitmap = localBitmap ?: remoteBitmap
     val image = foodPhotoResource(photo)
     if (bitmap != null) {
-        Image(bitmap.asImageBitmap(), contentDescription = "$description · locally selected demo image",
+        Image(bitmap.asImageBitmap(), contentDescription = description,
             modifier = modifier, contentScale = ContentScale.Crop)
     } else if (image != null) {
         Image(painterResource(image), contentDescription = description, modifier = modifier, contentScale = ContentScale.Crop)
@@ -224,11 +224,11 @@ fun SellerPhotoContent(photo: SellerPhoto?, modifier: Modifier = Modifier, local
     val colors = RitThemeTokens.colors
     val bitmap = rememberLocalBitmap(localUri)
     if (bitmap != null) {
-        Image(bitmap.asImageBitmap(), contentDescription = "Locally selected demo seller image", modifier = modifier,
+        Image(bitmap.asImageBitmap(), contentDescription = "Canteen photo", modifier = modifier,
             contentScale = ContentScale.Crop)
     } else if (photo != null) {
         val image = requireNotNull(sellerPhotoResource(photo))
-        Image(painterResource(image), contentDescription = "Illustrative seller concept image, not a verified vendor photograph",
+        Image(painterResource(image), contentDescription = "Canteen photo",
             modifier = modifier, contentScale = ContentScale.Crop)
     } else {
         Box(modifier.background(colors.warmCard), contentAlignment = Alignment.Center) {
@@ -289,7 +289,7 @@ fun CatalogFoodCard(item: MenuItem, seller: Seller, onClick: () -> Unit, modifie
             .background(colors.card).clickable(role = Role.Button, onClick = onClick),
     ) {
         Box(Modifier.fillMaxWidth().height(158.dp)) {
-            FoodPhotoContent(item.photo, item.name + " illustrative preview image",
+            FoodPhotoContent(item.photo, item.name + " photo",
                 Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = RitRadii.card, topEnd = RitRadii.card)),
                 item.localImageUri, item.remoteImageUrl)
             if (onFavoriteClick != null) {
@@ -334,8 +334,8 @@ fun CatalogSellerCard(seller: Seller, categoryNames: String, onClick: () -> Unit
             RitText(seller.description.replace(" for group requests.", "."), RitType.body, colors.muted, maxLines = 2)
             Spacer(Modifier.height(8.dp))
             RitText(categoryNames, RitType.small, colors.muted, maxLines = 2)
-            RitText(seller.hours?.display?.let { "Demo hours: $it · live status unverified" }
-                ?: "Hours and live availability not verified", RitType.small, colors.muted, maxLines = 2)
+            RitText(seller.hours?.display?.let { "Hours: $it" }
+                ?: "Hours not set", RitType.small, colors.muted, maxLines = 2)
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RitText("View Menu", RitType.label, colors.accent)

@@ -79,9 +79,8 @@ fun SellerProfileScreen(
                     RitText(seller.description, RitType.body, colors.muted)
                     Spacer(Modifier.height(10.dp))
                     Spacer(Modifier.height(12.dp))
-                    RitText(seller.location ?: "Location not yet verified", RitType.small, colors.muted)
-                    RitText(seller.hours?.display ?: "Operating hours not yet configured", RitType.small, colors.muted)
-                    RitText("Live open/closed status unavailable", RitType.small, colors.muted)
+                    RitText(seller.location ?: "On campus", RitType.small, colors.muted)
+                    RitText(seller.hours?.display ?: "Hours not set", RitType.small, colors.muted)
                     Spacer(Modifier.height(18.dp))
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(RitRadii.card)).background(colors.warmCard)
                         .clickable(role = Role.Button) { onMenu(seller.id) }.padding(18.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -89,8 +88,7 @@ fun SellerProfileScreen(
                         RitText("→", RitType.label, colors.accent)
                     }
                     Spacer(Modifier.height(20.dp))
-                    RitText("Menu preview", RitType.title)
-                    RitText("Illustrative items and prices", RitType.small, colors.muted)
+                    RitText("Menu", RitType.title)
                     Spacer(Modifier.height(8.dp))
                 }
             }
@@ -149,7 +147,7 @@ fun FoodDetailsScreen(itemId: String, onBack: () -> Unit, onAddBulk: ((String) -
         CatalogHeader("Food Details", onBack)
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 18.dp)) {
             item {
-                FoodPhotoContent(item.photo, item.name + " illustrative preview image",
+                FoodPhotoContent(item.photo, item.name + " photo",
                     Modifier.fillMaxWidth().height(250.dp).clip(RoundedCornerShape(RitRadii.hero)),
                     item.localImageUri, item.remoteImageUrl)
                 Spacer(Modifier.height(18.dp))
@@ -216,6 +214,6 @@ fun FoodDetailsScreen(itemId: String, onBack: () -> Unit, onAddBulk: ((String) -
 private fun MissingCatalogEntry(kind: String, onBack: () -> Unit) {
     Column {
         CatalogHeader(kind, onBack)
-        RitEmptyState("$kind not found", "This preview entry is no longer available.")
+        RitEmptyState("$kind not found", "This is no longer available.")
     }
 }

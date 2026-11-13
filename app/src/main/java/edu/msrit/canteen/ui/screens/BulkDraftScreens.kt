@@ -122,7 +122,7 @@ fun BulkSellerPickerScreen(
             }
             items(catalog.sellers.filter { it.capabilities.bulk }, key = { it.id }) { seller ->
                 Column(Modifier.padding(bottom = 14.dp).testTag("bulk_choose_${seller.id}")) {
-                    CatalogSellerCard(seller, "Minimum ${policies.forSeller(seller.id)?.minimum ?: 8} combined units · demo policy",
+                    CatalogSellerCard(seller, "Minimum ${policies.forSeller(seller.id)?.minimum ?: 8} combined units",
                         onClick = {
                             if (session.selectSeller(seller.id)) onSelected() else blockedSeller = seller.id
                         })
@@ -206,7 +206,7 @@ fun BulkCartScreen(
                     .border(1.dp, colors.outline, RoundedCornerShape(RitRadii.card))
                     .background(colors.card, RoundedCornerShape(RitRadii.card)).padding(12.dp)
                     .testTag("bulk_cart_item_${item.id}"), verticalAlignment = Alignment.CenterVertically) {
-                    FoodPhotoContent(item.photo, "${item.name} illustrative image", Modifier.width(72.dp).height(72.dp))
+                    FoodPhotoContent(item.photo, "${item.name} photo", Modifier.width(72.dp).height(72.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         RitText(item.name, RitType.label, maxLines = 1)
@@ -264,7 +264,7 @@ fun BulkPickupScreen(
                 BulkInfoCard(seller?.name ?: "Seller", if (connectedMode)
                     if (policy == null) "Seller hours could not be loaded. This is only a proposed time; the server will validate it on submission."
                     else "Server policy loaded: minimum ${policy.minimum} units. Pickup remains a request until the seller confirms."
-                    else "Demo weekly hours: Mon–Fri 9:00–17:00, Sat 10:00–14:00, Sun closed. Demo holiday and temporary closure exceptions apply. These are not verified live hours.")
+                    else "Usual hours: Mon–Fri 9:00–17:00, Sat 10:00–14:00, Sun closed. Holidays and closures may apply.")
                 Spacer(Modifier.height(18.dp))
                 RitText("Preferred date", RitType.title)
                 Spacer(Modifier.height(8.dp))
@@ -325,8 +325,8 @@ fun BulkPickupScreen(
                     else "Choose a future pickup time."
                 } else when (window) {
                     null -> "Choose a future date and time."
-                    PickupWindow.REGULAR -> "Within the demo operating window. Seller confirmation is still required."
-                    PickupWindow.SPECIAL_REQUIRED -> "Closed or outside demo hours. An explicit special pickup request and reason are required; the seller may decline."
+                    PickupWindow.REGULAR -> "Within opening hours. The canteen still needs to confirm."
+                    PickupWindow.SPECIAL_REQUIRED -> "Outside opening hours. Add a reason for a special pickup; the canteen may decline."
                     PickupWindow.HOURS_UNVERIFIED -> "Seller hours are unverified. Ordinary pickup cannot be assumed."
                     PickupWindow.PAST -> "Choose a future pickup time."
                 }
@@ -362,7 +362,6 @@ fun BulkReviewScreen(
     onBack: () -> Unit,
     onEditItems: () -> Unit,
     onEditPickup: () -> Unit,
-    onDemoNegotiation: () -> Unit,
     onSubmitLocalDemo: (() -> Unit)? = null,
     catalog: CustomerCatalogSource = PreviewCatalog,
     errorMessage: String? = null,
@@ -389,7 +388,7 @@ fun BulkReviewScreen(
                 RitText(seller?.name ?: "Choose a seller", RitType.heading)
                 RitText("One seller · minimum ${policy?.minimum ?: seller?.bulkMinimumUnits ?: check.minimum} combined units", RitType.small, colors.muted)
                 Spacer(Modifier.height(14.dp))
-                BulkInfoCard("${check.totalUnits} units · ${displayPaise(check.provisionalPaise)} provisional", "Current demo catalog prices only. This is not a final quote or payable amount.")
+                BulkInfoCard("${check.totalUnits} units · ${displayPaise(check.provisionalPaise)} provisional", "Based on current menu prices. The canteen will send a final quote.")
                 Spacer(Modifier.height(12.dp))
             }
             items(draft.lines, key = { it.itemId }) { line ->
@@ -415,8 +414,6 @@ fun BulkReviewScreen(
                 Spacer(Modifier.height(16.dp))
                 BulkInfoCard("Server validation", "The backend checks seller ownership, item availability, minimum units, configured hours and closures. A draft is not a confirmed order.")
                 Spacer(Modifier.height(12.dp))
-                RitSecondaryButton("View separate negotiation demo", onDemoNegotiation,
-                    Modifier.fillMaxWidth().testTag("bulk_review_demo_negotiation"))
                 RitText("The demonstration is not a response to this draft.", RitType.small, colors.muted)
                 if (errorMessage != null) RitText(errorMessage, RitType.body, colors.accent)
             }
