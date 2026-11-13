@@ -81,7 +81,6 @@ import edu.msrit.canteen.ui.screens.IndividualOrderDetailScreen
 import edu.msrit.canteen.ui.screens.DemoCheckoutScreen
 import edu.msrit.canteen.ui.screens.DemoOrderDetailScreen
 import edu.msrit.canteen.ui.screens.SellerDemoIndividualQueue
-import edu.msrit.canteen.ui.screens.SellerIndividualBackendScreen
 import edu.msrit.canteen.ui.screens.SellerDemoPickupScreen
 import edu.msrit.canteen.ui.screens.SellerDemoOrderDetailScreen
 import edu.msrit.canteen.ui.screens.RitConfirmDialog
@@ -98,7 +97,7 @@ import kotlinx.coroutines.sync.withLock
 import edu.msrit.canteen.customer.DebugCustomerAccountApi
 import edu.msrit.canteen.customer.QuoteStage
 import edu.msrit.canteen.ui.screens.SellerDailyOperationsOverview
-import edu.msrit.canteen.ui.screens.SellerInboxScreen
+import edu.msrit.canteen.ui.screens.SellerOrdersPage
 import edu.msrit.canteen.ui.screens.SellerDailyRequestDetailPresentation
 import edu.msrit.canteen.ui.screens.SellerRevisionCompareScreen
 import edu.msrit.canteen.ui.screens.SellerFinalApprovalScreen
@@ -1214,21 +1213,35 @@ fun RitAppNavigation(appearance: AppearancePreference,
             composable(Route.SellerIndividualQueue) {
                 val sellerId = activeSellerId() ?: ""
                 InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
-                    androidx.compose.runtime.LaunchedEffect(sellerId) { refreshSellerIndividual(sellerId) }
-                    SellerIndividualBackendScreen(sellerIndividualOrders,
+                    androidx.compose.runtime.LaunchedEffect(sellerId) {
+                        loadBulk(sellerId)
+                        // Keep the queue current so new paid orders appear without a manual refresh.
+                        while (true) { refreshSellerIndividual(sellerId); kotlinx.coroutines.delay(15_000) }
+                    }
+                    SellerTabFrame(SellerBottomItem.Orders, ::openSellerBottom) {
+                    SellerOrdersPage(sellerIndividualOrders, DevelopmentSellerOperations.records, sellerId,
                         DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "bulk.respond")),
-                        onBack = { navController.popBackStack() },
-                        onTransition = { id, next, pickupCode ->
+                        onMarkReady = { id, onResult ->
                             scope.launch {
                                 val result = withContext(Dispatchers.IO) {
-                                    DebugCommerceApi.transitionIndividual(sellerId, id, next, pickupCode)
+                                    DebugCommerceApi.transitionIndividual(sellerId, id, "DEMO_READY")
                                 }
-                                if (result.value != null) {
-                                    refreshSellerIndividual(sellerId)
-                                    sellerIndividualFeedback = "Demo status saved."
-                                } else sellerIndividualFeedback = result.error ?: "Could not update demo order."
+                                if (result.value != null) refreshSellerIndividual(sellerId)
+                                onResult(if (result.value != null) null else result.error ?: "Could not update this order.")
                             }
-                        }, feedback = sellerIndividualFeedback)
+                        },
+                        onConfirmPickup = { id, pin, onResult ->
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    DebugCommerceApi.transitionIndividual(sellerId, id, "DEMO_COMPLETED", pin)
+                                }
+                                if (result.value != null) refreshSellerIndividual(sellerId)
+                                onResult(if (result.value != null) null else result.error ?: "Could not confirm pickup.")
+                            }
+                        },
+                        onOpenBulkRequest = { navController.navigate(Route.sellerDetail(it)) },
+                        loadError = sellerIndividualFeedback)
+                    }
                 } }
             }
             composable(Route.SellerDemoOrderDetail,
@@ -1256,14 +1269,34 @@ fun RitAppNavigation(appearance: AppearancePreference,
             composable(Route.SellerInbox) {
                 val sellerId = activeSellerId() ?: ""
                 InsetScreen { DebugSellerGate(sellerId, "bulk.view", { returnToAuthorizedHome() }) {
-                    androidx.compose.runtime.LaunchedEffect(sellerId) { loadBulk(sellerId); refreshSellerIndividual(sellerId) }
+                    androidx.compose.runtime.LaunchedEffect(sellerId) {
+                        loadBulk(sellerId)
+                        // Keep the queue current so new paid orders appear without a manual refresh.
+                        while (true) { refreshSellerIndividual(sellerId); kotlinx.coroutines.delay(15_000) }
+                    }
                     SellerTabFrame(SellerBottomItem.Orders, ::openSellerBottom) {
-                    SellerInboxScreen(DevelopmentSellerOperations.records, sellerId,
-                        onBack = { navController.popBackStack() },
-                        onRequest = { navController.navigate(Route.sellerDetail(it)) },
-                        onIndividual = { navController.navigate(Route.SellerIndividualQueue) },
-                        newIndividualCount = sellerIndividualOrders.count { it.status == "DEMO_PAYMENT_SIMULATED" },
-                        onVerifyPickup = null)
+                    SellerOrdersPage(sellerIndividualOrders, DevelopmentSellerOperations.records, sellerId,
+                        DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "bulk.respond")),
+                        onMarkReady = { id, onResult ->
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    DebugCommerceApi.transitionIndividual(sellerId, id, "DEMO_READY")
+                                }
+                                if (result.value != null) refreshSellerIndividual(sellerId)
+                                onResult(if (result.value != null) null else result.error ?: "Could not update this order.")
+                            }
+                        },
+                        onConfirmPickup = { id, pin, onResult ->
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    DebugCommerceApi.transitionIndividual(sellerId, id, "DEMO_COMPLETED", pin)
+                                }
+                                if (result.value != null) refreshSellerIndividual(sellerId)
+                                onResult(if (result.value != null) null else result.error ?: "Could not confirm pickup.")
+                            }
+                        },
+                        onOpenBulkRequest = { navController.navigate(Route.sellerDetail(it)) },
+                        loadError = sellerIndividualFeedback)
                     }
                 } }
             }

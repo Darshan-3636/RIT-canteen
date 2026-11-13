@@ -70,10 +70,11 @@ dependencies {
     implementation("androidx.compose.ui:ui:1.11.1")
     implementation("androidx.compose.ui:ui-tooling-preview:1.11.1")
     implementation("androidx.navigation:navigation-compose:2.9.8")
+    implementation("com.google.zxing:core:3.5.4")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling:1.11.1")
     debugImplementation("androidx.compose.ui:ui-test-manifest:1.11.1")
-    debugImplementation("com.google.zxing:core:3.5.4")
     debugImplementation("com.squareup.okhttp3:okhttp:4.12.0")
     debugImplementation("phonepe.intentsdk.android.release:IntentSDK:5.4.0")
     testImplementation("junit:junit:4.13.2")

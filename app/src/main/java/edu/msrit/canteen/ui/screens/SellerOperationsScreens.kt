@@ -173,48 +173,32 @@ fun SellerOverviewScreen(records: List<BulkRequestRecord>, sellerId: String, sel
     }
 }
 
+/** Bulk-request list shown in the Bulk tab of the seller Orders page. */
 @Composable
-fun SellerInboxScreen(records: List<BulkRequestRecord>, sellerId: String, onBack: () -> Unit,
-                      onRequest: (String) -> Unit, onIndividual: (() -> Unit)? = null,
-                      newIndividualCount: Int = 0, onVerifyPickup: (() -> Unit)? = null) {
+fun SellerBulkRequestsList(records: List<BulkRequestRecord>, sellerId: String, onRequest: (String) -> Unit) {
     val colors = RitThemeTokens.colors
     var filter by rememberSaveable { mutableStateOf(SellerRequestFilter.ALL) }
     var query by rememberSaveable { mutableStateOf("") }
     val visible = filterSellerRequests(records, sellerId, filter, query)
-    Column(Modifier.fillMaxSize().background(colors.background).testTag("seller_inbox")) {
-        CatalogHeader("Orders", null)
-        LazyColumn(modifier = Modifier.weight(1f).testTag("seller_inbox_list"),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
-            item {
-                if (onIndividual != null) {
-                    RitSecondaryButton("Individual orders · $newIndividualCount new", onIndividual,
-                        Modifier.fillMaxWidth().testTag("seller_orders_individual"))
-                    Spacer(Modifier.height(8.dp))
+    LazyColumn(modifier = Modifier.fillMaxSize().testTag("seller_inbox_list"),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 25.dp)) {
+        item {
+            RitTextField(query, { query = it }, "Find a request", "Reference, customer or item",
+                Modifier.fillMaxWidth(), inputTag = "seller_inbox_search")
+            Spacer(Modifier.height(10.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.testTag("seller_inbox_filters")) {
+                items(SellerRequestFilter.entries) { option ->
+                    RitChip(option.label, filter == option, { filter = option },
+                        Modifier.testTag("seller_filter_${option.name.lowercase()}"))
                 }
-                if (onVerifyPickup != null) {
-                    RitSecondaryButton("Verify demo pickup", onVerifyPickup,
-                        Modifier.fillMaxWidth().testTag("seller_orders_verify"))
-                    Spacer(Modifier.height(14.dp))
-                }
-                RitText("Bulk requests", RitType.title)
-                Spacer(Modifier.height(10.dp))
-                RitTextField(query, { query = it }, "Find a request", "Reference, customer or item",
-                    Modifier.fillMaxWidth(), inputTag = "seller_inbox_search")
-                Spacer(Modifier.height(10.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.testTag("seller_inbox_filters")) {
-                    items(SellerRequestFilter.entries) { option ->
-                        RitChip(option.label, filter == option, { filter = option },
-                            Modifier.testTag("seller_filter_${option.name.lowercase()}"))
-                    }
-                }
-                Spacer(Modifier.height(14.dp))
-                RitText("${visible.size} requests", RitType.small, colors.muted)
-                Spacer(Modifier.height(10.dp))
             }
-            if (visible.isEmpty()) item { RitEmptyState("No matching requests", "Try another status or customer or item name.") }
-            items(visible, key = { it.reference }) { record -> SellerRequestCard(record) { onRequest(record.reference) } }
+            Spacer(Modifier.height(14.dp))
+            RitText("${visible.size} requests", RitType.small, colors.muted)
+            Spacer(Modifier.height(10.dp))
         }
+        if (visible.isEmpty()) item { RitEmptyState("No matching requests", "Try another status or customer or item name.") }
+        items(visible, key = { it.reference }) { record -> SellerRequestCard(record) { onRequest(record.reference) } }
     }
 }
 
