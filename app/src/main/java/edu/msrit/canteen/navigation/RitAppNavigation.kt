@@ -924,6 +924,14 @@ fun RitAppNavigation(appearance: AppearancePreference,
                     androidx.compose.runtime.LaunchedEffect(orderId) {
                         val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
                         orders.value?.let(DevelopmentIndividualOrders::applyServer)
+                        launch {
+                            // Keep the status current so "Ready for pickup" shows up while the customer waits.
+                            while (true) {
+                                kotlinx.coroutines.delay(15_000)
+                                withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
+                                    .value?.let(DevelopmentIndividualOrders::applyServer)
+                            }
+                        }
                         val attempts = withContext(Dispatchers.IO) { DebugCommerceApi.sandboxPayments() }
                         sandboxPayment = attempts.value?.firstOrNull { it.sourceType == "INDIVIDUAL" && it.sourceId == orderId }
                     }
@@ -933,34 +941,17 @@ fun RitAppNavigation(appearance: AppearancePreference,
                         paymentBusy = true
                         val result = withContext(Dispatchers.IO) { DebugCommerceApi.reconcileSandboxPayment(callback) }
                         sandboxPayment = result.value ?: sandboxPayment
-                        paymentFeedback = result.value?.let { "PhonePe UAT status: ${it.status}. No real money was charged." }
-                            ?: result.error ?: "UAT status could not be confirmed. Check again."
+                        paymentFeedback = result.value?.let(::paymentStatusMessage)
+                            ?: result.error ?: "Payment status could not be confirmed. Check again."
                         val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
                         orders.value?.let(DevelopmentIndividualOrders::applyServer)
                         paymentBusy = false
                     }
                     IndividualOrderDetailScreen(DevelopmentIndividualOrders.records.find { it.id == entry.arguments?.getString("id") },
-                        { navController.popBackStack() }, onDemoPayment = { outcome ->
-                            if (paymentBusy) return@IndividualOrderDetailScreen
-                            paymentBusy = true
-                            paymentFeedback = null
-                            scope.launch {
-                                try {
-                                    val id = entry.arguments?.getString("id").orEmpty()
-                                    val result = withContext(Dispatchers.IO) { DebugCommerceApi.simulateIndividualPayment(id, outcome) }
-                                    if (result.value != null) {
-                                        DevelopmentIndividualOrders.upsertServer(result.value)
-                                        paymentFeedback = if (outcome == "SUCCESS")
-                                            "DEMO payment simulated successfully. No money was charged or verified."
-                                        else "DEMO $outcome saved. No money was charged or verified."
-                                        val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
-                                        orders.value?.let(DevelopmentIndividualOrders::applyServer)
-                                    } else paymentFeedback = result.error ?: "Demo simulation failed."
-                                } finally { paymentBusy = false }
-                            }
-                        }, feedback = paymentFeedback, paymentBusy = paymentBusy,
-                        sandboxPayment = sandboxPayment,
-                        onSandboxStart = if (BuildConfig.DEBUG && BuildConfig.RIT_CLOUD_DEMO) ({
+                        { navController.popBackStack() },
+                        feedback = paymentFeedback, paymentBusy = paymentBusy,
+                        payment = sandboxPayment,
+                        onPayNow = if (BuildConfig.DEBUG && BuildConfig.RIT_CLOUD_DEMO) ({
                             if (!paymentBusy) {
                                 paymentBusy = true
                                 paymentFeedback = null
@@ -982,20 +973,20 @@ fun RitAppNavigation(appearance: AppearancePreference,
                                             else DebugCommerceApi.sandboxPayment(existing.id)
                                         }
                                         val attempt = result.value
-                                        if (attempt == null) paymentFeedback = result.error ?: "PhonePe UAT is unavailable."
+                                        if (attempt == null) paymentFeedback = result.error ?: "PhonePe is unavailable right now."
                                         else {
                                             sandboxPayment = attempt
                                             paymentFeedback = if (attempt.status == "PENDING" &&
                                                 !attempt.sdkToken.isNullOrBlank() && !attempt.providerOrderId.isNullOrBlank() &&
                                                 !attempt.merchantId.isNullOrBlank() && onSandboxCheckout(attempt))
-                                                "PhonePe UAT opened. Return here to check the server-confirmed status."
-                                            else "UAT checkout could not open. Check its status before retrying."
+                                                "Complete the payment in PhonePe, then come back here."
+                                            else "PhonePe could not open. Check the payment status before trying again."
                                         }
                                     } finally { paymentBusy = false }
                                 }
                             }
                         }) else null,
-                        onSandboxCheck = if (BuildConfig.DEBUG && BuildConfig.RIT_CLOUD_DEMO) ({
+                        onCheckPayment = if (BuildConfig.DEBUG && BuildConfig.RIT_CLOUD_DEMO) ({
                             val id = sandboxPayment?.id
                             if (id != null && !paymentBusy) {
                                 paymentBusy = true
@@ -1003,8 +994,8 @@ fun RitAppNavigation(appearance: AppearancePreference,
                                     try {
                                         val result = withContext(Dispatchers.IO) { DebugCommerceApi.reconcileSandboxPayment(id) }
                                         sandboxPayment = result.value ?: sandboxPayment
-                                        paymentFeedback = result.value?.let { "PhonePe UAT status: ${it.status}. No real money was charged." }
-                                            ?: result.error ?: "UAT status could not be confirmed."
+                                        paymentFeedback = result.value?.let(::paymentStatusMessage)
+                                            ?: result.error ?: "Payment status could not be confirmed."
                                         val orders = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
                                         orders.value?.let(DevelopmentIndividualOrders::applyServer)
                                     } finally { paymentBusy = false }
@@ -1629,8 +1620,8 @@ fun RitAppNavigation(appearance: AppearancePreference,
                         sandboxBusy = true
                         val result = withContext(Dispatchers.IO) { DebugCommerceApi.reconcileSandboxPayment(callback) }
                         sandboxPayment = result.value ?: sandboxPayment
-                        sandboxFeedback = result.value?.let { "PhonePe UAT status: ${it.status}. No real money was charged." }
-                            ?: result.error ?: "UAT status could not be confirmed. Check again."
+                        sandboxFeedback = result.value?.let(::paymentStatusMessage)
+                            ?: result.error ?: "Payment status could not be confirmed. Check again."
                         loadBulk()
                         sandboxBusy = false
                     }
@@ -1683,14 +1674,14 @@ fun RitAppNavigation(appearance: AppearancePreference,
                                             else DebugCommerceApi.sandboxPayment(existing.id)
                                         }
                                         val attempt = result.value
-                                        if (attempt == null) sandboxFeedback = result.error ?: "PhonePe UAT is unavailable."
+                                        if (attempt == null) sandboxFeedback = result.error ?: "PhonePe is unavailable right now."
                                         else {
                                             sandboxPayment = attempt
                                             sandboxFeedback = if (attempt.status == "PENDING" &&
                                                 !attempt.sdkToken.isNullOrBlank() && !attempt.providerOrderId.isNullOrBlank() &&
                                                 !attempt.merchantId.isNullOrBlank() && onSandboxCheckout(attempt))
-                                                "PhonePe UAT opened. Return here to check the server-confirmed status."
-                                            else "UAT checkout could not open. Check its status before retrying."
+                                                "Complete the payment in PhonePe, then come back here."
+                                            else "PhonePe could not open. Check the payment status before trying again."
                                         }
                                     } finally { sandboxBusy = false }
                                 }
@@ -1704,8 +1695,8 @@ fun RitAppNavigation(appearance: AppearancePreference,
                                     try {
                                         val result = withContext(Dispatchers.IO) { DebugCommerceApi.reconcileSandboxPayment(id) }
                                         sandboxPayment = result.value ?: sandboxPayment
-                                        sandboxFeedback = result.value?.let { "PhonePe UAT status: ${it.status}. No real money was charged." }
-                                            ?: result.error ?: "UAT status could not be confirmed."
+                                        sandboxFeedback = result.value?.let(::paymentStatusMessage)
+                                            ?: result.error ?: "Payment status could not be confirmed."
                                         loadBulk()
                                     } finally { sandboxBusy = false }
                                 }
@@ -1784,4 +1775,12 @@ private fun DebugAdminGate(onDenied: () -> Unit, content: @Composable () -> Unit
 @Composable
 private fun InsetScreen(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().background(RitThemeTokens.colors.background).windowInsetsPadding(WindowInsets.systemBars)) { content() }
+}
+
+private fun paymentStatusMessage(payment: SandboxPayment): String = when (payment.status) {
+    "SANDBOX_SUCCESS" -> "Payment received."
+    "SANDBOX_FAILED" -> "Payment failed. You can try again."
+    "EXPIRED" -> "Payment expired. You can try again."
+    "CANCELLED" -> "Payment was cancelled. Check the status if you completed it in PhonePe."
+    else -> "Payment is still processing. Check again in a moment."
 }

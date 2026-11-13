@@ -28,28 +28,26 @@ class IndividualDemoLifecycleUiTest {
         listOf(QuoteLineSnapshot("masala-dosa","Masala Dosa",2,5_000)),
         10_000, locallySaved = true, status = "DEMO_SAVED")
 
-    @Test fun customerPaymentActionIsExplicitlySimulated() {
-        var selected: String? = null
-        rule.setContent { RitTheme { IndividualOrderDetailScreen(order, {}, { selected = it }) } }
-        rule.onNodeWithText("Demo only · no money charged or verified payment.", substring = true).assertExists()
-        rule.onNodeWithTag("individual_demo_pay_success").performScrollTo().performClick()
-        assertEquals("SUCCESS", selected)
+    @Test fun unpaidOrderShowsOnlyPayNowAndNoPickupCode() {
+        var pays = 0
+        rule.setContent { RitTheme { IndividualOrderDetailScreen(order.copy(pickupCode = "0427"), {},
+            onPayNow = { pays++ }) } }
+        rule.onNodeWithText("Simulate", substring = true).assertDoesNotExist()
+        rule.onNodeWithText("Demo", substring = true).assertDoesNotExist()
+        rule.onNodeWithTag("individual_pickup_code").assertDoesNotExist()
+        rule.onNodeWithTag("individual_pay_now").performScrollTo().performClick()
+        assertEquals(1, pays)
     }
 
-    @Test fun paymentControlsDisableDuringRequestAndSuccessShowsPersistedStatus() {
-        var current by mutableStateOf(order)
-        var busy by mutableStateOf(true)
-        rule.setContent { RitTheme { IndividualOrderDetailScreen(current, {}, {},
-            "DEMO payment simulated successfully. No money was charged or verified.", paymentBusy = busy) } }
-        rule.onNodeWithTag("individual_demo_pay_success").performScrollTo().assertIsNotEnabled()
-        rule.onNodeWithTag("individual_demo_pay_pending").performScrollTo().assertIsNotEnabled()
-        rule.runOnIdle {
-            busy = false
-            current = order.copy(status = "DEMO_PAYMENT_SIMULATED", demoPaymentOutcome = "SUCCESS")
-        }
-        rule.onNodeWithTag("individual_demo_pay_success").assertDoesNotExist()
-        rule.onNodeWithTag("individual_order_status").assertExists()
-        rule.onNodeWithTag("individual_demo_payment_feedback").assertExists()
+    @Test fun paidOrderShowsPreparationTimeThenPinAndQrWhenReady() {
+        var current by mutableStateOf(order.copy(status = "DEMO_PAYMENT_SIMULATED", pickupCode = "0427"))
+        rule.setContent { RitTheme { IndividualOrderDetailScreen(current, {}, onPayNow = {}) } }
+        rule.onNodeWithText("Ready in 10–12 min", substring = true).assertExists()
+        rule.onNodeWithTag("individual_pay_now").assertDoesNotExist()
+        rule.onNodeWithTag("individual_pickup_code").assertExists()
+        rule.runOnIdle { current = current.copy(status = "DEMO_READY") }
+        rule.onNodeWithText("Ready for pickup").assertExists()
+        rule.onNodeWithTag("individual_pickup_qr").assertExists()
     }
 
     @Test fun sellerSeesOnlyPaidOrdersMarksReadyAndConfirmsPickupWithPin() {
@@ -77,19 +75,16 @@ class IndividualDemoLifecycleUiTest {
         rule.onNodeWithTag("seller_confirm_pickup_${order.id}").assertDoesNotExist()
     }
 
-    @Test fun uatActionIsSeparateAndAnActiveAttemptDisablesClickThroughSimulation() {
+    @Test fun pendingPaymentCanBeResumedOrChecked() {
         var starts = 0
         var checks = 0
-        val attempt = SandboxPayment("uat-id", "INDIVIDUAL", order.id, 10_000, "PENDING",
-            "RIT_UAT_test", "provider-id", null, null)
+        val attempt = SandboxPayment("pay-id", "INDIVIDUAL", order.id, 10_000, "PENDING",
+            "RIT_order", "provider-id", null, null)
         rule.setContent { RitTheme { IndividualOrderDetailScreen(order.copy(sandboxPaymentStatus = "PENDING"), {},
-            onDemoPayment = {}, sandboxPayment = attempt, onSandboxStart = { starts++ },
-            onSandboxCheck = { checks++ }) } }
-        rule.onNodeWithTag("individual_demo_pay_success").assertDoesNotExist()
-        rule.onNodeWithTag("individual_phonepe_uat_start").performScrollTo().performClick()
-        rule.onNodeWithTag("individual_phonepe_uat_check").performScrollTo().performClick()
+            payment = attempt, onPayNow = { starts++ }, onCheckPayment = { checks++ }) } }
+        rule.onNodeWithTag("individual_pay_now").performScrollTo().performClick()
+        rule.onNodeWithTag("individual_check_payment").performScrollTo().performClick()
         assertEquals(1, starts)
         assertEquals(1, checks)
-        rule.onNodeWithTag("individual_sandbox_payment_status").assertExists()
     }
 }
