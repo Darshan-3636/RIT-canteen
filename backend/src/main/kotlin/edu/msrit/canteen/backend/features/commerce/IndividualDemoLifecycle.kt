@@ -154,7 +154,8 @@ internal fun transitionIndividualDemo(context: BackendContext, principal: Authen
         if(current==next) return@transaction loadDemoIndividual(db,id)!!
         val allowed = when (next) {
             "DEMO_ACCEPTED", "DEMO_REJECTED" -> current == "DEMO_PAYMENT_SIMULATED"
-            "DEMO_READY" -> current == "DEMO_ACCEPTED"
+            // Paid orders go straight to Ready; Accepted is kept for orders accepted before this change.
+            "DEMO_READY" -> current in setOf("DEMO_PAYMENT_SIMULATED", "DEMO_ACCEPTED")
             "DEMO_COMPLETED" -> current == "DEMO_READY"
             else -> false
         }

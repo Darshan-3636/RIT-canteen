@@ -333,7 +333,7 @@ class CommerceIntegrationTest {
                 header(HttpHeaders.Authorization,"Bearer $token");contentType(ContentType.Application.Json)
                 setBody("""{"outcome":"$outcome"}""")
             }
-            val pickupCode=Regex(""""pickupCode":"([A-F0-9]{12})"""").find(created.bodyAsText())!!.groupValues[1]
+            val pickupCode=Regex(""""pickupCode":"([0-9]{4})"""").find(created.bodyAsText())!!.groupValues[1]
             suspend fun move(token:String,status:String,code:String?=null)=client.post("$sellerPath/$id/demo-status") {
                 header(HttpHeaders.Authorization,"Bearer $token");contentType(ContentType.Application.Json)
                 setBody("""{"status":"$status","pickupCode":${if(code==null) "null" else "\"$code\""}}""")
@@ -369,16 +369,17 @@ class CommerceIntegrationTest {
             assertTrue(sellerQueue.bodyAsText().contains("\"customerName\":\"Commerce Integration customer\""))
             assertTrue(sellerQueue.bodyAsText().contains("\"customerPhone\":null"))
             assertFalse(sellerQueue.bodyAsText().contains("customer-${f.customer.user}@example.test"))
-            assertFalse(sellerQueue.bodyAsText().contains(pickupCode))
+            assertFalse(sellerQueue.bodyAsText().contains("\"pickupCode\":\"$pickupCode\""))
             val otherSellerQueue=client.get("/api/v1/sellers/north-counter/individual-demo-orders") {
                 header(HttpHeaders.Authorization,"Bearer ${f.seller.token}")
             }
             assertEquals(HttpStatusCode.OK,otherSellerQueue.status)
             assertFalse(otherSellerQueue.bodyAsText().contains(id))
-            assertEquals(HttpStatusCode.OK,move(f.seller.token,"DEMO_ACCEPTED").status)
-            assertEquals(HttpStatusCode.OK,move(f.seller.token,"DEMO_ACCEPTED").status) // Safe retry does not emit another transition.
+            // A paid order goes straight to Ready; there is no separate accept step.
             assertEquals(HttpStatusCode.OK,move(f.seller.token,"DEMO_READY").status)
-            assertEquals(HttpStatusCode.UnprocessableEntity,move(f.seller.token,"DEMO_COMPLETED","INVALID00000").status)
+            assertEquals(HttpStatusCode.OK,move(f.seller.token,"DEMO_READY").status) // Safe retry does not emit another transition.
+            val wrongPin=if(pickupCode=="0000") "0001" else "0000"
+            assertEquals(HttpStatusCode.UnprocessableEntity,move(f.seller.token,"DEMO_COMPLETED",wrongPin).status)
             val complete=move(f.seller.token,"DEMO_COMPLETED",pickupCode)
             assertEquals(HttpStatusCode.OK,complete.status)
             assertTrue(complete.bodyAsText().contains("\"paymentVerified\":false"))

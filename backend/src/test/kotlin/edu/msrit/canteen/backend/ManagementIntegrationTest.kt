@@ -502,7 +502,19 @@ class ManagementIntegrationTest {
             assertEquals(before,db.queryOne("SELECT row_to_json(p)::text FROM sandbox_payment_attempts p WHERE id=?",payment) { it.getString(1) })
             assertEquals("historical-password-hash",db.queryOne("SELECT password_hash FROM users WHERE id=?",customer) { it.getString(1) })
             assertEquals(1200L,db.queryOne("SELECT subtotal_paise FROM individual_demo_orders WHERE id=?",order) { it.getLong(1) })
-            assertEquals(22L,db.count("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL"))
+            assertEquals(23L,db.count("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL"))
+            // V054: the uncollected order now has a 4-digit PIN, and new orders get distinct PINs.
+            val pins=mutableListOf(db.queryOne("SELECT pickup_code FROM individual_demo_orders WHERE id=?",order) { it.getString(1) }!!)
+            repeat(30) {
+                val next=UUID.randomUUID()
+                db.update("INSERT INTO individual_demo_orders(id,customer_user_id,seller_id,subtotal_paise) VALUES (?,?,'historic-counter',100)",next,customer)
+                pins+=db.queryOne("SELECT pickup_code FROM individual_demo_orders WHERE id=?",next) { it.getString(1) }!!
+            }
+            assertTrue(pins.all { Regex("[0-9]{4}").matches(it) }, pins.toString())
+            assertEquals(pins.size,pins.toSet().size)
+            assertFailsWith<java.sql.SQLException> {
+                db.update("UPDATE individual_demo_orders SET pickup_code=? WHERE id<>? AND seller_id='historic-counter' AND pickup_code<>?",pins[0],order,pins[0])
+            }
         }
     }
 }
