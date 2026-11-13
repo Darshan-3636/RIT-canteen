@@ -115,7 +115,7 @@ fun SellerOverviewScreen(records: List<BulkRequestRecord>, sellerId: String, sel
                 RitText(roleLabel, RitType.small, colors.muted)
                 Spacer(Modifier.height(14.dp))
                 val hours = PreviewCatalog.sellers.find { it.id == sellerId }?.hours?.display
-                BulkInfoCard(if (hours == null) "Current availability unverified" else "Weekly hours",
+                BulkInfoCard(if (hours == null) "Hours not set" else "Weekly hours",
                     hours
                         ?: "Set your weekly hours in Manage.")
                 Spacer(Modifier.height(14.dp))
@@ -125,7 +125,7 @@ fun SellerOverviewScreen(records: List<BulkRequestRecord>, sellerId: String, sel
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    BulkInfoCard("$unpaid unpaid", "Agreed, not verified", Modifier.weight(1f))
+                    BulkInfoCard("$unpaid unpaid", "Agreed, awaiting payment", Modifier.weight(1f))
                     BulkInfoCard("$scheduled paid", "Confirmed bulk orders", Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(10.dp))

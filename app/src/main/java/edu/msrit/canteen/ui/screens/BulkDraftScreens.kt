@@ -318,14 +318,14 @@ fun BulkPickupScreen(
                         PickupWindow.SPECIAL_REQUIRED -> if (policy?.specialPickupEnabled == false)
                             "Seller does not accept special pickup requests. Choose a time within published hours."
                             else "Outside published hours or on a closure. Request a special pickup; the seller may decline."
-                        else -> "Seller hours are unverified. The server will validate this proposed time on submission."
+                        else -> "Opening hours aren't set. The canteen will confirm this time."
                     }
                     else "Choose a future pickup time."
                 } else when (window) {
                     null -> "Choose a future date and time."
                     PickupWindow.REGULAR -> "Within opening hours. The canteen still needs to confirm."
                     PickupWindow.SPECIAL_REQUIRED -> "Outside opening hours. Add a reason for a special pickup; the canteen may decline."
-                    PickupWindow.HOURS_UNVERIFIED -> "Seller hours are unverified. Ordinary pickup cannot be assumed."
+                    PickupWindow.HOURS_UNVERIFIED -> "Opening hours aren't set. The canteen will confirm this time."
                     PickupWindow.PAST -> "Choose a future pickup time."
                 }
                 BulkInfoCard("Pickup check", status, Modifier.testTag("bulk_pickup_status"))

@@ -108,6 +108,7 @@ fun SellerDailyOperationsOverview(
     onBottom: ((SellerBottomItem) -> Unit)? = null,
     canViewInsights: Boolean = true,
     demoOrders: List<DemoOrder> = emptyList(),
+    newPaidIndividualOrders: Int = 0,
     onOpenIndividual: (() -> Unit)? = null,
     onVerifyPickup: (() -> Unit)? = null,
     onOpenHours: (() -> Unit)? = null,
@@ -131,7 +132,8 @@ fun SellerDailyOperationsOverview(
         }
         .sortedBy { it.latest.pickup }
     val nextPickup = upcoming.firstOrNull()
-    val newIndividual = demoOrders.count {
+    // Paid server orders waiting to be prepared; the local demo list only exists in old tests.
+    val newIndividual = newPaidIndividualOrders + demoOrders.count {
         it.sellerId == sellerId && it.kind == DemoOrderKind.INDIVIDUAL &&
             it.state == DemoOrderState.SUBMITTED
     }
@@ -932,8 +934,8 @@ private fun SellerRequestJourney(record: BulkRequestRecord, canRespond: Boolean,
                 "Payment verification",
                 when {
                     paidFixture -> "Paid."
-                    status == SellerRequestStatus.AGREED_UNPAID -> "Payment not yet verified."
-                    else -> "Payment status is not verified for this request."
+                    status == SellerRequestStatus.AGREED_UNPAID -> "Awaiting payment."
+                    else -> "Not paid yet."
                 },
                 complete = paidFixture,
                 current = status == SellerRequestStatus.AGREED_UNPAID,
@@ -1338,7 +1340,7 @@ private fun sellerDetailState(record: BulkRequestRecord, now: LocalDateTime): St
         specialNeedsApproval -> "Pickup requires explicit exception approval"
         status in NEEDS_SELLER_RESPONSE -> "Seller needs to respond"
         status == SellerRequestStatus.WAITING_CUSTOMER -> "Waiting for customer"
-        status == SellerRequestStatus.AGREED_UNPAID -> "Payment not yet verified"
+        status == SellerRequestStatus.AGREED_UNPAID -> "Awaiting payment"
         status == SellerRequestStatus.PAID_FIXTURE && record.verifiedPaidFixture -> "Paid"
         status == SellerRequestStatus.PAID_FIXTURE -> "Payment verification required"
         status == SellerRequestStatus.EXPIRED -> "Quote expired"
@@ -1358,11 +1360,11 @@ private fun sellerResponseAction(record: BulkRequestRecord): String =
 private fun nextSafeStepDetail(record: BulkRequestRecord, now: LocalDateTime): String {
     if (isRequestQuoteExpired(record, now)) {
         val expiry = record.thread.expiresAt?.let { " on ${displayPickup(it)}" }.orEmpty()
-        return "The quote expired$expiry. No response is available on this revision. Payment is not verified unless a trusted confirmation says otherwise."
+        return "The quote expired$expiry. No response is available on this revision."
     }
     return when (record.operationalStatus()) {
         SellerRequestStatus.WAITING_CUSTOMER -> "The seller response is recorded. Wait for customer approval of revision ${record.latest.version}."
-        SellerRequestStatus.AGREED_UNPAID -> "Both sides have accepted the current terms, but payment is not yet verified. Do not treat this as paid."
+        SellerRequestStatus.AGREED_UNPAID -> "Both sides have accepted the current terms. Waiting for the customer to pay."
         SellerRequestStatus.PAID_FIXTURE -> if (record.verifiedPaidFixture)
             "Paid. Pickup at ${displayPickup(record.latest.pickup)}."
         else "Payment verification is required before this can be treated as paid."
@@ -1618,7 +1620,7 @@ private fun SellerDailyRequestCard(
         status == SellerRequestStatus.SELLER_REVIEW && requiresSpecialDecision -> "Review pickup exception"
         needsReply -> "Review and reply"
         status == SellerRequestStatus.WAITING_CUSTOMER -> "Waiting for customer · view details"
-        status == SellerRequestStatus.AGREED_UNPAID -> "Payment not yet verified · view details"
+        status == SellerRequestStatus.AGREED_UNPAID -> "Awaiting payment · view details"
         status == SellerRequestStatus.PAID_FIXTURE -> "View pickup"
         else -> "View request"
     }
@@ -1735,7 +1737,7 @@ private fun dailyStatusLabel(record: BulkRequestRecord, canRespond: Boolean): St
             record.thread.specialAcceptedVersion != record.latest.version) "Pickup exception needs a decision"
         else "Review the latest terms"
         SellerRequestStatus.WAITING_CUSTOMER -> "Waiting for customer"
-        SellerRequestStatus.AGREED_UNPAID -> "Agreed · payment not verified"
+        SellerRequestStatus.AGREED_UNPAID -> "Agreed · awaiting payment"
         SellerRequestStatus.PAID_FIXTURE -> if (record.verifiedPaidFixture) "Paid" else "Payment verification required"
         SellerRequestStatus.EXPIRED -> "Quote expired"
         SellerRequestStatus.WITHDRAWN -> "Request withdrawn"

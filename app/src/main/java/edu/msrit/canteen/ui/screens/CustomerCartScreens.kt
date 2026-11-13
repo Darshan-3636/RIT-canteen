@@ -135,7 +135,7 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
             if (mode == CartMode.INDIVIDUAL) {
                 item {
                     RitText(individualSellerName, RitType.title)
-                    RitText("One seller per individual cart · no payment or kitchen dispatch yet", RitType.small, colors.muted)
+                    RitText("Pay after placing your order", RitType.small, colors.muted)
                     Spacer(Modifier.height(12.dp))
                 }
                 if (individual.draft.lines.isEmpty()) item {

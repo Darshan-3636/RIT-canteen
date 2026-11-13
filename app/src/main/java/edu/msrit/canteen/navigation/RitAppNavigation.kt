@@ -882,7 +882,10 @@ fun RitAppNavigation(appearance: AppearancePreference,
                                 val history = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
                                 history.value?.let(DevelopmentIndividualOrders::applyServer)
                                 withContext(Dispatchers.Main.immediate) {
-                                    navController.navigate(Route.individualOrderDetail(order.id))
+                                    // Back from the order should not return to the already-placed review.
+                                    navController.navigate(Route.individualOrderDetail(order.id)) {
+                                        popUpTo(Route.IndividualReview) { inclusive = true }
+                                    }
                                 }
                             } else submitError = result.error ?: "Could not place your order."
                             submitting = false
@@ -1195,6 +1198,8 @@ fun RitAppNavigation(appearance: AppearancePreference,
                         onBottom = ::openSellerBottom,
                         canViewInsights = DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "analytics.view")),
                         demoOrders = emptyList(),
+                        newPaidIndividualOrders = sellerIndividualOrders.count {
+                            edu.msrit.canteen.customer.sellerOrderTab(it.status) == edu.msrit.canteen.customer.SellerOrderTab.NEW },
                         onOpenIndividual = { navController.navigate(Route.SellerIndividualQueue) },
                         onVerifyPickup = null,
                         onOpenHours = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "hours.edit")))

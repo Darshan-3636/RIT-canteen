@@ -178,7 +178,7 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
                 BulkInfoCard("Opening hours", when (window) {
                     PickupWindow.REGULAR -> "Within opening hours."
                     PickupWindow.SPECIAL_REQUIRED -> "Outside hours, holiday or closure: special flag and reason required."
-                    PickupWindow.HOURS_UNVERIFIED -> "Hours unverified; cannot propose ordinary pickup."
+                    PickupWindow.HOURS_UNVERIFIED -> "Opening hours aren't set."
                     PickupWindow.PAST -> "Choose a future pickup time."
                 })
                 Spacer(Modifier.height(9.dp))

@@ -44,6 +44,7 @@ import edu.msrit.canteen.ui.components.RitPrimaryButton
 import edu.msrit.canteen.ui.components.RitSecondaryButton
 import edu.msrit.canteen.ui.components.RitText
 import edu.msrit.canteen.ui.components.SellerPhotoContent
+import edu.msrit.canteen.customer.PREPARATION_TIME_LABEL
 import edu.msrit.canteen.ui.components.dietaryLabel
 import edu.msrit.canteen.ui.theme.RitRadii
 import edu.msrit.canteen.ui.theme.RitThemeTokens
@@ -160,7 +161,7 @@ fun FoodDetailsScreen(itemId: String, onBack: () -> Unit, onAddBulk: ((String) -
                 }
                 RitText("By ${seller.name}", RitType.body, colors.muted)
                 Spacer(Modifier.height(12.dp))
-                RitText(dietaryLabel(item) + " · " + if (item.kind == FoodKind.PACKAGED) "Packaged" else "Prepared", RitType.small, colors.muted)
+                RitText(dietaryLabel(item) + " · " + if (item.kind == FoodKind.PACKAGED) "Packaged" else "Prepared · $PREPARATION_TIME_LABEL", RitType.small, colors.muted)
                 Spacer(Modifier.height(18.dp))
                 RitText("About this item", RitType.title)
                 RitText(item.description, RitType.body, colors.muted, maxLines = if (expanded) Int.MAX_VALUE else 2)

@@ -548,7 +548,6 @@ fun SellerBusinessSettingsScreen(sellerId: String, userId: String, repo: SellerB
         if (SellerCapability.PROMOTIONS in caps)
             BusinessCard("Promotions", "Manage offers for eligible menu items", onPromotions)
         BusinessCard("Notifications", "Your in-app order and quote updates", onNotifications)
-        BusinessCard("Payment configuration", "Not connected. PhonePe merchant eligibility and settlement requirements remain unverified; no credentials or transactions here.")
     }
 }
 
