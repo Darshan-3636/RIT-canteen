@@ -52,8 +52,8 @@ fun CustomerCatalogSource.discover(
             (!filters.itemMarkedAvailableOnly || item.availability == ItemAvailability.AVAILABLE) &&
             when (filters.orderEligibility) {
                 null -> true
-                OrderEligibilityFilter.INDIVIDUAL_PLANNED -> eligibility == ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK
-                OrderEligibilityFilter.BULK_REQUEST -> seller.capabilities.bulk && eligibility != ItemEligibility.UNAVAILABLE
+                OrderEligibilityFilter.INDIVIDUAL_PLANNED -> eligibility in setOf(ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK, ItemEligibility.INDIVIDUAL_ONLY)
+                OrderEligibilityFilter.BULK_REQUEST -> eligibility in setOf(ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK, ItemEligibility.BULK_ONLY)
             } && matchesAll(tokens, item.name, item.description, categoriesById[item.categoryId]?.name.orEmpty(),
                 seller.name, seller.description, item.tags.joinToString(" "))
     }

@@ -11,6 +11,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven(url = "https://phonepe.mycloudrepo.io/public/repositories/phonepe-intentsdk-android")
     }
 }
 

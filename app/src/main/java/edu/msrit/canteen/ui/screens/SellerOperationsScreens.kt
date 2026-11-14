@@ -27,6 +27,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import edu.msrit.canteen.customer.BulkRequestRecord
 import edu.msrit.canteen.customer.DemoTransitionResult
+import edu.msrit.canteen.customer.DemoOrder
+import edu.msrit.canteen.customer.DemoOrderState
 import edu.msrit.canteen.customer.QuoteActor
 import edu.msrit.canteen.customer.QuoteStage
 import edu.msrit.canteen.customer.RIT_TIME_ZONE
@@ -39,6 +41,7 @@ import edu.msrit.canteen.customer.operationalStatus
 import edu.msrit.canteen.ui.components.CatalogHeader
 import edu.msrit.canteen.ui.components.RitChip
 import edu.msrit.canteen.ui.components.RitEmptyState
+import edu.msrit.canteen.ui.components.RitMessageCard
 import edu.msrit.canteen.ui.components.RitPrimaryButton
 import edu.msrit.canteen.ui.components.RitSecondaryButton
 import edu.msrit.canteen.ui.components.RitStatusIndicator
@@ -70,11 +73,11 @@ private fun SellerRequestCard(record: BulkRequestRecord, onOpen: () -> Unit) {
         .background(colors.card, RoundedCornerShape(RitRadii.card))
         .clickable(onClick = onOpen).testTag("seller_request_${record.reference}").padding(15.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            RitText(record.reference, RitType.label)
+            RitText(record.customerLabel, RitType.label, modifier = Modifier.weight(1f), maxLines = 2)
             SellerStatus(record)
         }
         Spacer(Modifier.height(5.dp))
-        RitText("${record.customerLabel} · ${record.latest.lines.sumOf { it.quantity }} units", RitType.body)
+        RitText("${record.latest.lines.sumOf { it.quantity }} units", RitType.body)
         RitText(record.latest.lines.joinToString { "${it.title} × ${it.quantity}" }, RitType.small, colors.muted,
             maxLines = 2)
         RitText("${displayPickup(record.latest.pickup)} · ${displayPaise(record.latest.totalPaise)}",
@@ -108,15 +111,13 @@ fun SellerOverviewScreen(records: List<BulkRequestRecord>, sellerId: String, sel
         LazyColumn(modifier = Modifier.testTag("seller_overview_list"),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
-                RitStatusIndicator("Debug scenario · no live orders or seller sync")
-                Spacer(Modifier.height(12.dp))
                 RitText(sellerName, RitType.heading)
-                RitText("$roleLabel · seller-scoped preview", RitType.small, colors.muted)
+                RitText(roleLabel, RitType.small, colors.muted)
                 Spacer(Modifier.height(14.dp))
                 val hours = PreviewCatalog.sellers.find { it.id == sellerId }?.hours?.display
-                BulkInfoCard(if (hours == null) "Current availability unverified" else "Demo weekly hours configured",
-                    hours?.let { "$it · fictional schedule; no live open/closed claim or real-time update." }
-                        ?: "The weekly hours and closures used here are fictional testing data. No live open/closed claim or real-time update is available.")
+                BulkInfoCard(if (hours == null) "Hours not set" else "Weekly hours",
+                    hours
+                        ?: "Set your weekly hours in Manage.")
                 Spacer(Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     BulkInfoCard("${needsAction.size} need action", "Incoming or revised requests", Modifier.weight(1f))
@@ -124,15 +125,15 @@ fun SellerOverviewScreen(records: List<BulkRequestRecord>, sellerId: String, sel
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    BulkInfoCard("$unpaid unpaid", "Agreed, not verified", Modifier.weight(1f))
-                    BulkInfoCard("$scheduled fixture", "Paid display samples", Modifier.weight(1f))
+                    BulkInfoCard("$unpaid unpaid", "Agreed, awaiting payment", Modifier.weight(1f))
+                    BulkInfoCard("$scheduled paid", "Confirmed bulk orders", Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(10.dp))
                 BulkInfoCard("$upcoming upcoming times", "Requested pickup times, not confirmed reservations")
                 Spacer(Modifier.height(20.dp))
                 RitText("Needs your attention", RitType.title)
                 RitText(if (canRespond) "Review the latest revision before responding."
-                    else "View-only staff fixture: response capability is not granted.", RitType.small, colors.muted)
+                    else "You can view this request but not respond to it.", RitType.small, colors.muted)
                 Spacer(Modifier.height(10.dp))
             }
             items(needsAction.take(3), key = { it.reference }) { record ->
@@ -162,7 +163,7 @@ fun SellerOverviewScreen(records: List<BulkRequestRecord>, sellerId: String, sel
                 }
                 if (canHistory) RitSecondaryButton("Search and history", onHistory,
                     Modifier.fillMaxWidth().testTag("seller_open_history"))
-                else BulkInfoCard("History restricted in this staff fixture", "Owner-configurable capabilities will be built in a later prompt.")
+                else BulkInfoCard("History restricted", "Ask the owner for access to order history.")
                 Spacer(Modifier.height(12.dp))
                 BulkInfoCard("Individual prepared-food orders deferred", "Acceptance, preparation, readiness and handover steps are not approved. This area has no operational actions.")
             }
@@ -170,37 +171,32 @@ fun SellerOverviewScreen(records: List<BulkRequestRecord>, sellerId: String, sel
     }
 }
 
+/** Bulk-request list shown in the Bulk tab of the seller Orders page. */
 @Composable
-fun SellerInboxScreen(records: List<BulkRequestRecord>, sellerId: String, onBack: () -> Unit,
-                      onRequest: (String) -> Unit) {
+fun SellerBulkRequestsList(records: List<BulkRequestRecord>, sellerId: String, onRequest: (String) -> Unit) {
     val colors = RitThemeTokens.colors
     var filter by rememberSaveable { mutableStateOf(SellerRequestFilter.ALL) }
     var query by rememberSaveable { mutableStateOf("") }
     val visible = filterSellerRequests(records, sellerId, filter, query)
-    Column(Modifier.fillMaxSize().background(colors.background).testTag("seller_inbox")) {
-        CatalogHeader("Bulk requests", onBack)
-        LazyColumn(modifier = Modifier.testTag("seller_inbox_list"),
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
-            item {
-                RitStatusIndicator("Seller-scoped demo · no backend delivery")
-                Spacer(Modifier.height(10.dp))
-                RitTextField(query, { query = it }, "Find a request", "Reference, customer or item",
-                    Modifier.fillMaxWidth(), inputTag = "seller_inbox_search")
-                Spacer(Modifier.height(10.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.testTag("seller_inbox_filters")) {
-                    items(SellerRequestFilter.entries) { option ->
-                        RitChip(option.label, filter == option, { filter = option },
-                            Modifier.testTag("seller_filter_${option.name.lowercase()}"))
-                    }
+    LazyColumn(modifier = Modifier.fillMaxSize().testTag("seller_inbox_list"),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 25.dp)) {
+        item {
+            RitTextField(query, { query = it }, "Find a request", "Reference, customer or item",
+                Modifier.fillMaxWidth(), inputTag = "seller_inbox_search")
+            Spacer(Modifier.height(10.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.testTag("seller_inbox_filters")) {
+                items(SellerRequestFilter.entries) { option ->
+                    RitChip(option.label, filter == option, { filter = option },
+                        Modifier.testTag("seller_filter_${option.name.lowercase()}"))
                 }
-                Spacer(Modifier.height(14.dp))
-                RitText("${visible.size} demonstration records", RitType.small, colors.muted)
-                Spacer(Modifier.height(10.dp))
             }
-            if (visible.isEmpty()) item { RitEmptyState("No matching requests", "Try another status or reference.") }
-            items(visible, key = { it.reference }) { record -> SellerRequestCard(record) { onRequest(record.reference) } }
+            Spacer(Modifier.height(14.dp))
+            RitText("${visible.size} requests", RitType.small, colors.muted)
+            Spacer(Modifier.height(10.dp))
         }
+        if (visible.isEmpty()) item { RitEmptyState("No matching requests", "Try another status or customer or item name.") }
+        items(visible, key = { it.reference }) { record -> SellerRequestCard(record) { onRequest(record.reference) } }
     }
 }
 
@@ -215,8 +211,6 @@ fun SellerRequestDetailScreen(record: BulkRequestRecord, canRespond: Boolean, on
         CatalogHeader("Request details", onBack)
         LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
-                RitStatusIndicator("Debug-only request · no network transaction")
-                Spacer(Modifier.height(12.dp))
                 RitText(record.reference, RitType.heading)
                 SellerStatus(record)
                 Spacer(Modifier.height(8.dp))
@@ -243,7 +237,7 @@ fun SellerRequestDetailScreen(record: BulkRequestRecord, canRespond: Boolean, on
                     }
                 }
                 Spacer(Modifier.height(9.dp))
-                BulkInfoCard("Latest quoted total", "${displayPaise(record.latest.totalPaise)} · negotiated preview amount, not payable")
+                BulkInfoCard("Latest quoted total", displayPaise(record.latest.totalPaise))
                 Spacer(Modifier.height(9.dp))
                 BulkInfoCard("Latest pickup", displayPickup(record.latest.pickup))
                 if (record.latest.specialPickup) {
@@ -258,7 +252,7 @@ fun SellerRequestDetailScreen(record: BulkRequestRecord, canRespond: Boolean, on
                 BulkInfoCard("Revision approvals", "Seller: ${record.thread.sellerAcceptedVersion ?: "none"} · Customer: ${record.thread.customerAcceptedVersion ?: "none"}. Both must match the latest version before payment could be considered.")
                 if (record.thread.expiresAt != null) {
                     Spacer(Modifier.height(9.dp))
-                    BulkInfoCard("Demo quote expiry", displayPickup(record.thread.expiresAt))
+                    BulkInfoCard("Quote expires", displayPickup(record.thread.expiresAt))
                 }
                 Spacer(Modifier.height(18.dp))
                 RitText("Negotiation history", RitType.title)
@@ -284,7 +278,7 @@ fun SellerRequestDetailScreen(record: BulkRequestRecord, canRespond: Boolean, on
                     Spacer(Modifier.height(9.dp))
                     RitSecondaryButton("Reject request", { feedback = onReject().explanation },
                         Modifier.fillMaxWidth().testTag("seller_detail_reject"))
-                } else if (!canRespond) BulkInfoCard("View only", "This debug staff identity lacks bulk.respond. It cannot change the quote or status.")
+                } else if (!canRespond) BulkInfoCard("View only", "You can't change this quote or its status.")
                 if (feedback.isNotBlank()) {
                     Spacer(Modifier.height(9.dp))
                     RitText(feedback, RitType.small, colors.accent)
@@ -307,7 +301,7 @@ fun SellerRevisionCompareScreen(record: BulkRequestRecord, onBack: () -> Unit) {
         val diff = compareQuotes(previous, current)
         LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
-                RitStatusIndicator("Immutable demo versions ${previous.version} → ${current.version}")
+                RitStatusIndicator("Version ${previous.version} → ${current.version}")
                 Spacer(Modifier.height(14.dp))
                 BulkInfoCard("Previous", "${displayPaise(previous.totalPaise)} · ${displayPickup(previous.pickup)}")
                 Spacer(Modifier.height(9.dp))
@@ -332,7 +326,7 @@ fun SellerRevisionCompareScreen(record: BulkRequestRecord, onBack: () -> Unit) {
 
 @Composable
 fun SellerFinalApprovalScreen(record: BulkRequestRecord, canRespond: Boolean, onBack: () -> Unit,
-                              onSpecial: () -> Unit, onApprove: () -> DemoTransitionResult) {
+                              onSpecial: () -> Unit, onApprove: ((String) -> Unit) -> Unit) {
     val colors = RitThemeTokens.colors
     var feedback by remember { mutableStateOf("") }
     val latest = record.latest
@@ -343,8 +337,6 @@ fun SellerFinalApprovalScreen(record: BulkRequestRecord, canRespond: Boolean, on
         CatalogHeader("Final quote review", onBack)
         LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
-                RitStatusIndicator("Seller decision · local demo only")
-                Spacer(Modifier.height(14.dp))
                 RitText("${record.reference} · revision ${latest.version}", RitType.heading)
                 Spacer(Modifier.height(10.dp))
                 latest.lines.forEach { line ->
@@ -363,13 +355,13 @@ fun SellerFinalApprovalScreen(record: BulkRequestRecord, canRespond: Boolean, on
                 Spacer(Modifier.height(12.dp))
                 BulkInfoCard("Customer response", "Customer approval of revision ${latest.version}: ${if (record.thread.customerAcceptedVersion == latest.version) "recorded in demo" else "not recorded"}. Seller approval alone cannot trigger payment.")
                 Spacer(Modifier.height(12.dp))
-                RitPrimaryButton("Approve exact revision in demo", { feedback = onApprove().explanation },
+                RitPrimaryButton("Approve exact revision", { onApprove { feedback = it } },
                     Modifier.fillMaxWidth().testTag("seller_final_approve_action"), enabled = canApprove)
                 if (!specialReady) RitText("Accept exceptional pickup separately before approving the quote.",
                     RitType.small, colors.accent)
                 if (feedback.isNotBlank()) RitText(feedback, RitType.small, colors.accent)
                 Spacer(Modifier.height(12.dp))
-                RitText("This is not a server acknowledgement or a payment request.", RitType.small, colors.muted)
+                RitText("An agreement is not a payment or pickup confirmation.", RitType.small, colors.muted)
             }
         }
     }
@@ -377,7 +369,8 @@ fun SellerFinalApprovalScreen(record: BulkRequestRecord, canRespond: Boolean, on
 
 @Composable
 fun SellerSpecialPickupScreen(record: BulkRequestRecord, canRespond: Boolean, onBack: () -> Unit,
-                              onAccept: () -> DemoTransitionResult, onReject: () -> DemoTransitionResult) {
+                              onAccept: ((String) -> Unit) -> Unit,
+                              onReject: ((String) -> Unit) -> Unit) {
     val colors = RitThemeTokens.colors
     var feedback by remember { mutableStateOf("") }
     val latest = record.latest
@@ -397,21 +390,21 @@ fun SellerSpecialPickupScreen(record: BulkRequestRecord, canRespond: Boolean, on
                     BulkInfoCard("Customer notes", record.original.instructions)
                 }
                 Spacer(Modifier.height(9.dp))
-                BulkInfoCard("Demo policy conflict", "This fixture may fall outside weekly hours, on a holiday or during a temporary closure. Actual seller hours are not verified.")
+                BulkInfoCard("Outside opening hours", "This pickup time may fall outside weekly hours, on a holiday or during a closure.")
                 Spacer(Modifier.height(13.dp))
                 RitText(if (record.thread.specialAcceptedVersion == latest.version) "Accepted for this exact revision"
                     else "Not accepted for this revision", RitType.label)
                 Spacer(Modifier.height(12.dp))
-                RitPrimaryButton("Explicitly accept special timing", { feedback = onAccept().explanation },
+                RitPrimaryButton("Explicitly accept special timing", { onAccept { feedback = it } },
                     Modifier.fillMaxWidth().testTag("seller_special_accept"),
                     enabled = canRespond && latest.specialPickup && record.thread.specialAcceptedVersion != latest.version &&
                         record.thread.stage in setOf(QuoteStage.SUBMITTED, QuoteStage.COUNTEROFFER))
                 Spacer(Modifier.height(9.dp))
                 if (canRespond && record.thread.stage in setOf(QuoteStage.SUBMITTED, QuoteStage.COUNTEROFFER)) {
-                    RitSecondaryButton("Reject this special request", { feedback = onReject().explanation },
+                    RitSecondaryButton("Reject this special request", { onReject { feedback = it } },
                         Modifier.fillMaxWidth().testTag("seller_special_reject"))
                 }
-                if (!canRespond) RitText("View only: this mock role cannot decide exceptional pickup.", RitType.small, colors.muted)
+                if (!canRespond) RitText("You can't decide special pickup requests.", RitType.small, colors.muted)
                 if (feedback.isNotBlank()) RitText(feedback, RitType.small, colors.accent)
             }
         }
@@ -434,9 +427,9 @@ fun SellerScheduleScreen(records: List<BulkRequestRecord>, sellerId: String, onB
         CatalogHeader("Upcoming pickups", onBack)
         LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
-                RitStatusIndicator("Demo schedule · requested times are not reservations")
+                RitStatusIndicator("Requested pickup times")
                 Spacer(Modifier.height(12.dp))
-                BulkInfoCard("Payment truth", "Only the verified-paid fixture is shown as a confirmed order. New requests, counters and agreed-unpaid quotes are not paid orders.")
+                BulkInfoCard("Confirmed orders", "Only paid bulk orders are confirmed. New requests, counteroffers and unpaid quotes are not.")
                 Spacer(Modifier.height(14.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.testTag("seller_schedule_filters")) {
@@ -458,25 +451,27 @@ fun SellerScheduleScreen(records: List<BulkRequestRecord>, sellerId: String, onB
                     SellerRequestCard(record) { onRequest(record.reference) }
                 }
             }
-            if (groups.isEmpty()) item { RitEmptyState("No upcoming demo records", "No confirmed pickup is inferred from a request alone.") }
+            if (groups.isEmpty()) item { RitEmptyState("No upcoming pickups", "Paid bulk orders will appear here.") }
         }
     }
 }
 
 @Composable
 fun SellerHistoryScreen(records: List<BulkRequestRecord>, sellerId: String, onBack: () -> Unit,
-                        onRequest: (String) -> Unit) {
+                        onRequest: (String) -> Unit, demoOrders: List<DemoOrder> = emptyList(),
+                        onDemoOrder: ((String) -> Unit)? = null) {
     val colors = RitThemeTokens.colors
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(SellerRequestFilter.ALL) }
     val visible = filterSellerRequests(records, sellerId, filter, query)
     val groups = visible.groupBy { it.createdAt.toLocalDate() }.toSortedMap(reverseOrder())
+    val simulated = demoOrders.filter { filter == SellerRequestFilter.ALL && it.sellerId == sellerId &&
+        (query.isBlank() || it.reference.contains(query, ignoreCase = true) ||
+            it.lines.any { line -> line.title.contains(query, ignoreCase = true) }) }
     Column(Modifier.fillMaxSize().background(colors.background).testTag("seller_history")) {
         CatalogHeader("Search and history", onBack)
         LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
-                RitStatusIndicator("Fictional request records · no sales history")
-                Spacer(Modifier.height(12.dp))
                 RitTextField(query, { query = it }, "Find a record", "Reference, customer or item",
                     Modifier.fillMaxWidth(), inputTag = "seller_history_search")
                 Spacer(Modifier.height(10.dp))
@@ -498,7 +493,20 @@ fun SellerHistoryScreen(records: List<BulkRequestRecord>, sellerId: String, onBa
                     SellerRequestCard(record) { onRequest(record.reference) }
                 }
             }
-            if (groups.isEmpty()) item { RitEmptyState("No matching records", "Try another reference or status filter.") }
+            if (simulated.isNotEmpty()) {
+                item { Spacer(Modifier.height(12.dp)); RitText("Order history", RitType.title) }
+                items(simulated.sortedByDescending { it.updatedAt }, key = { "demo_${it.reference}" }) { order ->
+                    Column(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
+                        RitMessageCard(order.reference,
+                            "${order.kind.name.lowercase()} · ${order.state.name.lowercase().replace('_', ' ')}")
+                        if (onDemoOrder != null) RitSecondaryButton("Open details",
+                            { onDemoOrder(order.reference) }, Modifier.fillMaxWidth())
+                    }
+                }
+            }
+            if (groups.isEmpty() && simulated.isEmpty()) item {
+                RitEmptyState("No matching records", "Try another reference or status filter.")
+            }
         }
     }
 }
@@ -509,7 +517,7 @@ fun CustomerDemoRequestsScreen(records: List<BulkRequestRecord>, customerId: Str
     val colors = RitThemeTokens.colors
     val mine = records.filter { it.customerUserId == customerId }.sortedByDescending { it.createdAt }
     Column(Modifier.fillMaxSize().background(colors.background).testTag("customer_demo_requests")) {
-        CatalogHeader("Local demo requests", onBack)
+        CatalogHeader("Bulk requests", onBack)
         LazyColumn(modifier = Modifier.testTag("customer_demo_requests_list"),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
@@ -525,8 +533,14 @@ fun CustomerDemoRequestsScreen(records: List<BulkRequestRecord>, customerId: Str
 
 @Composable
 fun CustomerDemoRequestScreen(record: BulkRequestRecord, onBack: () -> Unit,
-                              onCounter: () -> Unit, onCompare: () -> Unit,
-                              onApprove: () -> DemoTransitionResult, onWithdraw: () -> DemoTransitionResult) {
+                              onCounter: (() -> Unit)?, onCompare: () -> Unit,
+                              onApprove: ((String) -> Unit) -> Unit,
+                              onWithdraw: ((String) -> Unit) -> Unit,
+                              onCheckout: (() -> Unit)? = null,
+                              demoOrder: DemoOrder? = null, onTrack: (() -> Unit)? = null,
+                              sandboxPayment: edu.msrit.canteen.customer.SandboxPayment? = null,
+                              onSandboxStart: (() -> Unit)? = null, onSandboxCheck: (() -> Unit)? = null,
+                              sandboxFeedback: String? = null, sandboxBusy: Boolean = false) {
     val colors = RitThemeTokens.colors
     var feedback by remember { mutableStateOf("") }
     val latest = record.latest
@@ -534,13 +548,13 @@ fun CustomerDemoRequestScreen(record: BulkRequestRecord, onBack: () -> Unit,
         record.thread.sellerAcceptedVersion == latest.version &&
         (!latest.specialPickup || record.thread.specialAcceptedVersion == latest.version)
     val canWithdraw = record.thread.stage in setOf(QuoteStage.SUBMITTED, QuoteStage.COUNTEROFFER,
-        QuoteStage.AGREED_AWAITING_PAYMENT)
+        QuoteStage.AGREED_AWAITING_PAYMENT) && demoOrder?.state !in setOf(
+            DemoOrderState.DEMO_CONFIRMED, DemoOrderState.DEMO_COLLECTED)
+    val quoteCurrent = record.thread.expiresAt?.isAfter(LocalDateTime.now(RIT_TIME_ZONE)) != false
     Column(Modifier.fillMaxSize().background(colors.background).testTag("customer_demo_request")) {
-        CatalogHeader("Demo bulk request", onBack)
+        CatalogHeader("Bulk request", onBack)
         LazyColumn(contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
-                RitStatusIndicator("Local scenario · no seller notification or payment")
-                Spacer(Modifier.height(12.dp))
                 RitText(record.reference, RitType.heading)
                 SellerStatus(record)
                 Spacer(Modifier.height(13.dp))
@@ -551,10 +565,10 @@ fun CustomerDemoRequestScreen(record: BulkRequestRecord, onBack: () -> Unit,
                     BulkInfoCard("Special pickup", "${latest.specialReason}\nSeller acceptance: ${if (record.thread.specialAcceptedVersion == latest.version) "explicit on this version" else "pending"}")
                 }
                 Spacer(Modifier.height(10.dp))
-                BulkInfoCard("Exact-version approval", "Seller: ${record.thread.sellerAcceptedVersion ?: "none"} · Customer: ${record.thread.customerAcceptedVersion ?: "none"}. Both must match revision ${latest.version}; payment remains disabled without a server.")
+                BulkInfoCard("Exact-version approval", "Seller: ${record.thread.sellerAcceptedVersion ?: "none"} · Customer: ${record.thread.customerAcceptedVersion ?: "none"}. Both must match revision ${latest.version}; then you can pay.")
                 if (record.thread.expiresAt != null) {
                     Spacer(Modifier.height(9.dp))
-                    BulkInfoCard("Demo expiry", displayPickup(record.thread.expiresAt))
+                    BulkInfoCard("Quote expires", displayPickup(record.thread.expiresAt))
                 }
                 Spacer(Modifier.height(16.dp))
                 RitText("Revision timeline", RitType.title)
@@ -566,22 +580,50 @@ fun CustomerDemoRequestScreen(record: BulkRequestRecord, onBack: () -> Unit,
                 }
                 if (record.thread.revisions.size > 1) RitSecondaryButton("Compare revisions", onCompare,
                     Modifier.fillMaxWidth().testTag("customer_demo_compare"))
-                if (record.thread.stage == QuoteStage.COUNTEROFFER && latest.actor == QuoteActor.SELLER) {
+                if (onCounter != null && record.thread.stage == QuoteStage.COUNTEROFFER && latest.actor == QuoteActor.SELLER) {
                     Spacer(Modifier.height(9.dp))
-                    RitSecondaryButton("Propose a revision in demo", onCounter,
+                    RitSecondaryButton("Propose changes", onCounter,
                         Modifier.fillMaxWidth().testTag("customer_demo_counter"))
                 }
                 Spacer(Modifier.height(10.dp))
-                RitPrimaryButton("Approve exact revision in demo", { feedback = onApprove().explanation },
+                RitPrimaryButton("Approve exact revision", { onApprove { feedback = it } },
                     Modifier.fillMaxWidth().testTag("customer_demo_approve"), enabled = canApprove)
+                if (onTrack != null && demoOrder?.state in setOf(DemoOrderState.DEMO_CONFIRMED,
+                        DemoOrderState.DEMO_COLLECTED)) {
+                    Spacer(Modifier.height(9.dp))
+                    RitPrimaryButton("Track order", onTrack,
+                        Modifier.fillMaxWidth().testTag("customer_demo_track"))
+                } else if (onCheckout != null && quoteCurrent &&
+                    record.thread.stage == QuoteStage.AGREED_AWAITING_PAYMENT) {
+                    Spacer(Modifier.height(9.dp))
+                    RitPrimaryButton("Pay Now", onCheckout,
+                        Modifier.fillMaxWidth().testTag("customer_demo_checkout"))
+                } else if (!quoteCurrent && record.thread.stage == QuoteStage.AGREED_AWAITING_PAYMENT) {
+                    Spacer(Modifier.height(9.dp))
+                    BulkInfoCard("Quote expired", "This quote can no longer be paid. Request a new quote.")
+                }
+                if (onSandboxStart != null && record.thread.stage == QuoteStage.AGREED_AWAITING_PAYMENT && quoteCurrent) {
+                    Spacer(Modifier.height(10.dp))
+                    sandboxPayment?.let { BulkInfoCard("Payment", it.status.removePrefix("SANDBOX_").replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase)) }
+                    if (sandboxPayment?.status !in setOf("SANDBOX_SUCCESS", "CANCELLED")) {
+                        RitPrimaryButton(if (sandboxBusy) "Opening PhonePe…" else "Pay Now", onSandboxStart,
+                            Modifier.fillMaxWidth().testTag("bulk_phonepe_uat_start"), enabled = !sandboxBusy)
+                    }
+                    if (sandboxPayment != null && sandboxPayment.status in setOf("INITIATED", "PENDING", "CANCELLED") &&
+                        onSandboxCheck != null) {
+                        Spacer(Modifier.height(8.dp))
+                        RitSecondaryButton("Check payment status", onSandboxCheck,
+                            Modifier.fillMaxWidth().testTag("bulk_phonepe_uat_check"), enabled = !sandboxBusy)
+                    }
+                    if (!sandboxFeedback.isNullOrBlank()) RitText(sandboxFeedback, RitType.small, colors.accent)
+                }
                 if (canWithdraw) {
                     Spacer(Modifier.height(9.dp))
-                    RitSecondaryButton("Withdraw unpaid demo request", { feedback = onWithdraw().explanation },
+                    RitSecondaryButton("Withdraw unpaid request", { onWithdraw { feedback = it } },
                         Modifier.fillMaxWidth().testTag("customer_demo_withdraw"))
                 }
                 if (feedback.isNotBlank()) RitText(feedback, RitType.small, colors.accent)
                 Spacer(Modifier.height(12.dp))
-                BulkInfoCard("No checkout", "Even a mutually agreed demo quote cannot create a payable intent or a verified order without authoritative backend and payment-provider confirmation.")
             }
         }
     }

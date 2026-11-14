@@ -1,5 +1,6 @@
 package edu.msrit.canteen.ui.screens
 
+import edu.msrit.canteen.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -30,6 +31,7 @@ import edu.msrit.canteen.ui.components.CatalogHeader
 import edu.msrit.canteen.ui.components.CatalogSellerCard
 import edu.msrit.canteen.ui.components.RitBottomItem
 import edu.msrit.canteen.ui.components.RitBottomNavigation
+import edu.msrit.canteen.ui.components.RitDropdownField
 import edu.msrit.canteen.ui.components.RitEmptyState
 import edu.msrit.canteen.ui.components.RitLoadingIndicator
 import edu.msrit.canteen.ui.components.RitSearchField
@@ -65,16 +67,15 @@ fun CustomerMenuScreen(
     Column(Modifier.fillMaxSize().background(colors.background).testTag("customer_menu")) {
         CatalogHeader(title, onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
-            RitText(seller?.name ?: "Across preview sellers", RitType.heading)
+            RitText(seller?.name ?: "All food", RitType.heading)
             RitText(when {
-                preparedOnly -> "Prepared dishes · individual ordering is not live"
-                seller != null -> "${if (seller.capabilities.futureIndividualPrepared) "Prepared food planned + bulk" else "Bulk orders only"} · illustrative prices"
-                else -> "Category results across sellers · preview data"
+                preparedOnly -> "Meals from the main canteen"
+                seller != null -> "Browse this canteen's menu"
+                else -> "Browse campus canteen menus"
             }, RitType.body, colors.muted)
             Spacer(Modifier.height(12.dp))
-            RitStatusIndicator("Sample catalog · no orders can be placed")
-            Spacer(Modifier.height(16.dp))
-            RitSearchField(query, { query = it }, hint = "Search these preview items…")
+            Spacer(Modifier.height(4.dp))
+            RitSearchField(query, { query = it }, hint = "Search these items…")
             Spacer(Modifier.height(14.dp))
         }
         CatalogCategories(categories, selectedCategory) { selectedCategory = it }
@@ -108,25 +109,35 @@ fun ExploreSellersScreen(
     val colors = RitThemeTokens.colors
     var query by rememberSaveable { mutableStateOf("") }
     var categoryId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedCanteen by rememberSaveable { mutableStateOf("") }
     val sellers = catalog.visibleSellers(query, categoryId)
+    val selectedSeller = sellers.firstOrNull { it.id == selectedCanteen }
     Column(Modifier.fillMaxSize().background(colors.background).testTag("explore_sellers")) {
         CatalogHeader("Explore Sellers", onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
-            RitText("Campus sellers", RitType.heading)
-            RitText("Browse menus from independent preview sellers", RitType.body, colors.muted)
+            RitText("Browse campus canteen menus.", RitType.body, colors.muted)
             Spacer(Modifier.height(8.dp))
-            RitStatusIndicator("Seller identities and hours unverified")
-            Spacer(Modifier.height(14.dp))
-            RitSearchField(query, { query = it }, hint = "Search preview sellers…")
+            RitDropdownField(
+                value = selectedSeller?.name.orEmpty(),
+                label = "Choose Canteen",
+                placeholder = SELECT_CANTEEN,
+                options = sellers.map { it.name },
+                onValueChange = { name -> selectedCanteen = sellers.firstOrNull { it.name == name }?.id.orEmpty() },
+                modifier = Modifier.fillMaxWidth(),
+                inputTag = "explore_canteen_selector",
+            )
+            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(8.dp))
+            RitSearchField(query, { query = it }, hint = "Search sellers…")
             Spacer(Modifier.height(14.dp))
         }
         CatalogCategories(catalog.categories, categoryId) { categoryId = it }
         Spacer(Modifier.height(10.dp))
         when {
             isLoading -> RitLoadingIndicator(Modifier.padding(24.dp))
-            sellers.isEmpty() -> RitEmptyState("No sellers found", "Try another name or category.")
+            selectedSeller == null -> RitEmptyState("Choose a canteen", "Select a canteen to see its details and menu.")
             else -> LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 20.dp)) {
-                items(sellers, key = { it.id }) { seller ->
+                items(listOf(selectedSeller), key = { it.id }) { seller ->
                     val names = catalog.categories.filter { it.id in seller.categoryIds }.joinToString(" · ") { it.name }
                     Column(Modifier.padding(vertical = 6.dp)) { CatalogSellerCard(seller, names, { onSeller(seller.id) },
                         isFavorite = favorites != null && customerId != null && seller.id in favorites.sellerIds(customerId),

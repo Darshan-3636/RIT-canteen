@@ -4,5 +4,9 @@ package edu.msrit.canteen.customer
 object DevelopmentIndividualOrders {
     val records: List<IndividualOrderPreview> get() = emptyList()
     fun saveLocal(draft: IndividualDraft, catalog: CustomerCatalogSource = PreviewCatalog): Boolean = false
+    fun activate(userId: String) = Unit
+    fun deactivate() = Unit
+    fun applyServer(recordsFromServer: List<IndividualOrderPreview>) = Unit
+    fun upsertServer(record: IndividualOrderPreview) = Unit
     fun reset() = Unit
 }

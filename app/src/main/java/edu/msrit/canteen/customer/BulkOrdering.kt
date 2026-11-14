@@ -8,6 +8,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
+import java.util.UUID
 
 val RIT_TIME_ZONE: ZoneId = ZoneId.of("Asia/Kolkata")
 const val DEFAULT_BULK_MINIMUM = 8
@@ -24,13 +25,37 @@ data class BulkDraft(
     val instructions: String = "",
 )
 
+data class BulkServerDraft(val version: Long, val draft: BulkDraft, val subtotalPaise: Long,
+                           val unavailableItemIds: Set<String>)
+
+/** Account-scoped backend key survives app restarts and a timed-out submission retry. */
+fun bulkSubmissionKeyForVersion(version: Long): String {
+    require(version >= 0)
+    return "bulk-draft-version-$version"
+}
+
 class BulkDraftSession {
     var draft by mutableStateOf(BulkDraft())
         private set
+    var revision: Long = 0
+        private set
+    var onChanged: (() -> Unit)? = null
+    private var submissionKey: String = UUID.randomUUID().toString()
+
+    /** Stable across transport retries; changing the draft starts a new server attempt. */
+    fun idempotencyKey(): String = submissionKey
+    private fun changed() { revision++; submissionKey = UUID.randomUUID().toString(); onChanged?.invoke() }
+
+    /** Server responses replace local edits only after an explicit fetch, not after a stale-write failure. */
+    fun applyServer(value: BulkServerDraft) {
+        draft = value.draft
+        revision++
+        submissionKey = UUID.randomUUID().toString()
+    }
 
     fun selectSeller(sellerId: String): Boolean {
         if (draft.sellerId != null && draft.sellerId != sellerId && draft.lines.isNotEmpty()) return false
-        draft = if (draft.sellerId == sellerId) draft else BulkDraft(sellerId = sellerId)
+        if (draft.sellerId != sellerId) { draft = BulkDraft(sellerId = sellerId); changed() }
         return true
     }
 
@@ -38,14 +63,15 @@ class BulkDraftSession {
         if (item.sellerId != draft.sellerId || quantity < 0 || quantity > 999) return false
         val other = draft.lines.filterNot { it.itemId == item.id }
         draft = draft.copy(lines = if (quantity == 0) other else other + BulkLine(item.id, quantity))
+        changed()
         return true
     }
 
-    fun setPickup(value: LocalDateTime?) { draft = draft.copy(pickup = value) }
-    fun setSpecial(value: Boolean) { draft = draft.copy(specialPickup = value, specialReason = if (value) draft.specialReason else "") }
-    fun setSpecialReason(value: String) { draft = draft.copy(specialReason = value.take(500)) }
-    fun setInstructions(value: String) { draft = draft.copy(instructions = value.take(500)) }
-    fun clear() { draft = BulkDraft() }
+    fun setPickup(value: LocalDateTime?) { draft = draft.copy(pickup = value); changed() }
+    fun setSpecial(value: Boolean) { draft = draft.copy(specialPickup = value, specialReason = if (value) draft.specialReason else ""); changed() }
+    fun setSpecialReason(value: String) { draft = draft.copy(specialReason = value.take(500)); changed() }
+    fun setInstructions(value: String) { draft = draft.copy(instructions = value.take(500)); changed() }
+    fun clear() { draft = BulkDraft(); changed() }
 }
 
 data class BulkTimeWindow(val opens: LocalTime, val closes: LocalTime) {
@@ -59,6 +85,8 @@ data class SellerBulkPolicy(
     val weeklyHours: Map<DayOfWeek, List<BulkTimeWindow>> = emptyMap(),
     val holidays: Set<LocalDate> = emptySet(),
     val temporaryClosures: Set<LocalDate> = emptySet(),
+    val specialPickupEnabled: Boolean = true,
+    val individualEnabled: Boolean = false,
 ) {
     init { require(minimumOverride == null || minimumOverride > 0) }
     val minimum: Int get() = minimumOverride ?: DEFAULT_BULK_MINIMUM
@@ -115,7 +143,7 @@ fun checkBulkDraft(
     for (line in draft.lines) {
         val item = catalog.items.find { it.id == line.itemId }
         if (item == null || item.sellerId != draft.sellerId) { issues += BulkDraftIssue.CROSS_SELLER_ITEM; continue }
-        if (seller == null || itemEligibility(seller, item) == ItemEligibility.UNAVAILABLE) issues += BulkDraftIssue.ITEM_UNAVAILABLE
+        if (seller == null || itemEligibility(seller, item) !in setOf(ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK, ItemEligibility.BULK_ONLY)) issues += BulkDraftIssue.ITEM_UNAVAILABLE
         estimate += item.price.rupees.toLong() * line.quantity * 100L
     }
     val minimum = policy?.minimum ?: DEFAULT_BULK_MINIMUM

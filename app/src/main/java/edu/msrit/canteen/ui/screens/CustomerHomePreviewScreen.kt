@@ -28,7 +28,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import edu.msrit.canteen.customer.CustomerCatalogSource
 import edu.msrit.canteen.customer.FavoritesRepository
-import edu.msrit.canteen.customer.FoodPhoto
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.visibleItems
 import edu.msrit.canteen.onboarding.CopyContext
@@ -80,7 +79,6 @@ fun CustomerHomePreviewScreen(
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
                     RitBrandHeader(onTrailingClick = { onBottom(RitBottomItem.Profile) })
                     Spacer(Modifier.height(12.dp))
-                    RitStatusIndicator("Catalog preview · illustrative prices")
                     Spacer(Modifier.height(20.dp))
                     RitText("Good food, close by.", RitType.heading)
                     RitText("Explore meals and sellers at RIT.", RitType.body, colors.muted)
@@ -99,14 +97,16 @@ fun CustomerHomePreviewScreen(
                     Spacer(Modifier.height(20.dp))
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(RitRadii.hero)).background(colors.warmCard)
                         .clickable(role = Role.Button, onClick = onSellers)) {
-                        FoodPhotoContent(FoodPhoto.DOSA, "Illustrative masala dosa photograph", Modifier.fillMaxWidth().height(158.dp))
+                        val hero = catalog.items.firstOrNull { it.id == "masala-dosa" }
+                        FoodPhotoContent(hero?.photo, "Masala dosa",
+                            Modifier.fillMaxWidth().height(158.dp), hero?.localImageUri)
                         Column(Modifier.padding(16.dp)) {
                             RitText("Discover the campus menu", RitType.title)
                             RitText("Browse the main canteen and group-order sellers", RitType.small, colors.muted)
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    RitText("See demo seller offers →", RitType.label, colors.accent,
+                    RitText("See offers →", RitType.label, colors.accent,
                         Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onOffers)
                             .testTag("home_offers_entry").padding(vertical = 10.dp))
                     Spacer(Modifier.height(22.dp))
@@ -129,9 +129,8 @@ fun CustomerHomePreviewScreen(
             }
             item {
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
-                    RitText(if (selectedName == null) "All preview food" else "$selectedName preview food", RitType.title,
+                    RitText(if (selectedName == null) "All food" else selectedName, RitType.title,
                         modifier = Modifier.testTag("home_results_heading"))
-                    RitText("Sample items and prices · not a live menu", RitType.small, colors.muted)
                 }
             }
             if (visibleFood.isEmpty()) {

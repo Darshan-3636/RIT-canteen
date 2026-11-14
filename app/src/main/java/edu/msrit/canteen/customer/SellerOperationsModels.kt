@@ -77,7 +77,7 @@ fun validateBulkProposal(
 enum class SellerRequestStatus(val label: String) {
     NEW("New request"), CUSTOMER_COUNTER("Customer revision · seller action"),
     SELLER_REVIEW("Seller approval needed"), WAITING_CUSTOMER("Awaiting customer approval"),
-    AGREED_UNPAID("Agreed · payment unverified"), PAID_FIXTURE("Verified-paid fixture"),
+    AGREED_UNPAID("Agreed · awaiting payment"), PAID_FIXTURE("Paid"),
     EXPIRED("Expired"), WITHDRAWN("Withdrawn"), REJECTED("Rejected"),
 }
 
@@ -98,7 +98,7 @@ fun BulkRequestRecord.operationalStatus(): SellerRequestStatus = when (thread.st
 
 enum class SellerRequestFilter(val label: String) {
     ALL("All"), NEEDS_ACTION("Needs action"), WAITING_CUSTOMER("Customer response"),
-    UNPAID("Unpaid"), PAID("Paid fixture"), CLOSED("Closed")
+    UNPAID("Unpaid"), PAID("Paid"), CLOSED("Closed")
 }
 
 fun filterSellerRequests(records: List<BulkRequestRecord>, sellerId: String,
@@ -122,9 +122,9 @@ fun filterSellerRequests(records: List<BulkRequestRecord>, sellerId: String,
     }.sortedByDescending { it.createdAt }
 
 enum class DemoTransitionResult(val explanation: String) {
-    APPLIED("Saved in this debug-only scenario. Nothing was sent to a server."),
+    APPLIED("Saved."),
     NOT_FOUND("This request is not available in the current seller/customer context."),
-    UNAUTHORIZED("This mock role cannot perform that action for this seller."),
+    UNAUTHORIZED("You don't have permission to do that."),
     STALE_VERSION("The quote changed. Reopen the latest revision before responding."),
     INVALID_STATE("This request state does not permit that action."),
     INVALID_PROPOSAL("Review the seller, items, quantities, price, pickup and special-request details."),

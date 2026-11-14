@@ -22,4 +22,9 @@ object AuthInput {
         val name = normalizeName(value)
         return name.length in 3..100 && name.split(' ').size >= 2 && name.all { it.isLetter() || it.isWhitespace() || it in "'-" }
     }
+
+    fun isRegistrationNameValid(value: String): Boolean {
+        val name = normalizeName(value)
+        return isFullNameValid(name) && name.all { it.isLetter() || it == ' ' }
+    }
 }

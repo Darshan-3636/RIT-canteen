@@ -3,6 +3,8 @@ package edu.msrit.canteen.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,19 +22,30 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import edu.msrit.canteen.customer.BulkRequestRecord
 import edu.msrit.canteen.customer.IndividualOrderPreview
+import edu.msrit.canteen.customer.PREPARATION_TIME_LABEL
+import edu.msrit.canteen.customer.customerOrderStatus
+import edu.msrit.canteen.customer.isPaidOrder
+import edu.msrit.canteen.ui.components.RitPickupQr
+import edu.msrit.canteen.customer.SandboxPayment
+import edu.msrit.canteen.customer.DemoOrder
+import edu.msrit.canteen.customer.DemoOrderKind
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.QuoteStage
 import edu.msrit.canteen.ui.components.CatalogHeader
+import edu.msrit.canteen.ui.components.CatalogPill
+import edu.msrit.canteen.ui.components.FoodPhotoContent
 import edu.msrit.canteen.ui.components.RitBottomItem
 import edu.msrit.canteen.ui.components.RitBottomNavigation
 import edu.msrit.canteen.ui.components.RitChip
 import edu.msrit.canteen.ui.components.RitEmptyState
 import edu.msrit.canteen.ui.components.RitSecondaryButton
+import edu.msrit.canteen.ui.components.RitPrimaryButton
 import edu.msrit.canteen.ui.components.RitText
 import edu.msrit.canteen.ui.theme.RitRadii
 import edu.msrit.canteen.ui.theme.RitThemeTokens
@@ -45,8 +59,8 @@ private fun bulkPrimaryState(record: BulkRequestRecord): String = when (record.t
     QuoteStage.SUBMITTED -> "Waiting for seller review"
     QuoteStage.COUNTEROFFER -> if (record.latest.actor == edu.msrit.canteen.customer.QuoteActor.SELLER)
         "Review seller's updated offer" else "Waiting for seller's response"
-    QuoteStage.AGREED_AWAITING_PAYMENT -> "Agreed · payment unavailable"
-    QuoteStage.PAID_CONFIRMED -> "Scheduled · paid SAMPLE fixture"
+    QuoteStage.AGREED_AWAITING_PAYMENT -> "Agreed · awaiting payment"
+    QuoteStage.PAID_CONFIRMED -> "Paid"
     QuoteStage.EXPIRED -> "Offer expired"
     QuoteStage.REJECTED -> "Seller declined"
     QuoteStage.WITHDRAWN -> "Request withdrawn"
@@ -55,10 +69,12 @@ private fun bulkPrimaryState(record: BulkRequestRecord): String = when (record.t
 @Composable
 fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<BulkRequestRecord>,
                          onBack: () -> Unit, onIndividual: (String) -> Unit, onBulk: (String) -> Unit,
-                         onCart: () -> Unit, onBottom: (RitBottomItem) -> Unit, cartCount: Int = 0) {
+                         onCart: () -> Unit, onBottom: (RitBottomItem) -> Unit, cartCount: Int = 0,
+                         customerUserId: String = "debug-customer",
+                         demoOrders: List<DemoOrder> = emptyList(), onDemoOrder: (String) -> Unit = {}) {
     val colors = RitThemeTokens.colors
     var tab by remember { mutableStateOf(OrdersTab.ALL) }
-    val bulkVisible = bulk.filter { it.customerUserId == "debug-customer" }
+    val bulkVisible = bulk.filter { it.customerUserId == customerUserId }
     Column(Modifier.fillMaxSize().background(colors.background).testTag("customer_orders")) {
         CatalogHeader("Orders", onBack)
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -67,32 +83,54 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                     { tab = choice }, Modifier.weight(1f).testTag("orders_tab_${choice.name.lowercase()}"))
             }
         }
-        LazyColumn(Modifier.weight(1f), contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp)) {
+        LazyColumn(Modifier.weight(1f).testTag("orders_list"),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp)) {
             item {
-                RitText("Demo activity", RitType.heading)
-                RitText("Sample history and local previews only. No order here was submitted by this app to a live seller.",
-                    RitType.small, colors.muted)
+                RitText("Your activity", RitType.heading)
                 Spacer(Modifier.height(14.dp))
             }
             if (tab != OrdersTab.BULK) {
                 item { RitText("Individual food", RitType.title); Spacer(Modifier.height(7.dp)) }
-                if (individual.isEmpty()) item { RitEmptyState("No individual previews", "Select prepared food from Main Canteen to build a demo order.") }
+                items(demoOrders.filter { it.customerId == customerUserId && it.kind == DemoOrderKind.INDIVIDUAL },
+                    key = { "demo_${it.reference}" }) { order ->
+                    OrderCard("Individual · ${PreviewCatalog.sellers.find { it.id == order.sellerId }?.name ?: "Seller"}", order.state.name.lowercase().replace('_', ' '),
+                        order.lines.joinToString { "${it.quantity}× ${it.title}" },
+                        "${order.reference} · ${displayPaise(order.totalPaise)}",
+                        { onDemoOrder(order.reference) }, "orders_demo_${order.reference}", order.lines.firstOrNull()?.itemId)
+                }
+                if (individual.isEmpty() && demoOrders.none {
+                        it.customerId == customerUserId && it.kind == DemoOrderKind.INDIVIDUAL })
+                    item { RitEmptyState("No individual orders", "Choose an item eligible for individual ordering.") }
                 items(individual, key = { it.id }) { record ->
-                    OrderCard("Individual · Main Canteen", if (record.locallySaved) "Saved locally · not submitted" else "Sample history · not a real purchase",
+                    OrderCard("Individual · ${PreviewCatalog.sellers.find { seller -> seller.id == PreviewCatalog.items.find { it.id == record.lines.firstOrNull()?.itemId }?.sellerId }?.name ?: "Seller"}", if (record.locallySaved)
+                        customerOrderStatus(record.status)
+                        else "Past order",
                         record.lines.joinToString { "${it.quantity}× ${it.title}" },
-                        "${record.placedAt.format(orderDate)} · ${displayPaise(record.totalPaise)}",
-                        { onIndividual(record.id) }, "orders_individual_${record.id}")
+                        "${record.pickupReference.ifBlank { record.placedAt.format(orderDate) }} · ${displayPaise(record.totalPaise)}",
+                        { onIndividual(record.id) }, "orders_individual_${record.id}", record.lines.firstOrNull()?.itemId)
                 }
             }
             if (tab != OrdersTab.INDIVIDUAL) {
                 item { Spacer(Modifier.height(12.dp)); RitText("Bulk requests", RitType.title); Spacer(Modifier.height(7.dp)) }
-                if (bulkVisible.isEmpty()) item { RitEmptyState("No bulk requests", "Group requests and seller offers will appear here.") }
+                items(demoOrders.filter { it.customerId == customerUserId && it.kind == DemoOrderKind.BULK },
+                    key = { "demo_${it.reference}" }) { order ->
+                    OrderCard("Bulk · ${PreviewCatalog.sellers.find { it.id == order.sellerId }?.name ?: "Seller"}",
+                        order.state.name.lowercase().replace('_', ' '),
+                        order.lines.joinToString { "${it.quantity}× ${it.title}" },
+                        "${order.reference} · ${displayPaise(order.totalPaise)}",
+                        { onDemoOrder(order.reference) }, "orders_demo_${order.reference}", order.lines.firstOrNull()?.itemId)
+                }
+                if (bulkVisible.isEmpty() && demoOrders.none {
+                        it.customerId == customerUserId && it.kind == DemoOrderKind.BULK })
+                    item { RitEmptyState("No bulk requests", "Group requests and seller offers will appear here.") }
                 items(bulkVisible, key = { it.reference }) { record ->
                     val seller = PreviewCatalog.sellers.find { it.id == record.sellerId }?.name ?: "Seller"
-                    OrderCard("Bulk · $seller", bulkPrimaryState(record),
+                    val simulated = demoOrders.find { it.reference == record.reference && it.customerId == customerUserId }
+                    OrderCard("Bulk quote · $seller", simulated?.state?.name?.lowercase()?.replace('_', ' ')
+                        ?: bulkPrimaryState(record),
                         "${record.latest.lines.sumOf { it.quantity }} items · pickup ${record.latest.pickup.format(orderDate)}",
-                        "${record.reference} · ${displayPaise(record.latest.totalPaise)} · Demo data",
-                        { onBulk(record.reference) }, "orders_bulk_${record.reference}")
+                        "${record.reference} · ${displayPaise(record.latest.totalPaise)}",
+                        { onBulk(record.reference) }, "orders_bulk_${record.reference}", record.latest.lines.firstOrNull()?.itemId)
                 }
             }
             item { Spacer(Modifier.height(10.dp)); RitSecondaryButton("Open Cart", onCart, Modifier.fillMaxWidth()) }
@@ -103,14 +141,19 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
 
 @Composable
 private fun OrderCard(title: String, status: String, detail: String, foot: String,
-                      onClick: () -> Unit, tag: String) {
+                      onClick: () -> Unit, tag: String, previewItemId: String?) {
     val colors = RitThemeTokens.colors
     Column(Modifier.fillMaxWidth().padding(bottom = 10.dp).border(1.dp, colors.outline,
         RoundedCornerShape(RitRadii.card)).background(colors.card, RoundedCornerShape(RitRadii.card))
         .clickable(onClick = onClick).testTag(tag).padding(16.dp)) {
+        PreviewCatalog.items.find { it.id == previewItemId }?.let { item ->
+            FoodPhotoContent(item.photo, "${item.name} photo", Modifier.fillMaxWidth().height(110.dp), item.localImageUri)
+            Spacer(Modifier.height(10.dp))
+        }
         RitText(title, RitType.label)
-        Spacer(Modifier.height(3.dp))
-        RitText(status, RitType.title, colors.accent)
+        Spacer(Modifier.height(6.dp))
+        CatalogPill(status)
+        Spacer(Modifier.height(8.dp))
         RitText(detail, RitType.body)
         Spacer(Modifier.height(5.dp))
         RitText(foot, RitType.small, colors.muted)
@@ -118,23 +161,65 @@ private fun OrderCard(title: String, status: String, detail: String, foot: Strin
 }
 
 @Composable
-fun IndividualOrderDetailScreen(record: IndividualOrderPreview?, onBack: () -> Unit) {
+fun IndividualOrderDetailScreen(record: IndividualOrderPreview?, onBack: () -> Unit,
+                                feedback: String? = null,
+                                paymentBusy: Boolean = false, payment: SandboxPayment? = null,
+                                onPayNow: (() -> Unit)? = null,
+                                onCheckPayment: (() -> Unit)? = null) {
     val colors = RitThemeTokens.colors
     Column(Modifier.fillMaxSize().background(colors.background).testTag("individual_order_detail")) {
-        CatalogHeader("Order Preview", onBack)
-        if (record == null) RitEmptyState("Preview unavailable", "This local record may have been reset.")
-        else Column(Modifier.padding(20.dp)) {
-            RitText(if (record.locallySaved) "Saved locally" else "Sample history", RitType.heading)
-            RitText("Not submitted to a seller · no payment or kitchen acceptance", RitType.body, colors.muted)
+        CatalogHeader("Order", onBack)
+        if (record == null) RitEmptyState("Order unavailable", "Refresh Orders to load this order.")
+        else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+            RitText(customerOrderStatus(record.status), RitType.heading,
+                modifier = Modifier.testTag("individual_order_status"))
+            if (record.pickupReference.isNotBlank()) RitText("Order ${record.pickupReference}", RitType.body, colors.muted,
+                Modifier.testTag("individual_pickup_reference"))
+            val pin = record.pickupCode
+            if (isPaidOrder(record.status) && record.status != "DEMO_COMPLETED") {
+                Spacer(Modifier.height(6.dp))
+                RitText(if (record.status == "DEMO_READY") "Your food is ready. Show this at the counter."
+                    else "$PREPARATION_TIME_LABEL. Show this at the counter when it's ready.", RitType.body)
+                if (pin != null) {
+                    Spacer(Modifier.height(14.dp))
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        RitPickupQr(pin, Modifier.testTag("individual_pickup_qr"))
+                        Spacer(Modifier.height(10.dp))
+                        RitText("Pickup PIN", RitType.label, colors.muted)
+                        RitText(pin, RitType.display, colors.accent, Modifier.testTag("individual_pickup_code"))
+                    }
+                }
+            }
+            record.handedOverAt?.let { RitText("Collected", RitType.small, colors.muted) }
             Spacer(Modifier.height(18.dp))
             record.lines.forEach { line ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    PreviewCatalog.items.find { it.id == line.itemId }?.let { item ->
+                        FoodPhotoContent(item.photo, "${item.name} order item", Modifier.padding(end = 10.dp).size(48.dp), item.localImageUri)
+                    }
                     RitText("${line.quantity} × ${line.title}", RitType.body, modifier = Modifier.weight(1f))
                     RitText(displayPaise(line.unitPricePaise * line.quantity), RitType.body)
                 }
             }
             Spacer(Modifier.height(12.dp))
-            RitText("Illustrative total  ${displayPaise(record.totalPaise)}", RitType.title)
+            RitText("Total  ${displayPaise(record.totalPaise)}", RitType.title)
+            val awaitingPayment = record.status in setOf("DEMO_SAVED", "DEMO_PAYMENT_PENDING", "DEMO_PAYMENT_FAILED")
+            if (awaitingPayment) {
+                Spacer(Modifier.height(18.dp))
+                if (onPayNow == null) RitText("Payment isn't available right now. Please try again later.",
+                    RitType.body, colors.muted)
+                else if (payment?.status !in setOf("SANDBOX_SUCCESS", "CANCELLED")) RitPrimaryButton(
+                    if (paymentBusy) "Opening PhonePe…" else "Pay Now", onPayNow,
+                    Modifier.fillMaxWidth().testTag("individual_pay_now"), enabled = !paymentBusy)
+                if (payment != null && payment.status in setOf("PENDING", "INITIATED", "CANCELLED") &&
+                    onCheckPayment != null) {
+                    Spacer(Modifier.height(8.dp))
+                    RitSecondaryButton("Check payment status", onCheckPayment,
+                        Modifier.fillMaxWidth().testTag("individual_check_payment"), enabled = !paymentBusy)
+                }
+            }
+            if (!feedback.isNullOrBlank()) RitText(feedback, RitType.body, colors.accent,
+                Modifier.padding(top = 10.dp).testTag("individual_payment_feedback"))
         }
     }
 }

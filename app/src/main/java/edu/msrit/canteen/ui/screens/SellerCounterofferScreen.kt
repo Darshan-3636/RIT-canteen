@@ -64,14 +64,14 @@ private fun SnapshotStateMap<String, Int>.setBounded(itemId: String, value: Int)
 /** Shared editor for seller and customer demo revisions. Sending only mutates the local debug repository. */
 @Composable
 fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies: BulkPolicySource,
-                          onBack: () -> Unit, onSubmit: (BulkProposal) -> DemoTransitionResult,
+                          onBack: () -> Unit, onSubmit: (BulkProposal, (Boolean, String) -> Unit) -> Unit,
                           onApplied: () -> Unit, catalog: CustomerCatalogSource = PreviewCatalog) {
     val colors = RitThemeTokens.colors
     val context = LocalContext.current
     val latest = record.latest
     val seller = catalog.sellers.firstOrNull { it.id == record.sellerId }
     val menu = catalog.visibleItems(record.sellerId).filter {
-        seller != null && itemEligibility(seller, it) != ItemEligibility.UNAVAILABLE
+        seller != null && itemEligibility(seller, it) in setOf(ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK, ItemEligibility.BULK_ONLY)
     }
     val quantities = remember(record.reference, latest.version) {
         mutableStateMapOf<String, Int>().apply {
@@ -80,8 +80,7 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
     }
     val prices = remember(record.reference, latest.version) {
         mutableStateMapOf<String, String>().apply {
-            menu.forEach { item -> put(item.id,
-                ((latest.lines.find { it.itemId == item.id }?.unitPricePaise ?: item.price.rupees * 100L) / 100).toString()) }
+            menu.forEach { item -> put(item.id, item.price.rupees.toString()) }
         }
     }
     var pickup by remember(record.reference, latest.version) { mutableStateOf(latest.pickup) }
@@ -89,6 +88,7 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
     var specialReason by remember(record.reference, latest.version) { mutableStateOf(latest.specialReason) }
     var note by remember(record.reference, latest.version) { mutableStateOf("") }
     var feedback by remember(record.reference, latest.version) { mutableStateOf("") }
+    var showingPreview by remember(record.reference, latest.version) { mutableStateOf(false) }
     val selected = menu.filter { (quantities[it.id] ?: 0) > 0 }
     val pricesValid = selected.all { prices[it.id]?.toLongOrNull() != null }
     val lines = selected.mapNotNull { item ->
@@ -101,27 +101,45 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
         proposal.note.isNotBlank()
     val now = LocalDateTime.now(RIT_TIME_ZONE)
     val issues = if (pricesValid) validateBulkProposal(proposal, record.sellerId, record.appliedMinimum,
-        catalog, policies.forSeller(record.sellerId), now) else setOf(edu.msrit.canteen.customer.ProposalIssue.INVALID_LINE)
+        catalog, policies.forSeller(record.sellerId), now).filterNot {
+        // Backend owns hours/closure decisions; the local editor has no read-back endpoint.
+        it in setOf(edu.msrit.canteen.customer.ProposalIssue.INVALID_PICKUP,
+            edu.msrit.canteen.customer.ProposalIssue.SPECIAL_FLAG_REQUIRED,
+            edu.msrit.canteen.customer.ProposalIssue.SPECIAL_REASON_REQUIRED)
+    }.toSet() else setOf(edu.msrit.canteen.customer.ProposalIssue.INVALID_LINE)
     val window = pickupWindow(policies.forSeller(record.sellerId), pickup, now)
-    val canSubmit = hasChange && issues.isEmpty() && record.thread.stage in setOf(QuoteStage.SUBMITTED, QuoteStage.COUNTEROFFER) &&
+    val canSubmit = isSeller && hasChange && issues.isEmpty() && pickup.isAfter(now) &&
+        (!special || specialReason.isNotBlank()) &&
+        record.thread.stage in setOf(QuoteStage.SUBMITTED, QuoteStage.COUNTEROFFER) &&
         latest.actor != if (isSeller) QuoteActor.SELLER else QuoteActor.CUSTOMER
     val preview = if (pricesValid && lines.isNotEmpty()) QuoteRevision(latest.version + 1,
         if (isSeller) QuoteActor.SELLER else QuoteActor.CUSTOMER, lines, pickup, special,
         proposal.totalPaise, note, now, specialReason) else null
     val diff = preview?.let { compareQuotes(latest, it) }
 
+    if (isSeller && showingPreview && preview != null) {
+        SellerCounterofferPreviewPresentation(
+            record = record, proposal = preview, canRespond = true,
+            onBack = { showingPreview = false },
+            onContinueReview = { showingPreview = false },
+            onReviewSpecialPickup = { showingPreview = false },
+            proposalIsDraft = true,
+        )
+        return
+    }
+
     Column(Modifier.fillMaxSize().background(colors.background).testTag("demo_quote_editor")) {
         CatalogHeader(if (isSeller) "Seller counteroffer" else "Customer revision", onBack)
         LazyColumn(Modifier.weight(1f).testTag("demo_quote_editor_list"),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
-                RitStatusIndicator("Revision ${latest.version + 1} · local debug simulation only")
+                RitStatusIndicator("Revision ${latest.version + 1}")
                 Spacer(Modifier.height(12.dp))
                 BulkInfoCard("One seller: ${seller?.name ?: record.sellerId}",
                     "Only this seller's available items appear. Minimum snapshot: ${record.appliedMinimum} combined units.")
                 Spacer(Modifier.height(14.dp))
                 RitText("Items, quantities and unit prices", RitType.title)
-                RitText("Quoted total is the sum of these lines; no tax or service fee is added.", RitType.small, colors.muted)
+                RitText("Server catalog prices are authoritative; this editor cannot set custom prices.", RitType.small, colors.muted)
                 Spacer(Modifier.height(9.dp))
             }
             items(menu, key = { it.id }) { item: MenuItem ->
@@ -135,9 +153,7 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
                         RitChip("+", false, { quantities.setBounded(item.id, (quantities[item.id] ?: 0) + 1) },
                             Modifier.testTag("demo_quote_plus_${item.id}"))
                     }
-                    RitTextField(prices[item.id].orEmpty(), { prices[item.id] = it.filter(Char::isDigit).take(8) },
-                        "Quoted unit price · rupees", "0", Modifier.fillMaxWidth(),
-                        inputTag = "demo_quote_price_${item.id}")
+                    RitText("Current server price: ${item.price.display}", RitType.small, colors.muted)
                 }
             }
             item {
@@ -159,10 +175,10 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
                     }, initial.hour, initial.minute, false).show()
                 }, Modifier.fillMaxWidth().testTag("demo_quote_time"))
                 Spacer(Modifier.height(9.dp))
-                BulkInfoCard("Demo hours check", when (window) {
-                    PickupWindow.REGULAR -> "Inside fictional regular hours; still not a reserved slot."
+                BulkInfoCard("Opening hours", when (window) {
+                    PickupWindow.REGULAR -> "Within opening hours."
                     PickupWindow.SPECIAL_REQUIRED -> "Outside hours, holiday or closure: special flag and reason required."
-                    PickupWindow.HOURS_UNVERIFIED -> "Hours unverified; cannot propose ordinary pickup."
+                    PickupWindow.HOURS_UNVERIFIED -> "Opening hours aren't set."
                     PickupWindow.PAST -> "Choose a future pickup time."
                 })
                 Spacer(Modifier.height(9.dp))
@@ -200,14 +216,17 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
                         RitText("Change at least one term or add a message before sending a revision.", RitType.small, colors.muted)
                 }
                 Spacer(Modifier.height(10.dp))
-                BulkInfoCard("Revision integrity", "Sending creates a new immutable demo version and invalidates approvals on older versions. It does not create a real seller/customer message.")
+                BulkInfoCard("New version", "Sending creates a new quote version; earlier approvals no longer apply.")
                 if (feedback.isNotBlank()) RitText(feedback, RitType.small, colors.accent)
             }
         }
-        RitPrimaryButton("Create demo revision", {
-            val result = onSubmit(proposal)
-            feedback = result.explanation
-            if (result == DemoTransitionResult.APPLIED) onApplied()
+        if (isSeller && canSubmit) RitSecondaryButton("Preview changed terms", { showingPreview = true },
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("demo_quote_preview"))
+        RitPrimaryButton(if (isSeller) "Send seller counteroffer" else "Customer counteroffer unavailable", {
+            onSubmit(proposal) { applied, message ->
+                feedback = message
+                if (applied) onApplied()
+            }
         }, Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp).testTag("demo_quote_submit"),
             enabled = canSubmit)
     }

@@ -1,5 +1,6 @@
 package edu.msrit.canteen.customer
 
+import edu.msrit.canteen.BuildConfig
 import java.time.Instant
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,7 +16,7 @@ object DevelopmentPromotions : PromotionSource {
         Promotion("north-lunch-demo", "north-counter", "Group lunch feature · demo",
             "Illustrative seller banner for bulk-request discovery. No order or redemption is available.", PromotionKind.BANNER,
             Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-11-30T23:59:59Z"), true,
-            itemIds = setOf("north-lunch"), categoryIds = setOf("rice")),
+            itemIds = setOf("north-lunch"), categoryIds = setOf("combos")),
         Promotion("corner-coffee-demo", "coffee-corner", "Coffee break for groups · demo",
             "Illustrative ₹30 off an eligible bulk request. No automatic pricing or redemption.", PromotionKind.FIXED_DISCOUNT,
             Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-12-31T23:59:59Z"), true,
@@ -27,10 +28,10 @@ object DevelopmentPromotions : PromotionSource {
         Promotion("unpublished-demo", PreviewCatalog.MAIN_ID, "Hidden demo", "Unpublished.", PromotionKind.BANNER,
             Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-12-31T00:00:00Z"), false),
     )
-    override var promotions by mutableStateOf(initial)
+    override var promotions by mutableStateOf(if (BuildConfig.RIT_CLOUD_DEMO) emptyList() else initial)
         private set
     fun replaceDemo(value: List<Promotion>) { promotions = value }
-    fun resetDemo() { promotions = initial }
+    fun resetDemo() { promotions = if (BuildConfig.RIT_CLOUD_DEMO) emptyList() else initial }
 }
 
 object DevelopmentSampleHistory : OrderHistorySource {
