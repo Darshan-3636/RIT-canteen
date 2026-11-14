@@ -33,7 +33,7 @@ object ThemeCatalog {
         ThemeArtwork(ThemeId.Minecraft, "Minecraft", ThemeFamily.Game, R.drawable.onboarding_minecraft_shader, "Shader-lit voxel students selecting dishes at a canteen counter", true),
         ThemeArtwork(ThemeId.Valorant, "Valorant", ThemeFamily.Game, R.drawable.onboarding_valorant_game, "Game-style group and seller planning a large food request", true),
         ThemeArtwork(ThemeId.Pubg, "PUBG", ThemeFamily.Game, R.drawable.onboarding_pubg_clean, "Parachuting above a campus", true),
-        ThemeArtwork(ThemeId.AmongUs, "Among Us", ThemeFamily.Game, R.drawable.onboarding_among_us_map, "Top-down crew exploring three connected food-court seller rooms", true),
+        ThemeArtwork(ThemeId.AmongUs, "Among Us", ThemeFamily.Game, R.drawable.onboarding_among_us_map, "Top-down crew exploring the canteen's food counters", true),
         ThemeArtwork(ThemeId.Codm, "CODM", ThemeFamily.Game, R.drawable.onboarding_codm, "Tactical campus view", false),
         ThemeArtwork(ThemeId.Aristotle, "Aristotle", ThemeFamily.Education, R.drawable.onboarding_aristotle, "Illustrated philosopher", false),
         ThemeArtwork(ThemeId.Newton, "Newton", ThemeFamily.Education, R.drawable.onboarding_newton, "Illustrated scientist", false),
@@ -55,7 +55,7 @@ object OnboardingManifest {
     val content = listOf(
         OnboardingContent(SlideId.OrderFood, "Order Food", "Discover the main canteen's prepared-food menu and see what's available on campus."),
         OnboardingContent(SlideId.BulkOrders, "Bulk Orders", "Plan food for clubs, meetings and events. Agree on items, quantities, pickup time and price before a final quote and payment."),
-        OnboardingContent(SlideId.ExploreSellers, "Explore Sellers", "Browse participating stalls, menus, categories and offers. Save your favourites; ordering options vary by seller."),
+        OnboardingContent(SlideId.ExploreSellers, "Explore the Menu", "Browse the canteen's menu, categories and offers. Save your favourites to order them again quickly."),
     )
     val themeAssignments = mapOf(
         SlideId.OrderFood to ThemeId.Minecraft,

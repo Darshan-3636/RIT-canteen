@@ -881,6 +881,8 @@ fun RitAppNavigation(appearance: AppearancePreference,
                                 DevelopmentIndividualOrders.upsertServer(order)
                                 val history = withContext(Dispatchers.IO) { DebugCommerceApi.individualOrders() }
                                 history.value?.let(DevelopmentIndividualOrders::applyServer)
+                                // Checkout empties the server cart; pull it so the Cart badge clears.
+                                if (!refreshIndividualCart()) individualCart.clear()
                                 withContext(Dispatchers.Main.immediate) {
                                     // Back from the order should not return to the already-placed review.
                                     navController.navigate(Route.individualOrderDetail(order.id)) {

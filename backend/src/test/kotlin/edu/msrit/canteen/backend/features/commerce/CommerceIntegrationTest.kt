@@ -290,9 +290,9 @@ class CommerceIntegrationTest {
             assertEquals(HttpStatusCode.Conflict,place("cart-checkout-1",2).status)
             assertEquals(HttpStatusCode.Conflict,place("cart-checkout-2",1).status)
             val cart=client.get(path) { header(HttpHeaders.Authorization,"Bearer ${f.customer.token}") }
-            assertTrue(cart.bodyAsText().contains("\"version\":1"))
-            assertTrue(cart.bodyAsText().contains("\"itemId\":\"masala-dosa\""))
-            assertTrue(cart.bodyAsText().contains("\"quantity\":2"))
+            // The placed order now owns the items; the cart is emptied and moves to a new version.
+            assertTrue(cart.bodyAsText().contains("\"version\":2"))
+            assertFalse(cart.bodyAsText().contains("\"itemId\":\"masala-dosa\""))
             val other=client.get("/api/v1/me/individual-demo-orders") {
                 header(HttpHeaders.Authorization,"Bearer ${f.stranger.token}")
             }
