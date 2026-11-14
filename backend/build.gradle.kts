@@ -37,4 +37,15 @@ tasks.register("resolveRuntimeDependencies") {
     doLast { configurations.getByName("runtimeClasspath").resolve() }
 }
 
-kotlin { compilerOptions { freeCompilerArgs.add("-Xjsr305=strict") } }
+// Target the Docker runtime (Java 17) whichever JDK runs Gradle, so Java and Kotlin bytecode levels always match.
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        freeCompilerArgs.add("-Xjsr305=strict")
+    }
+}
