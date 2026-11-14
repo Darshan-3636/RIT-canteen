@@ -78,7 +78,7 @@ private fun Promotion.eligibilityLabel(catalog: CustomerCatalogSource): String {
     if (names.isNotEmpty()) return "For ${names.take(2).joinToString(" · ")}"
     val categories = catalog.categories.filter { it.id in categoryIds }.map { it.name }
     if (categories.isNotEmpty()) return "For ${categories.take(2).joinToString(" · ")}"
-    return "For this seller's menu"
+    return "For this canteen's menu"
 }
 
 @Composable
@@ -106,13 +106,13 @@ fun CustomerPromotionsScreen(onBack: () -> Unit, onPromotion: (String) -> Unit,
         CatalogHeader("Offers", onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
             RitText("Good things on the menu", RitType.heading)
-            RitText(if (sellerName == null) "Discover seller specials and featured food."
+            RitText(if (sellerName == null) "Discover canteen specials and featured food."
                 else "Specials and featured food from $sellerName.", RitType.body, colors.muted)
             Spacer(Modifier.height(10.dp))
             RitStatusIndicator("Offers are checked again at individual checkout")
             Spacer(Modifier.height(14.dp))
         }
-        if (loading) RitEmptyState("Loading offers…", "Checking current seller offers.")
+        if (loading) RitEmptyState("Loading offers…", "Checking current canteen offers.")
         else if (loadError != null) RitEmptyState("Offers unavailable", loadError!!)
         else if (promotions.isEmpty()) RitEmptyState("No offers available", "There are no current published offers for this menu.")
         else LazyColumn(modifier = Modifier.testTag("offers_list"),
@@ -120,7 +120,7 @@ fun CustomerPromotionsScreen(onBack: () -> Unit, onPromotion: (String) -> Unit,
             items(promotions, key = { it.id }) { promotion ->
                 val seller = catalog.sellers.find { it.id == promotion.sellerId }
                 Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                    PromotionCard(promotion, seller?.name ?: "Seller unavailable", now, { onPromotion(promotion.id) }, catalog,
+                    PromotionCard(promotion, seller?.name ?: "Canteen unavailable", now, { onPromotion(promotion.id) }, catalog,
                         Modifier.testTag("promotion_${promotion.id}"))
                 }
             }
@@ -180,16 +180,16 @@ fun CustomerPromotionDetailScreen(id: String, onBack: () -> Unit, onSeller: (Str
                     RitText(promotion.description, RitType.body, colors.muted)
                     Spacer(Modifier.height(18.dp))
                     RitMessageCard("Validity", when (promotion.statusAt(now)) {
-                        PromotionStatus.ACTIVE -> "Available during the listed period, subject to item and seller eligibility."
+                        PromotionStatus.ACTIVE -> "Available during the listed period, subject to item and canteen eligibility."
                         PromotionStatus.UPCOMING -> "This offer has not started."
                         PromotionStatus.EXPIRED -> "This offer has expired."
                     } + " ${offerDate.format(promotion.startsAt)} – ${offerDate.format(promotion.endsAt)}")
                     Spacer(Modifier.height(18.dp))
-                    RitText("Seller", RitType.title)
-                    RitText(seller?.name ?: "Seller unavailable", RitType.body, colors.muted)
+                    RitText("Canteen", RitType.title)
+                    RitText(seller?.name ?: "Canteen unavailable", RitType.body, colors.muted)
                     if (seller != null) {
                         Spacer(Modifier.height(10.dp))
-                        RitSecondaryButton("View seller profile", { onSeller(seller.id) }, Modifier.fillMaxWidth().testTag("promotion_open_seller"))
+                        RitSecondaryButton("View canteen profile", { onSeller(seller.id) }, Modifier.fillMaxWidth().testTag("promotion_open_seller"))
                     }
                     Spacer(Modifier.height(18.dp))
                     RitText("Related food", RitType.title)

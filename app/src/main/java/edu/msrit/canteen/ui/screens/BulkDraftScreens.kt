@@ -115,7 +115,7 @@ fun BulkSellerPickerScreen(
         CatalogHeader("Choose a canteen", onBack)
         LazyColumn(Modifier.testTag("bulk_seller_list"), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp)) {
             item {
-                BulkInfoCard("One seller per request", "Prepared and packaged items can be combined only when they belong to the same seller. Each seller has its own total-unit minimum.")
+                BulkInfoCard("One canteen per request", "Prepared and packaged items can be combined only when they come from the same canteen. Each canteen sets its own minimum.")
                 Spacer(Modifier.height(18.dp))
             }
             items(catalog.sellers.filter { it.capabilities.bulk }, key = { it.id }) { seller ->
@@ -128,8 +128,8 @@ fun BulkSellerPickerScreen(
             }
         }
     }
-    blockedSeller?.let { target -> RitConfirmDialog("Switch seller?",
-        "Your bulk cart contains items from another seller. Clear only the bulk cart to start with this seller?",
+    blockedSeller?.let { target -> RitConfirmDialog("Switch canteen?",
+        "Your bulk cart has items from another canteen. Clear the bulk cart and start with this canteen?",
         onDismiss = { blockedSeller = null }, onConfirm = {
             session.clear(); session.selectSeller(target); blockedSeller = null; onSelected()
         }) }
@@ -169,11 +169,11 @@ fun BulkCartScreen(
     if (seller == null) {
         Column(Modifier.fillMaxSize().background(colors.background).testTag("bulk_cart_empty")) {
             CatalogHeader("Add bulk items", onBack)
-            RitEmptyState("Choose one seller", "A bulk draft contains products from exactly one seller.")
+            RitEmptyState("Start a bulk order", "Pick items for a club, meeting or event in one request.")
             if (syncMessage != null) RitStatusIndicator(syncMessage)
             if (onReloadSaved != null) RitSecondaryButton("Discard local edits and reload saved draft", onReloadSaved,
                 Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("bulk_reload_saved"))
-            RitPrimaryButton("Choose a seller", onChooseSeller,
+            RitPrimaryButton("Start a bulk order", onChooseSeller,
                 Modifier.fillMaxWidth().padding(20.dp).testTag("bulk_cart_choose_seller"))
         }
         return
@@ -189,12 +189,11 @@ fun BulkCartScreen(
                 if (onReloadSaved != null) RitSecondaryButton("Discard local edits and reload saved draft", onReloadSaved,
                     Modifier.fillMaxWidth().testTag("bulk_reload_saved"))
                 Spacer(Modifier.height(10.dp))
-                BulkInfoCard(seller.name, "One seller per request · ${check.minimum} combined units minimum. Seller hours and prices shown here are demonstration data.")
+                BulkInfoCard(seller.name, "Minimum ${check.minimum} combined units.")
                 Spacer(Modifier.height(10.dp))
-                RitSecondaryButton("Choose another seller", onChooseSeller, Modifier.fillMaxWidth().testTag("bulk_switch_seller"))
                 Spacer(Modifier.height(16.dp))
-                RitText("Items from this seller", RitType.title)
-                RitText("Prepared and packaged products both count toward this seller's minimum.", RitType.small, colors.muted)
+                RitText("Menu", RitType.title)
+                RitText("Prepared and packaged items both count toward the minimum.", RitType.small, colors.muted)
                 Spacer(Modifier.height(8.dp))
             }
             items(menu, key = { it.id }) { item ->
@@ -217,13 +216,13 @@ fun BulkCartScreen(
             item {
                 Spacer(Modifier.height(18.dp))
                 BulkInfoCard("${check.totalUnits} of ${check.minimum} units", if (check.totalUnits < check.minimum)
-                    "Add ${check.minimum - check.totalUnits} more units from ${seller.name}. Quantities combine across this seller's items."
-                    else if (syncMessage != null) "Minimum met. This saved draft has not been sent to the seller."
+                    "Add ${check.minimum - check.totalUnits} more units from ${seller.name}. Quantities combine across this canteen's items."
+                    else if (syncMessage != null) "Minimum met. This saved draft has not been sent to the canteen."
                     else "Minimum met. This is still only a local request draft.", Modifier.testTag("bulk_minimum_status"))
                 Spacer(Modifier.height(14.dp))
                 RitText("Provisional catalog estimate: ${displayPaise(check.provisionalPaise)}", RitType.title,
                     modifier = Modifier.testTag("bulk_estimate"))
-                RitText("The seller may change items, quantities, time and price in a later quote. No payment is due now.", RitType.small, colors.muted)
+                RitText("The canteen may change items, quantities, time and price in a later quote. No payment is due now.", RitType.small, colors.muted)
             }
         }
         RitPrimaryButton("Continue to pickup details", onPickup,
@@ -259,9 +258,9 @@ fun BulkPickupScreen(
             item {
                 RitStatusIndicator("Proposed pickup · Asia/Kolkata (IST)")
                 Spacer(Modifier.height(12.dp))
-                BulkInfoCard(seller?.name ?: "Seller", if (connectedMode)
-                    if (policy == null) "Seller hours could not be loaded. This is only a proposed time; the server will validate it on submission."
-                    else "Server policy loaded: minimum ${policy.minimum} units. Pickup remains a request until the seller confirms."
+                BulkInfoCard(seller?.name ?: "Canteen", if (connectedMode)
+                    if (policy == null) "Canteen hours could not be loaded. This is only a proposed time; the server will validate it on submission."
+                    else "Server policy loaded: minimum ${policy.minimum} units. Pickup remains a request until the canteen confirms."
                     else "Usual hours: Mon–Fri 9:00–17:00, Sat 10:00–14:00, Sun closed. Holidays and closures may apply.")
                 Spacer(Modifier.height(18.dp))
                 RitText("Preferred date", RitType.title)
@@ -314,10 +313,10 @@ fun BulkPickupScreen(
                 RitText(selected?.let(::displayPickup) ?: "No pickup chosen", RitType.title, modifier = Modifier.testTag("bulk_pickup_selected"))
                 val status = if (connectedMode) {
                     if (selected?.isAfter(now) == true) when (window) {
-                        PickupWindow.REGULAR -> "Within the seller's published hours. Seller confirmation is still required."
+                        PickupWindow.REGULAR -> "Within the canteen's published hours. Canteen confirmation is still required."
                         PickupWindow.SPECIAL_REQUIRED -> if (policy?.specialPickupEnabled == false)
-                            "Seller does not accept special pickup requests. Choose a time within published hours."
-                            else "Outside published hours or on a closure. Request a special pickup; the seller may decline."
+                            "Canteen does not accept special pickup requests. Choose a time within published hours."
+                            else "Outside published hours or on a closure. Request a special pickup; the canteen may decline."
                         else -> "Opening hours aren't set. The canteen will confirm this time."
                     }
                     else "Choose a future pickup time."
@@ -336,11 +335,11 @@ fun BulkPickupScreen(
                     Spacer(Modifier.height(10.dp))
                     BulkTextBox("Reason for special request", draft.specialReason, session::setSpecialReason,
                         "Explain why this exception is requested…", "bulk_special_reason")
-                    RitText("Special pickup is never guaranteed without explicit seller approval.", RitType.small, colors.muted)
+                    RitText("Special pickup is never guaranteed without explicit canteen approval.", RitType.small, colors.muted)
                 }
                 Spacer(Modifier.height(16.dp))
                 BulkTextBox("Instructions (optional)", draft.instructions, session::setInstructions,
-                    "Helpful pickup details for the seller…", "bulk_instructions")
+                    "Helpful pickup details for the canteen…", "bulk_instructions")
             }
         }
         RitPrimaryButton(if (connectedMode) "Review request draft" else "Review local request draft", onReview,
@@ -381,10 +380,10 @@ fun BulkReviewScreen(
         CatalogHeader("Review bulk request", onBack)
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp)) {
             item {
-                RitStatusIndicator(syncMessage ?: "Unsubmitted local draft · no seller has seen this")
+                RitStatusIndicator(syncMessage ?: "Unsubmitted local draft · no canteen has seen this")
                 Spacer(Modifier.height(14.dp))
-                RitText(seller?.name ?: "Choose a seller", RitType.heading)
-                RitText("One seller · minimum ${policy?.minimum ?: seller?.bulkMinimumUnits ?: check.minimum} combined units", RitType.small, colors.muted)
+                RitText(seller?.name ?: "Choose a canteen", RitType.heading)
+                RitText("One canteen · minimum ${policy?.minimum ?: seller?.bulkMinimumUnits ?: check.minimum} combined units", RitType.small, colors.muted)
                 Spacer(Modifier.height(14.dp))
                 BulkInfoCard("${check.totalUnits} units · ${displayPaise(check.provisionalPaise)} provisional", "Based on current menu prices. The canteen will send a final quote.")
                 Spacer(Modifier.height(12.dp))
@@ -401,7 +400,7 @@ fun BulkReviewScreen(
                 BulkInfoCard("Requested pickup", draft.pickup?.let(::displayPickup) ?: "Not selected")
                 if (draft.specialPickup) {
                     Spacer(Modifier.height(8.dp))
-                    BulkInfoCard("Special pickup request · seller approval required", draft.specialReason)
+                    BulkInfoCard("Special pickup request · canteen approval required", draft.specialReason)
                 }
                 if (draft.instructions.isNotBlank()) {
                     Spacer(Modifier.height(8.dp))
@@ -410,7 +409,7 @@ fun BulkReviewScreen(
                 Spacer(Modifier.height(8.dp))
                 RitSecondaryButton("Edit pickup", onEditPickup, Modifier.fillMaxWidth().testTag("bulk_review_edit_pickup"))
                 Spacer(Modifier.height(16.dp))
-                BulkInfoCard("Server validation", "The backend checks seller ownership, item availability, minimum units, configured hours and closures. A draft is not a confirmed order.")
+                BulkInfoCard("Server validation", "The backend checks canteen ownership, item availability, minimum units, configured hours and closures. A draft is not a confirmed order.")
                 Spacer(Modifier.height(12.dp))
                 RitText("The demonstration is not a response to this draft.", RitType.small, colors.muted)
                 if (errorMessage != null) RitText(errorMessage, RitType.body, colors.accent)

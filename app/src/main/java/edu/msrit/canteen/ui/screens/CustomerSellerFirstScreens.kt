@@ -81,7 +81,7 @@ fun ChooseSellerScreen(
                 inputTag = "canteen_selector",
             )
             Spacer(Modifier.height(12.dp))
-            RitSearchField(query, { query = it }, hint = "Find a seller…", onClearClick = { query = "" })
+            RitSearchField(query, { query = it }, hint = "Find a canteen…", onClearClick = { query = "" })
             Spacer(Modifier.height(14.dp))
         }
         when {
@@ -130,9 +130,9 @@ fun SellerScopedMenuScreen(
     var categoryId by rememberSaveable(sellerId) { mutableStateOf<String?>(null) }
 
     Column(Modifier.fillMaxSize().background(colors.background).testTag("seller_scoped_menu")) {
-        CatalogHeader(seller?.name ?: "Seller Menu", onBack)
+        CatalogHeader(seller?.name ?: "Canteen Menu", onBack)
         if (seller == null) {
-            RitEmptyState("Seller not found", "This canteen isn't available.")
+            RitEmptyState("Canteen not found", "This canteen isn't available.")
             return@Column
         }
 
@@ -171,7 +171,7 @@ fun SellerScopedMenuScreen(
                     )
                     Spacer(Modifier.height(13.dp))
                     if (onChooseSeller != null) {
-                        RitSecondaryButton("Choose another seller", onChooseSeller,
+                        RitSecondaryButton("Choose another canteen", onChooseSeller,
                             Modifier.fillMaxWidth().testTag("seller_menu_change_seller"))
                         Spacer(Modifier.height(8.dp))
                     }
@@ -190,7 +190,7 @@ fun SellerScopedMenuScreen(
             }
             if (foods.isEmpty()) {
                 item {
-                    RitEmptyState("No menu items match", "Try another food name or category in this seller's menu.")
+                    RitEmptyState("No menu items match", "Try another food name or category in this canteen's menu.")
                 }
             } else {
                 items(foods, key = { it.id }) { food ->

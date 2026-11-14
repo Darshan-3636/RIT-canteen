@@ -78,7 +78,7 @@ fun CustomerSearchScreen(
         Column(Modifier.padding(horizontal = 20.dp)) {
             Spacer(Modifier.height(12.dp))
             RitSearchField(query, { query = it }, Modifier.fillMaxWidth(),
-                hint = "Search food, categories or sellers…",
+                hint = "Search food, categories or canteens…",
                 onFilterClick = { showFilters = !showFilters; keyboard?.hide() },
                 onClearClick = { query = "" }, inputModifier = Modifier.focusRequester(focus),
                 onSubmit = { keyboard?.hide() })
@@ -121,7 +121,7 @@ fun CustomerSearchScreen(
                         RitText("Combine filters to narrow the menu.", RitType.small, colors.muted)
                     }
                 }
-                item { FilterChoices("Seller", catalog.sellers.map { it.id to it.name }, filters.sellerId, "seller") {
+                item { FilterChoices("Canteen", catalog.sellers.map { it.id to it.name }, filters.sellerId, "seller") {
                     filters = filters.copy(sellerId = it)
                 } }
                 item { FilterChoices("Food category", catalog.categories.filter { category ->
@@ -159,7 +159,7 @@ fun CustomerSearchScreen(
             if (results.items.isEmpty() && results.sellers.isEmpty()) {
                 item {
                     Column {
-                        RitEmptyState("No matching food found", "Try another keyword, adjust filters or browse a seller.")
+                        RitEmptyState("No matching food found", "Try another keyword, adjust filters or browse a canteen.")
                         RitPrimaryButton("Clear search and filters", { query = ""; filters = DiscoveryFilters() },
                             Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("search_clear_all"))
                     }
@@ -176,7 +176,7 @@ fun CustomerSearchScreen(
                     }
                 }
                 if (results.sellers.isNotEmpty()) {
-                    item { RitText("Sellers", RitType.title, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) }
+                    item { RitText("Canteens", RitType.title, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) }
                     items(results.sellers, key = { "seller:${it.id}" }) { seller ->
                         val names = catalog.categories.filter { it.id in seller.categoryIds }.joinToString(" · ") { it.name }
                         Column(Modifier.padding(horizontal = 20.dp, vertical = 5.dp).testTag("search_seller_${seller.id}")) {

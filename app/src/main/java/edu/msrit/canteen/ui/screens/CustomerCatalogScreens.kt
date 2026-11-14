@@ -60,7 +60,7 @@ fun CustomerMenuScreen(
     val visible = catalog.visibleItems(sellerId, selectedCategory, query).filter { !preparedOnly || it.kind == FoodKind.PREPARED }
     val title = when {
         preparedOnly -> "Order Food"
-        seller != null -> "Seller Menu"
+        seller != null -> "Canteen Menu"
         category != null -> category.name
         else -> "Browse Food"
     }
@@ -113,7 +113,7 @@ fun ExploreSellersScreen(
     val sellers = catalog.visibleSellers(query, categoryId)
     val selectedSeller = sellers.firstOrNull { it.id == selectedCanteen }
     Column(Modifier.fillMaxSize().background(colors.background).testTag("explore_sellers")) {
-        CatalogHeader("Explore Sellers", onBack)
+        CatalogHeader("Choose a canteen", onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
             RitText("Browse campus canteen menus.", RitType.body, colors.muted)
             Spacer(Modifier.height(8.dp))
@@ -128,7 +128,7 @@ fun ExploreSellersScreen(
             )
             Spacer(Modifier.height(8.dp))
             Spacer(Modifier.height(8.dp))
-            RitSearchField(query, { query = it }, hint = "Search sellers…")
+            RitSearchField(query, { query = it }, hint = "Search canteens…")
             Spacer(Modifier.height(14.dp))
         }
         CatalogCategories(catalog.categories, categoryId) { categoryId = it }

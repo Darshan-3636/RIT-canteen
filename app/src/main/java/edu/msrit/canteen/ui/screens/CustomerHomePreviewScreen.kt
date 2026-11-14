@@ -81,7 +81,7 @@ fun CustomerHomePreviewScreen(
                     Spacer(Modifier.height(12.dp))
                     Spacer(Modifier.height(20.dp))
                     RitText("Good food, close by.", RitType.heading)
-                    RitText("Explore meals and sellers at RIT.", RitType.body, colors.muted)
+                    RitText("Explore meals and canteens at RIT.", RitType.body, colors.muted)
                     Spacer(Modifier.height(16.dp))
                     RitSearchEntry({ onSearch(selectedCategoryId) }, Modifier.fillMaxWidth())
                     RitText(if (cartCount > 0) "View Cart · $cartCount items →" else "Open Cart →",
@@ -92,7 +92,7 @@ fun CustomerHomePreviewScreen(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         RitQuickEntry("Order Food", "Main canteen", RitIconKind.Food, Modifier.weight(1f), onOrderFood)
                         RitQuickEntry("Bulk Orders", "Groups", RitIconKind.Bulk, Modifier.weight(1f), onBulk)
-                        RitQuickEntry("Explore Sellers", "Menus", RitIconKind.Store, Modifier.weight(1f), onSellers)
+                        RitQuickEntry("Explore Canteens", "Menus", RitIconKind.Store, Modifier.weight(1f), onSellers)
                     }
                     Spacer(Modifier.height(20.dp))
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(RitRadii.hero)).background(colors.warmCard)
@@ -102,7 +102,7 @@ fun CustomerHomePreviewScreen(
                             Modifier.fillMaxWidth().height(158.dp), hero?.localImageUri)
                         Column(Modifier.padding(16.dp)) {
                             RitText("Discover the campus menu", RitType.title)
-                            RitText("Browse the main canteen and group-order sellers", RitType.small, colors.muted)
+                            RitText("Browse the main canteen and group-order canteens", RitType.small, colors.muted)
                         }
                     }
                     Spacer(Modifier.height(12.dp))

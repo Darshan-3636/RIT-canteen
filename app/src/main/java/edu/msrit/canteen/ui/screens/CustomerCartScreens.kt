@@ -41,6 +41,7 @@ import edu.msrit.canteen.customer.CustomerCatalogSource
 import edu.msrit.canteen.customer.DebugPromotionsApi
 import edu.msrit.canteen.customer.IndividualCartSession
 import edu.msrit.canteen.customer.PreviewCatalog
+import edu.msrit.canteen.customer.primaryCanteenId
 import edu.msrit.canteen.customer.Promotion
 import edu.msrit.canteen.customer.PromotionKind
 import edu.msrit.canteen.customer.RIT_TIME_ZONE
@@ -120,7 +121,7 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
     val individualCheck = checkIndividualCart(individual.draft, catalog)
     val individualSellerId = individual.serverCart?.sellerId ?: individual.draft.lines.firstOrNull()?.let { line ->
         catalog.items.find { it.id == line.itemId }?.sellerId }
-    val individualSellerName = catalog.sellers.find { it.id == individualSellerId }?.name ?: "Selected seller"
+    val individualSellerName = catalog.sellers.find { it.id == individualSellerId }?.name ?: orderingCanteenName(catalog)
     val bulkCheck = checkBulkDraft(bulk.draft, catalog, policies, LocalDateTime.now(RIT_TIME_ZONE))
     val bulkSeller = catalog.sellers.find { it.id == bulk.draft.sellerId }
     Column(Modifier.fillMaxSize().background(colors.background).testTag("customer_cart")) {
@@ -169,7 +170,7 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
                 }
             } else {
                 item {
-                    RitText(bulkSeller?.name ?: "Choose a seller", RitType.title)
+                    RitText(bulkSeller?.name ?: orderingCanteenName(catalog), RitType.title)
                     RitText("One canteen per bulk request · estimate before the canteen's quote", RitType.small, colors.muted)
                     if (bulkSyncStatus != null) RitText(bulkSyncStatus, RitType.small,
                         if (bulkSyncStatus.startsWith("Not saved")) colors.accent else colors.muted,
@@ -177,7 +178,7 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
                     Spacer(Modifier.height(12.dp))
                 }
                 if (bulk.draft.lines.isEmpty()) item {
-                    RitEmptyState("Your bulk cart is empty", "Choose a seller, then add eligible items for a group request.")
+                    RitEmptyState("Your bulk cart is empty", "Add items for a club, meeting or event in one request.")
                 }
                 items(bulk.draft.lines, key = { it.itemId }) { line ->
                     val item = catalog.items.find { it.id == line.itemId && it.sellerId == bulk.draft.sellerId }
@@ -190,10 +191,12 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
                     Spacer(Modifier.height(12.dp))
                     RitText("${bulkCheck.totalUnits} units · minimum ${bulkCheck.minimum}", RitType.title,
                         modifier = Modifier.testTag("cart_bulk_minimum"))
-                    RitText("Estimated ${displayPaise(bulkCheck.provisionalPaise)} · seller may revise the quote", RitType.body, colors.muted)
+                    RitText("Estimated ${displayPaise(bulkCheck.provisionalPaise)} · the canteen may revise the quote", RitType.body, colors.muted)
                     Spacer(Modifier.height(12.dp))
-                    RitSecondaryButton(if (bulkSeller == null) "Choose a seller" else "Change seller", onChooseSeller, Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(7.dp))
+                    if (bulkSeller == null) {
+                        RitSecondaryButton("Start a bulk order", onChooseSeller, Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(7.dp))
+                    }
                     RitSecondaryButton("Edit bulk items", onBulkItems, Modifier.fillMaxWidth())
                     if (bulk.draft.lines.isNotEmpty()) {
                         Spacer(Modifier.height(7.dp))
@@ -253,7 +256,7 @@ fun IndividualReviewScreen(individual: IndividualCartSession, onBack: () -> Unit
     val check = checkIndividualCart(individual.draft, catalog)
     val selectedSellerId = individual.serverCart?.sellerId ?: individual.draft.lines.firstOrNull()?.let { line ->
         catalog.items.find { it.id == line.itemId }?.sellerId }
-    val selectedSellerName = catalog.sellers.find { it.id == selectedSellerId }?.name ?: "Selected seller"
+    val selectedSellerName = catalog.sellers.find { it.id == selectedSellerId }?.name ?: orderingCanteenName(catalog)
     var offers by remember(selectedSellerId) { mutableStateOf<List<Promotion>>(emptyList()) }
     var selectedOfferId by remember(selectedSellerId) { mutableStateOf<String?>(null) }
     var quote by remember(selectedSellerId) { mutableStateOf<DebugPromotionsApi.OfferQuote?>(null) }
@@ -327,3 +330,7 @@ fun IndividualReviewScreen(individual: IndividualCartSession, onBack: () -> Unit
                 (individual.serverCart?.readyForCheckout ?: check.readyForReview))
     }
 }
+
+/** Header name while the cart has no items to take a seller from: the canteen customers order from. */
+private fun orderingCanteenName(catalog: CustomerCatalogSource): String =
+    primaryCanteenId(catalog.sellers)?.let { id -> catalog.sellers.find { it.id == id }?.name } ?: "Canteen"

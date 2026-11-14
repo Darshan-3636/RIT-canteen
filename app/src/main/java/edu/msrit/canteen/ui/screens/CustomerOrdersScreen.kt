@@ -56,13 +56,13 @@ private enum class OrdersTab { ALL, INDIVIDUAL, BULK }
 private val orderDate = DateTimeFormatter.ofPattern("d MMM · h:mm a")
 
 private fun bulkPrimaryState(record: BulkRequestRecord): String = when (record.thread.stage) {
-    QuoteStage.SUBMITTED -> "Waiting for seller review"
+    QuoteStage.SUBMITTED -> "Waiting for canteen review"
     QuoteStage.COUNTEROFFER -> if (record.latest.actor == edu.msrit.canteen.customer.QuoteActor.SELLER)
-        "Review seller's updated offer" else "Waiting for seller's response"
+        "Review canteen's updated offer" else "Waiting for canteen's response"
     QuoteStage.AGREED_AWAITING_PAYMENT -> "Agreed · awaiting payment"
     QuoteStage.PAID_CONFIRMED -> "Paid"
     QuoteStage.EXPIRED -> "Offer expired"
-    QuoteStage.REJECTED -> "Seller declined"
+    QuoteStage.REJECTED -> "Canteen declined"
     QuoteStage.WITHDRAWN -> "Request withdrawn"
 }
 
@@ -122,9 +122,9 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                 }
                 if (bulkVisible.isEmpty() && demoOrders.none {
                         it.customerId == customerUserId && it.kind == DemoOrderKind.BULK })
-                    item { RitEmptyState("No bulk requests", "Group requests and seller offers will appear here.") }
+                    item { RitEmptyState("No bulk requests", "Group requests and canteen offers will appear here.") }
                 items(bulkVisible, key = { it.reference }) { record ->
-                    val seller = PreviewCatalog.sellers.find { it.id == record.sellerId }?.name ?: "Seller"
+                    val seller = PreviewCatalog.sellers.find { it.id == record.sellerId }?.name ?: "Canteen"
                     val simulated = demoOrders.find { it.reference == record.reference && it.customerId == customerUserId }
                     OrderCard("Bulk quote · $seller", simulated?.state?.name?.lowercase()?.replace('_', ' ')
                         ?: bulkPrimaryState(record),

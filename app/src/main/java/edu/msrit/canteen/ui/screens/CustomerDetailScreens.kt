@@ -61,11 +61,11 @@ fun SellerProfileScreen(
     catalog: CustomerCatalogSource = PreviewCatalog,
 ) {
     val seller = catalog.sellers.find { it.id == sellerId }
-    if (seller == null) { MissingCatalogEntry("Seller", onBack); return }
+    if (seller == null) { MissingCatalogEntry("Canteen", onBack); return }
     val colors = RitThemeTokens.colors
     val preview = catalog.visibleItems(sellerId).take(3)
     Column(Modifier.fillMaxSize().background(colors.background).testTag("seller_profile")) {
-        CatalogHeader("Seller Profile", onBack)
+        CatalogHeader("Canteen Profile", onBack)
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
             item {
                 Column(Modifier.padding(horizontal = 20.dp)) {
@@ -109,7 +109,7 @@ fun FoodDetailsScreen(itemId: String, onBack: () -> Unit, onAddBulk: ((String) -
                       customerId: String? = null, catalog: CustomerCatalogSource = PreviewCatalog) {
     val item = catalog.items.find { it.id == itemId && it in catalog.visibleItems() }
     if (item == null) { MissingCatalogEntry("Food", onBack); return }
-    val seller = catalog.sellers.find { it.id == item.sellerId } ?: run { MissingCatalogEntry("Seller", onBack); return }
+    val seller = catalog.sellers.find { it.id == item.sellerId } ?: run { MissingCatalogEntry("Canteen", onBack); return }
     val colors = RitThemeTokens.colors
     val eligibility = itemEligibility(seller, item)
     var expanded by rememberSaveable(itemId) { mutableStateOf(false) }

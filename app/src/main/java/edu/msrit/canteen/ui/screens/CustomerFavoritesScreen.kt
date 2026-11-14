@@ -59,7 +59,7 @@ fun CustomerFavoritesScreen(
         }
         if (foods.isEmpty() && sellers.isEmpty()) {
             Column(Modifier.weight(1f).testTag("favorites_empty")) {
-                RitEmptyState("No favourites yet", "Save a food or seller while browsing the catalog.")
+                RitEmptyState("No favourites yet", "Save a food or canteen while browsing the catalog.")
             }
         } else {
             LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -73,7 +73,7 @@ fun CustomerFavoritesScreen(
                     }
                 }
                 if (sellers.isNotEmpty()) {
-                    item { RitText("Sellers", RitType.title, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) }
+                    item { RitText("Canteens", RitType.title, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) }
                     items(sellers, key = { "seller:${it.id}" }) { seller ->
                         val categories = catalog.categories.filter { it.id in seller.categoryIds }.joinToString(" · ") { it.name }
                         Column(Modifier.padding(horizontal = 20.dp, vertical = 5.dp).testTag("favorite_saved_seller_${seller.id}")) {

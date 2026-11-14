@@ -771,8 +771,8 @@ fun RitAppNavigation(appearance: AppearancePreference,
                             }
                         },
                         favorites = demoFavorites, customerId = demoCustomerId) } }
-                pendingBulkItem?.let { itemId -> RitConfirmDialog("Switch seller?",
-                    "This food belongs to a different seller. Clear only your bulk cart to start with this seller?",
+                pendingBulkItem?.let { itemId -> RitConfirmDialog("Switch canteen?",
+                    "This food is from a different canteen. Clear your bulk cart and start with this canteen?",
                     { pendingBulkItem = null }, {
                         val item = PreviewCatalog.items.find { it.id == itemId }
                         if (item != null) {

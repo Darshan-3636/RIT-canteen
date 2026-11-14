@@ -61,10 +61,10 @@ fun CustomerQuickReorderScreen(onBack: () -> Unit, onFood: (String) -> Unit, onS
                             itemEligibility(seller,item)!=ItemEligibility.UNAVAILABLE
                         RitText("${line.quantity} × ${line.title}",RitType.body)
                         RitText(if(eligible) "Current price ${item!!.price.display}" else
-                            "No longer available from this seller",RitType.small,colors.muted)
+                            "No longer available from this canteen",RitType.small,colors.muted)
                         if(eligible) RitSecondaryButton("Choose order type",{ onFood(line.itemId) },
                             Modifier.fillMaxWidth().testTag("reorder_open_item_${line.itemId}"))
-                        else if(seller!=null) RitSecondaryButton("View seller",{ onSeller(seller.id) },Modifier.fillMaxWidth())
+                        else if(seller!=null) RitSecondaryButton("View canteen",{ onSeller(seller.id) },Modifier.fillMaxWidth())
                         Spacer(Modifier.height(12.dp))
                     }
                 }
@@ -109,7 +109,7 @@ fun CustomerQuickReorderScreen(onBack: () -> Unit, onFood: (String) -> Unit, onS
                                 RitSecondaryButton("View current item", { onFood(line.itemId) },
                                     Modifier.fillMaxWidth().testTag("reorder_open_item_${line.itemId}"))
                             } else if (catalog.sellers.any { it.id == line.sellerId }) {
-                                RitSecondaryButton("View seller", { onSeller(line.sellerId) }, Modifier.fillMaxWidth())
+                                RitSecondaryButton("View canteen", { onSeller(line.sellerId) }, Modifier.fillMaxWidth())
                             }
                             Spacer(Modifier.height(18.dp))
                         }
@@ -118,7 +118,7 @@ fun CustomerQuickReorderScreen(onBack: () -> Unit, onFood: (String) -> Unit, onS
                 item {
                     RitPrimaryButton("Reorder unavailable in preview", {}, Modifier.fillMaxWidth().testTag("reorder_submit"), enabled = false)
                     Spacer(Modifier.height(12.dp))
-                    RitText("A future reorder must revalidate seller, item, availability, current price and ordering eligibility before a new request.",
+                    RitText("A future reorder must revalidate canteen, item, availability, current price and ordering eligibility before a new request.",
                         RitType.small, colors.muted)
                 }
             }
