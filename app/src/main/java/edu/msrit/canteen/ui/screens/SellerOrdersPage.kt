@@ -95,7 +95,7 @@ fun SellerOrdersPage(
                 Modifier.weight(1f).testTag("seller_orders_tab_new")) { section = OrdersSection.NEW }
             SectionTab("Ready", grouped.getValue(SellerOrderTab.READY).size, section == OrdersSection.READY,
                 Modifier.weight(1f).testTag("seller_orders_tab_ready")) { section = OrdersSection.READY }
-            SectionTab("Done", null, section == OrdersSection.DONE,
+            SectionTab("Done", grouped.getValue(SellerOrderTab.DONE).size, section == OrdersSection.DONE,
                 Modifier.weight(1f).testTag("seller_orders_tab_done")) { section = OrdersSection.DONE }
             SectionTab("Bulk", newBulk, section == OrdersSection.BULK,
                 Modifier.weight(1f).testTag("seller_orders_tab_bulk")) { section = OrdersSection.BULK }
