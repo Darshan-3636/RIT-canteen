@@ -29,5 +29,6 @@ object DebugCommerceApi {
                         approved: Boolean): Result<BulkRequestRecord> = Result()
     fun sellerCounteroffer(sellerId: String, requestId: String, expectedVersion: Int,
                            proposal: BulkProposal): Result<BulkRequestRecord> = Result()
+    fun fulfilBulk(sellerId: String, requestId: String, status: String, pickupCode: String? = null): Result<BulkRequestRecord> = Result()
     fun withdraw(requestId: String, expectedVersion: Int): Result<BulkRequestRecord> = Result()
 }

@@ -7,11 +7,10 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 class CloudCustomerBoundaryTest {
-    @Test fun cloudModeNeverInventsOperatingHoursOrSampleQuotes() {
+    @Test fun cloudModeNeverInventsOperatingHours() {
         assumeTrue(BuildConfig.RIT_CLOUD_DEMO)
         DevelopmentSellerBusiness.clearServerPolicies()
         assertNull(DevelopmentBulkPreview.forSeller(PreviewCatalog.MAIN_ID))
-        assertNull(DevelopmentBulkPreview.sample(QuoteStage.COUNTEROFFER))
     }
 
     @Test fun cloudModeNeverAcceptsFixtureOnlyCustomerWrites() {

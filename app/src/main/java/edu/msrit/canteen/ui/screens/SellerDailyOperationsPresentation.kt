@@ -41,9 +41,6 @@ import edu.msrit.canteen.customer.BulkDraft
 import edu.msrit.canteen.customer.BulkLine
 import edu.msrit.canteen.customer.BulkRequestRecord
 import edu.msrit.canteen.customer.CustomerCatalogSource
-import edu.msrit.canteen.customer.DemoOrder
-import edu.msrit.canteen.customer.DemoOrderKind
-import edu.msrit.canteen.customer.DemoOrderState
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.QuoteActor
 import edu.msrit.canteen.customer.QuoteRevision
@@ -107,7 +104,6 @@ fun SellerDailyOperationsOverview(
     onOpenAccount: (() -> Unit)? = null,
     onBottom: ((SellerBottomItem) -> Unit)? = null,
     canViewInsights: Boolean = true,
-    demoOrders: List<DemoOrder> = emptyList(),
     newPaidIndividualOrders: Int = 0,
     onOpenIndividual: (() -> Unit)? = null,
     onVerifyPickup: (() -> Unit)? = null,
@@ -127,23 +123,16 @@ fun SellerDailyOperationsOverview(
         .filter { record ->
             record.thread.stage in UPCOMING_STAGES &&
                 record.latest.pickup.isAfter(now) &&
-                !isRequestQuoteExpired(record, now) &&
-                (record.thread.stage != QuoteStage.PAID_CONFIRMED || record.verifiedPaidFixture)
+                !isRequestQuoteExpired(record, now)
         }
         .sortedBy { it.latest.pickup }
     val nextPickup = upcoming.firstOrNull()
-    // Paid server orders waiting to be prepared; the local demo list only exists in old tests.
-    val newIndividual = newPaidIndividualOrders + demoOrders.count {
-        it.sellerId == sellerId && it.kind == DemoOrderKind.INDIVIDUAL &&
-            it.state == DemoOrderState.SUBMITTED
-    }
+    // Paid individual orders waiting to be prepared.
+    val newIndividual = newPaidIndividualOrders
     val newBulk = sellerRecords.count { it.thread.stage == QuoteStage.SUBMITTED && !isRequestQuoteExpired(it, now) }
     val waiting = sellerRecords.count {
         it.thread.stage == QuoteStage.AGREED_AWAITING_PAYMENT ||
             (it.thread.stage == QuoteStage.COUNTEROFFER && it.thread.sellerAcceptedVersion == it.latest.version)
-    } + demoOrders.count {
-        it.sellerId == sellerId && it.kind == DemoOrderKind.INDIVIDUAL &&
-            it.state in setOf(DemoOrderState.SELLER_ACCEPTED, DemoOrderState.PAYMENT_PENDING)
     }
 
     Column(
@@ -222,9 +211,12 @@ fun SellerDailyOperationsOverview(
 
             if (onOpenIndividual != null) item {
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    RitText("Individual orders", RitType.title)
-                    RitText("$newIndividual new", RitType.body, colors.muted)
-                    RitSecondaryButton("Review individual requests", onOpenIndividual,
+                    // Paid orders of both kinds are prepared from the same Orders page.
+                    val toPrepare = newIndividual + sellerRecords.count { it.thread.stage == QuoteStage.PAID }
+                    RitText("Orders to prepare", RitType.title)
+                    RitText(if (toPrepare == 0) "Nothing to prepare right now" else "$toPrepare paid, not ready yet",
+                        RitType.body, colors.muted)
+                    RitSecondaryButton("Open orders", onOpenIndividual,
                         Modifier.fillMaxWidth().testTag("seller_dashboard_individual"))
                 }
             }
@@ -462,7 +454,7 @@ fun SellerDailyRequestDetailPresentation(
                     ) {
                         RitMessageCard(
                             title = "Pickup requires explicit exception approval",
-                            detail = "Review the requested time and reason for revision ${record.latest.version}. It is a separate decision from the quote.",
+                            detail = "Check the requested pickup time and reason. You accept or decline it separately from the order.",
                         )
                         RitPrimaryButton(
                             "Review pickup exception",
@@ -494,7 +486,7 @@ fun SellerDailyRequestDetailPresentation(
 
             if (canRespond && !quoteExpired && record.thread.stage in ACTIVE_REQUEST_STAGES) {
                 if (onCounteroffer != null && record.latest.actor == QuoteActor.CUSTOMER) item {
-                    RitSecondaryButton("Create seller counteroffer", onCounteroffer,
+                    RitSecondaryButton("Suggest changes", onCounteroffer,
                         Modifier.fillMaxWidth().testTag("seller_daily_counteroffer"))
                 }
                 if (onReject != null) item {
@@ -529,7 +521,7 @@ fun SellerDailyRequestDetailPresentation(
                 item {
                     SellerSectionHeading(
                         "Request journey",
-                        "See who has responded to the current revision.",
+                        "See who has agreed to the current version.",
                         "seller_detail_journey_heading",
                     )
                 }
@@ -538,7 +530,7 @@ fun SellerDailyRequestDetailPresentation(
 
             item {
                 SellerSectionHeading(
-                    "Revision history",
+                    "History",
                     "Earlier approvals do not carry over to changed terms.",
                     "seller_detail_history_heading",
                 )
@@ -622,7 +614,7 @@ fun SellerCounterofferPreviewPresentation(
             item {
                 if (canRespond && !sourceQuoteExpired && sourceRequestIsOpen) {
                     RitPrimaryButton(
-                        if (proposalIsDraft) "Return to editor to send revision"
+                        if (proposalIsDraft) "Back to editing"
                         else if (specialNeedsApproval) "Review pickup exception first" else "Continue to seller response",
                         if (proposalIsDraft) onContinueReview
                         else if (specialNeedsApproval) onReviewSpecialPickup else onContinueReview,
@@ -634,17 +626,17 @@ fun SellerCounterofferPreviewPresentation(
                     )
                     if (proposalIsDraft && proposal.specialPickup) RitMessageCard(
                         "Separate pickup decision after sending",
-                        "This draft is not an accepted quote. Send it first, then explicitly review the exception for its new revision.",
+                        "These changes aren't sent yet. Send them first, then decide on the pickup time.",
                     )
                 } else if (sourceQuoteExpired) {
                     RitMessageCard(
                         "Current quote expired",
-                        "This draft cannot be continued from the expired revision. Reopen the seller workflow for a fresh review.",
+                        "This request expired, so these changes can't be sent.",
                         Modifier.testTag("seller_counteroffer_expired"),
                     )
                 } else if (!sourceRequestIsOpen) {
                     RitMessageCard(
-                        "This request is not open for a counteroffer",
+                        "This request can't be changed any more",
                         "Review the request status and expiry before starting another seller response.",
                         Modifier.testTag("seller_counteroffer_closed"),
                     )
@@ -681,8 +673,7 @@ fun SellerPickupSchedulePresentation(
             record.sellerId == sellerId &&
                 record.thread.stage in UPCOMING_STAGES &&
                 record.latest.pickup.isAfter(now) &&
-                !isRequestQuoteExpired(record, now) &&
-                (record.thread.stage != QuoteStage.PAID_CONFIRMED || record.verifiedPaidFixture)
+                !isRequestQuoteExpired(record, now)
         }
         .sortedBy { it.latest.pickup }
     val groups = upcoming.groupBy { it.latest.pickup.toLocalDate() }.toSortedMap()
@@ -806,7 +797,7 @@ private fun SellerDetailSummaryCard(
                         .semantics(mergeDescendants = true) { contentDescription = "Current request state: $state" }
                         .testTag("seller_detail_state"),
                 )
-                RitText("Current revision ${latest.version}", RitType.small, colors.muted)
+                RitText("Version ${latest.version}", RitType.small, colors.muted)
             }
         }
         latest.lines.forEach { line ->
@@ -845,12 +836,12 @@ private fun SellerDetailSummaryCard(
             val canStillReview = record.thread.stage in ACTIVE_REQUEST_STAGES && !isRequestQuoteExpired(record, now)
             RitMessageCard(
                 when {
-                    accepted -> "Pickup exception accepted for this revision"
+                    accepted -> "Pickup time outside hours accepted"
                     canStillReview -> "Pickup requires explicit exception approval"
                     else -> "No pickup exception decision is recorded"
                 },
                 when {
-                    accepted -> latest.specialReason.ifBlank { "Accepted for revision ${latest.version} only." }
+                    accepted -> latest.specialReason.ifBlank { "Accepted for this version of the order." }
                     canStillReview -> latest.specialReason.ifBlank { "The requested time is outside the regular pickup window." }
                     else -> "The request is expired or closed, so this exception cannot be reviewed here."
                 },
@@ -875,7 +866,7 @@ private fun SellerRequestJourney(record: BulkRequestRecord, canRespond: Boolean,
     val specialAccepted = record.thread.specialAcceptedVersion == latest.version
     val specialNeedsApproval = latest.specialPickup && !specialAccepted &&
         record.thread.stage in ACTIVE_REQUEST_STAGES && !quoteExpired
-    val paidFixture = record.thread.stage == QuoteStage.PAID_CONFIRMED && record.verifiedPaidFixture
+    val paid = record.thread.stage in setOf(QuoteStage.PAID, QuoteStage.READY, QuoteStage.COMPLETED)
     val items = buildList {
         add(
             RequestJourneyStep(
@@ -888,11 +879,11 @@ private fun SellerRequestJourney(record: BulkRequestRecord, canRespond: Boolean,
             RequestJourneyStep(
                 "Seller response",
                 when {
-                    quoteExpired -> "Quote expired${record.thread.expiresAt?.let { " on ${displayPickup(it)}" } ?: ""}; no response is available on this revision."
-                    sellerApproved -> "Seller approval recorded for revision ${latest.version}."
-                    status in NEEDS_SELLER_RESPONSE -> "Seller needs to respond to revision ${latest.version}."
-                    status == SellerRequestStatus.WAITING_CUSTOMER -> "Seller approved revision ${latest.version}; customer response is next."
-                    else -> "No seller approval is recorded for revision ${latest.version}."
+                    quoteExpired -> "Quote expired${record.thread.expiresAt?.let { " on ${displayPickup(it)}" } ?: ""}; it can no longer be answered."
+                    sellerApproved -> "You accepted this version."
+                    status in NEEDS_SELLER_RESPONSE -> "Accept it, suggest changes or decline."
+                    status == SellerRequestStatus.WAITING_CUSTOMER -> "You accepted this version; waiting for the customer."
+                    else -> "You haven't accepted this version."
                 },
                 complete = sellerApproved,
                 current = !quoteExpired && status in NEEDS_SELLER_RESPONSE,
@@ -904,9 +895,9 @@ private fun SellerRequestJourney(record: BulkRequestRecord, canRespond: Boolean,
                 RequestJourneyStep(
                     "Pickup exception",
                     when {
-                        specialAccepted -> "Pickup exception accepted for revision ${latest.version} only."
-                        quoteExpired -> "Quote expired before an exception decision was recorded for this revision."
-                        specialNeedsApproval -> "Pickup requires explicit exception approval for revision ${latest.version}."
+                        specialAccepted -> "Pickup time outside hours accepted."
+                        quoteExpired -> "The request expired before you decided on the pickup time."
+                        specialNeedsApproval -> "The pickup time is outside your hours. Accept or decline it."
                         workflowClosed -> "The request closed before an exception decision was recorded."
                         else -> "No exception decision is recorded for this request."
                     },
@@ -920,9 +911,9 @@ private fun SellerRequestJourney(record: BulkRequestRecord, canRespond: Boolean,
             RequestJourneyStep(
                 "Customer approval",
                 when {
-                    customerApproved -> "Customer approval recorded for revision ${latest.version}."
-                    status == SellerRequestStatus.WAITING_CUSTOMER -> "Waiting for customer approval of revision ${latest.version}."
-                    else -> "Customer approval is still needed for the current revision."
+                    customerApproved -> "The customer agreed to this version."
+                    status == SellerRequestStatus.WAITING_CUSTOMER -> "Waiting for the customer to accept."
+                    else -> "The customer still needs to accept."
                 },
                 complete = customerApproved,
                 current = status == SellerRequestStatus.WAITING_CUSTOMER,
@@ -931,26 +922,35 @@ private fun SellerRequestJourney(record: BulkRequestRecord, canRespond: Boolean,
         )
         add(
             RequestJourneyStep(
-                "Payment verification",
+                "Payment",
                 when {
-                    paidFixture -> "Paid."
+                    paid -> "Paid with PhonePe."
                     status == SellerRequestStatus.AGREED_UNPAID -> "Awaiting payment."
                     else -> "Not paid yet."
                 },
-                complete = paidFixture,
+                complete = paid,
                 current = status == SellerRequestStatus.AGREED_UNPAID,
-                unavailable = workflowClosed && !paidFixture,
+                unavailable = workflowClosed && !paid,
             ),
         )
         add(
             RequestJourneyStep(
                 "Pickup time",
-                if (paidFixture) "Pickup at ${displayPickup(latest.pickup)}."
-                else "Requested time ${displayPickup(latest.pickup)}; this is not a confirmed reservation.",
-                complete = false,
-                current = false,
+                when (record.thread.stage) {
+                    QuoteStage.COMPLETED -> "Collected."
+                    QuoteStage.READY -> "Ready. Confirm pickup from Orders → Ready with the customer's QR code or PIN."
+                    QuoteStage.PAID -> "Pickup at ${displayPickup(latest.pickup)}. Mark it ready from Orders → New."
+                    else -> "Requested time ${displayPickup(latest.pickup)}; confirmed once the customer pays."
+                },
+                complete = record.thread.stage == QuoteStage.COMPLETED,
+                current = record.thread.stage in setOf(QuoteStage.PAID, QuoteStage.READY),
                 unavailable = workflowClosed,
-                stateLabel = if (paidFixture) "Confirmed" else if (workflowClosed) "Unavailable" else "Requested only",
+                stateLabel = when {
+                    record.thread.stage == QuoteStage.COMPLETED -> "Collected"
+                    paid -> "Confirmed"
+                    workflowClosed -> "Unavailable"
+                    else -> "Requested only"
+                },
             ),
         )
     }
@@ -1031,7 +1031,7 @@ private fun SellerRevisionHistoryCard(record: BulkRequestRecord) {
         SellerApprovalRow("Seller", record.thread.sellerAcceptedVersion, record.latest.version)
         SellerApprovalRow("Customer", record.thread.customerAcceptedVersion, record.latest.version)
         RitText(
-            "Both approvals must match revision ${record.latest.version}. A changed revision needs fresh approvals before payment can be considered.",
+            "You and the customer must agree to the same version before the customer can pay. Any change needs agreement again.",
             RitType.small,
             colors.muted,
         )
@@ -1041,14 +1041,14 @@ private fun SellerRevisionHistoryCard(record: BulkRequestRecord) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .semantics(mergeDescendants = true) {
-                        contentDescription = "Revision ${revision.version}. $role. " +
+                        contentDescription = "Version ${revision.version}. $role. " +
                             "${revision.lines.sumOf { it.quantity }} units. Total ${displayPaise(revision.totalPaise)}. " +
                             "Requested pickup ${displayPickup(revision.pickup)}."
                     }
                     .testTag("seller_detail_revision_${revision.version}"),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                RitText("Revision ${revision.version} · $role", RitType.label)
+                RitText("Version ${revision.version} · $role", RitType.label)
                 RitText(
                     "${revision.lines.sumOf { it.quantity }} units · ${displayPaise(revision.totalPaise)}",
                     RitType.small,
@@ -1068,8 +1068,8 @@ private fun SellerApprovalRow(label: String, approvedVersion: Int?, currentVersi
         modifier = Modifier
             .fillMaxWidth()
             .semantics(mergeDescendants = true) {
-                contentDescription = "$label approval for revision $currentVersion: " +
-                    if (approved) "recorded" else "not recorded for this revision"
+                contentDescription = "$label agreement to version $currentVersion: " +
+                    if (approved) "recorded" else "not yet"
             }
             .testTag("seller_approval_${label.lowercase()}"),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1077,7 +1077,7 @@ private fun SellerApprovalRow(label: String, approvedVersion: Int?, currentVersi
     ) {
         RitText(label, RitType.label, modifier = Modifier.weight(1f))
         RitText(
-            if (approved) "Approved · revision $currentVersion" else "Needs approval · revision $currentVersion",
+            if (approved) "Agreed · version $currentVersion" else "Not agreed yet",
             RitType.small,
             if (approved) colors.accent else colors.muted,
             modifier = Modifier.weight(1.4f),
@@ -1105,12 +1105,12 @@ private fun SellerCounterofferSummaryCard(
             .testTag("seller_counteroffer_summary"),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        RitText("${record.reference} · revision ${proposal.version}", RitType.heading)
+        RitText("Version ${proposal.version}", RitType.heading)
         RitStatusIndicator(
             "Proposed changes · not yet approved",
             Modifier
                 .semantics(mergeDescendants = true) {
-                    contentDescription = "Revision state: Proposed changes · not yet approved"
+                    contentDescription = "Your suggested changes · not sent yet"
                 }
                 .testTag("seller_counteroffer_state"),
         )
@@ -1154,12 +1154,12 @@ private fun SellerCounterofferSummaryCard(
             val canStillReview = record.thread.stage in ACTIVE_REQUEST_STAGES && !isRequestQuoteExpired(record, now)
             RitMessageCard(
                 when {
-                    acceptedForProposal -> "Pickup exception accepted for this revision"
+                    acceptedForProposal -> "Pickup time outside hours accepted"
                     canStillReview -> "Pickup requires explicit exception approval"
                     else -> "No pickup exception decision is recorded"
                 },
                 when {
-                    acceptedForProposal -> "Accepted for revision ${proposal.version} only."
+                    acceptedForProposal -> "Accepted for this version of the order."
                     canStillReview -> proposal.specialReason.ifBlank { "A separate seller decision is needed for this requested time." }
                     else -> "The source request is expired or closed, so this exception cannot be reviewed here."
                 },
@@ -1243,7 +1243,7 @@ private fun SellerRevisionDifferenceList(
             !differences.amountChanged && !differences.pickupChanged && !differences.specialChanged &&
             previous.specialReason == proposed.specialReason && previous.note == proposed.note
         ) {
-            RitMessageCard("No terms changed", "The proposal matches the current revision.", Modifier.testTag("seller_counteroffer_no_changes"))
+            RitMessageCard("No terms changed", "Nothing has changed yet.", Modifier.testTag("seller_counteroffer_no_changes"))
         }
     }
 }
@@ -1301,8 +1301,8 @@ private fun SellerRevisionApprovalFacts(
         SellerApprovalRow("Customer", record.thread.customerAcceptedVersion, currentVersion)
         if (isPreview) {
             RitMessageCard(
-                "No approvals are recorded for revision $proposedVersion",
-                "This draft is not sent. If it becomes a new revision, both sides must approve that exact revision before payment can be considered.",
+                "Not sent yet",
+                "Once you send these changes, the customer accepts them and then pays.",
                 Modifier.testTag("seller_counteroffer_new_revision_approvals"),
             )
         }
@@ -1341,8 +1341,9 @@ private fun sellerDetailState(record: BulkRequestRecord, now: LocalDateTime): St
         status in NEEDS_SELLER_RESPONSE -> "Seller needs to respond"
         status == SellerRequestStatus.WAITING_CUSTOMER -> "Waiting for customer"
         status == SellerRequestStatus.AGREED_UNPAID -> "Awaiting payment"
-        status == SellerRequestStatus.PAID_FIXTURE && record.verifiedPaidFixture -> "Paid"
-        status == SellerRequestStatus.PAID_FIXTURE -> "Payment verification required"
+        status == SellerRequestStatus.PAID -> "Paid · to prepare"
+        status == SellerRequestStatus.READY -> "Ready for pickup"
+        status == SellerRequestStatus.COLLECTED -> "Collected"
         status == SellerRequestStatus.EXPIRED -> "Quote expired"
         status == SellerRequestStatus.WITHDRAWN -> "Request withdrawn"
         status == SellerRequestStatus.REJECTED -> "Request closed"
@@ -1354,21 +1355,21 @@ private fun sellerResponseAction(record: BulkRequestRecord): String =
     when (record.operationalStatus()) {
         SellerRequestStatus.CUSTOMER_COUNTER -> "Review customer changes"
         SellerRequestStatus.SELLER_REVIEW -> "Review seller response"
-        else -> "Review this request"
+        else -> "Accept, change or decline"
     }
 
 private fun nextSafeStepDetail(record: BulkRequestRecord, now: LocalDateTime): String {
     if (isRequestQuoteExpired(record, now)) {
         val expiry = record.thread.expiresAt?.let { " on ${displayPickup(it)}" }.orEmpty()
-        return "The quote expired$expiry. No response is available on this revision."
+        return "The request expired$expiry. It can no longer be answered."
     }
     return when (record.operationalStatus()) {
-        SellerRequestStatus.WAITING_CUSTOMER -> "The seller response is recorded. Wait for customer approval of revision ${record.latest.version}."
+        SellerRequestStatus.WAITING_CUSTOMER -> "You've responded. Waiting for the customer to accept."
         SellerRequestStatus.AGREED_UNPAID -> "Both sides have accepted the current terms. Waiting for the customer to pay."
-        SellerRequestStatus.PAID_FIXTURE -> if (record.verifiedPaidFixture)
-            "Paid. Pickup at ${displayPickup(record.latest.pickup)}."
-        else "Payment verification is required before this can be treated as paid."
-        SellerRequestStatus.EXPIRED -> "The quote expired${record.thread.expiresAt?.let { " on ${displayPickup(it)}" } ?: ""}. A new revision would need fresh review."
+        SellerRequestStatus.PAID -> "Paid. Prepare it for pickup at ${displayPickup(record.latest.pickup)}, then mark it ready from Orders → New."
+        SellerRequestStatus.READY -> "Ready. Confirm pickup from Orders → Ready with the customer's QR code or PIN."
+        SellerRequestStatus.COLLECTED -> "Collected. Nothing left to do."
+        SellerRequestStatus.EXPIRED -> "The quote expired${record.thread.expiresAt?.let { " on ${displayPickup(it)}" } ?: ""}. The customer can send a new request."
         SellerRequestStatus.WITHDRAWN -> "The customer withdrew this request. No seller action is available."
         SellerRequestStatus.REJECTED -> "This request is closed. No seller action is available."
         else -> if (record.thread.expiresAt?.isBefore(now) == true)
@@ -1621,7 +1622,9 @@ private fun SellerDailyRequestCard(
         needsReply -> "Review and reply"
         status == SellerRequestStatus.WAITING_CUSTOMER -> "Waiting for customer · view details"
         status == SellerRequestStatus.AGREED_UNPAID -> "Awaiting payment · view details"
-        status == SellerRequestStatus.PAID_FIXTURE -> "View pickup"
+        status == SellerRequestStatus.PAID -> "Paid · prepare for pickup"
+        status == SellerRequestStatus.READY -> "Ready · waiting for pickup"
+        status == SellerRequestStatus.COLLECTED -> "Collected"
         else -> "View request"
     }
     val statusLabel = dailyStatusLabel(record, canRespond)
@@ -1677,7 +1680,7 @@ private fun SellerDailyRequestCard(
         if (record.latest.specialPickup) {
             RitText(
                 if (requiresSpecialDecision) "Needs explicit pickup exception approval"
-                else "Pickup exception accepted for this revision",
+                else "Pickup time outside hours accepted",
                 RitType.small,
                 colors.accent,
             )
@@ -1738,7 +1741,9 @@ private fun dailyStatusLabel(record: BulkRequestRecord, canRespond: Boolean): St
         else "Review the latest terms"
         SellerRequestStatus.WAITING_CUSTOMER -> "Waiting for customer"
         SellerRequestStatus.AGREED_UNPAID -> "Agreed · awaiting payment"
-        SellerRequestStatus.PAID_FIXTURE -> if (record.verifiedPaidFixture) "Paid" else "Payment verification required"
+        SellerRequestStatus.PAID -> "Paid · to prepare"
+        SellerRequestStatus.READY -> "Ready for pickup"
+        SellerRequestStatus.COLLECTED -> "Collected"
         SellerRequestStatus.EXPIRED -> "Quote expired"
         SellerRequestStatus.WITHDRAWN -> "Request withdrawn"
         SellerRequestStatus.REJECTED -> "Request closed"
@@ -1754,7 +1759,8 @@ private val UPCOMING_STAGES = setOf(
     QuoteStage.SUBMITTED,
     QuoteStage.COUNTEROFFER,
     QuoteStage.AGREED_AWAITING_PAYMENT,
-    QuoteStage.PAID_CONFIRMED,
+    QuoteStage.PAID,
+    QuoteStage.READY,
 )
 
 private const val MAX_PRIORITY_REQUESTS = 2

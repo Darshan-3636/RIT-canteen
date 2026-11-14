@@ -129,17 +129,17 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
     }
 
     Column(Modifier.fillMaxSize().background(colors.background).testTag("demo_quote_editor")) {
-        CatalogHeader(if (isSeller) "Seller counteroffer" else "Customer revision", onBack)
+        CatalogHeader(if (isSeller) "Suggest changes" else "Customer revision", onBack)
         LazyColumn(Modifier.weight(1f).testTag("demo_quote_editor_list"),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 25.dp)) {
             item {
-                RitStatusIndicator("Revision ${latest.version + 1}")
+                RitStatusIndicator("Version ${latest.version + 1}")
                 Spacer(Modifier.height(12.dp))
-                BulkInfoCard("One seller: ${seller?.name ?: record.sellerId}",
-                    "Only this seller's available items appear. Minimum snapshot: ${record.appliedMinimum} combined units.")
+                BulkInfoCard("${record.customerLabel}'s order",
+                    "Change quantities or add items. Minimum ${record.appliedMinimum} units in total.")
                 Spacer(Modifier.height(14.dp))
                 RitText("Items, quantities and unit prices", RitType.title)
-                RitText("Server catalog prices are authoritative; this editor cannot set custom prices.", RitType.small, colors.muted)
+                RitText("Prices come from your menu.", RitType.small, colors.muted)
                 Spacer(Modifier.height(9.dp))
             }
             items(menu, key = { it.id }) { item: MenuItem ->
@@ -153,7 +153,7 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
                         RitChip("+", false, { quantities.setBounded(item.id, (quantities[item.id] ?: 0) + 1) },
                             Modifier.testTag("demo_quote_plus_${item.id}"))
                     }
-                    RitText("Current server price: ${item.price.display}", RitType.small, colors.muted)
+                    RitText("${item.price.display} each", RitType.small, colors.muted)
                 }
             }
             item {
@@ -188,11 +188,11 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
                     Spacer(Modifier.height(8.dp))
                     BulkTextBox("Reason for exceptional pickup", specialReason, { specialReason = it.take(500) },
                         "Explain the exception…", "demo_quote_special_reason")
-                    RitText("Seller acceptance of special timing is a separate, revision-bound decision.",
+                    RitText("A pickup time outside your hours needs a separate yes or no.",
                         RitType.small, colors.muted)
                 }
                 Spacer(Modifier.height(14.dp))
-                BulkTextBox("Message about this revision", note, { note = it.take(500) },
+                BulkTextBox("Message to the customer", note, { note = it.take(500) },
                     "Explain changed terms…", "demo_quote_note")
                 Spacer(Modifier.height(14.dp))
                 RitText("Proposed total: ${displayPaise(proposal.totalPaise)}", RitType.title,
@@ -200,7 +200,7 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
                 RitText("${lines.sumOf { it.quantity }} units · ${issues.size} validation issue(s)",
                     RitType.small, if (issues.isEmpty()) colors.muted else colors.accent)
                 Spacer(Modifier.height(16.dp))
-                RitText("Compared with revision ${latest.version}", RitType.title)
+                RitText("Compared with version ${latest.version}", RitType.title)
                 Spacer(Modifier.height(7.dp))
                 if (diff != null) {
                     diff.removed.forEach { RitText("Removed: ${it.title} × ${it.quantity}", RitType.body) }
@@ -213,7 +213,7 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
                     if (diff.amountChanged) RitText("Total ${displayPaise(latest.totalPaise)} → ${displayPaise(proposal.totalPaise)}", RitType.body)
                     if (!diff.pickupChanged && !diff.specialChanged && !diff.amountChanged &&
                         diff.added.isEmpty() && diff.removed.isEmpty() && diff.changed.isEmpty())
-                        RitText("Change at least one term or add a message before sending a revision.", RitType.small, colors.muted)
+                        RitText("Change something or add a message before sending.", RitType.small, colors.muted)
                 }
                 Spacer(Modifier.height(10.dp))
                 BulkInfoCard("New version", "Sending creates a new quote version; earlier approvals no longer apply.")
@@ -222,7 +222,7 @@ fun DemoQuoteEditorScreen(record: BulkRequestRecord, isSeller: Boolean, policies
         }
         if (isSeller && canSubmit) RitSecondaryButton("Preview changed terms", { showingPreview = true },
             Modifier.fillMaxWidth().padding(horizontal = 20.dp).testTag("demo_quote_preview"))
-        RitPrimaryButton(if (isSeller) "Send seller counteroffer" else "Customer counteroffer unavailable", {
+        RitPrimaryButton(if (isSeller) "Send changes to customer" else "Customer counteroffer unavailable", {
             onSubmit(proposal) { applied, message ->
                 feedback = message
                 if (applied) onApplied()

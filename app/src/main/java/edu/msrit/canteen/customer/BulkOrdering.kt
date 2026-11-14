@@ -163,7 +163,8 @@ fun checkBulkDraft(
 }
 
 enum class QuoteActor { CUSTOMER, SELLER }
-enum class QuoteStage { SUBMITTED, COUNTEROFFER, AGREED_AWAITING_PAYMENT, PAID_CONFIRMED, EXPIRED, REJECTED, WITHDRAWN }
+/** Agreement first (submitted → counteroffer → agreed), then fulfilment once paid (paid → ready → completed). */
+enum class QuoteStage { SUBMITTED, COUNTEROFFER, AGREED_AWAITING_PAYMENT, PAID, READY, COMPLETED, EXPIRED, REJECTED, WITHDRAWN }
 
 data class QuoteLineSnapshot(val itemId: String, val title: String, val quantity: Int, val unitPricePaise: Long)
 data class QuoteRevision(

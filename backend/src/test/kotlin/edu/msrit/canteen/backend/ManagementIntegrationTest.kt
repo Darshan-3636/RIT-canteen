@@ -506,7 +506,7 @@ class ManagementIntegrationTest {
             assertEquals(before,db.queryOne("SELECT row_to_json(p)::text FROM sandbox_payment_attempts p WHERE id=?",payment) { it.getString(1) })
             assertEquals("historical-password-hash",db.queryOne("SELECT password_hash FROM users WHERE id=?",customer) { it.getString(1) })
             assertEquals(1200L,db.queryOne("SELECT subtotal_paise FROM individual_demo_orders WHERE id=?",order) { it.getLong(1) })
-            assertEquals(23L,db.count("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL"))
+            assertEquals(24L,db.count("SELECT count(*) FROM flyway_schema_history WHERE success AND version IS NOT NULL"))
             // V054: the uncollected order now has a 4-digit PIN, and new orders get distinct PINs.
             val pins=mutableListOf(db.queryOne("SELECT pickup_code FROM individual_demo_orders WHERE id=?",order) { it.getString(1) }!!)
             repeat(30) {

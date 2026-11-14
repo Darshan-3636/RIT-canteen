@@ -307,18 +307,13 @@ class SellerDailyOperationsPresentationUiTest {
         assertEquals(false, continued.get())
     }
 
-    @Test fun pickupScheduleGroupsFutureRequestsAndExcludesUnverifiedPaidState() {
+    @Test fun pickupScheduleGroupsFutureRequests() {
         val scheduleRecords = records
-        val paid = scheduleRecords.first { it.reference == "DEMO-NC-PAID" }
-        val unpaidFixtureCopy = paid.copy(
-            thread = paid.thread.copy(reference = "DEMO-NC-PAID-UNVERIFIED"),
-            verifiedPaidFixture = false,
-        )
         val opened = AtomicReference<String?>(null)
         rule.setContent {
             RitTheme(darkTheme = false) {
                 SellerPickupSchedulePresentation(
-                    records = scheduleRecords + unpaidFixtureCopy,
+                    records = scheduleRecords,
                     sellerId = "north-counter",
                     onBack = {},
                     onOpenRequest = { opened.set(it) },
@@ -331,7 +326,6 @@ class SellerDailyOperationsPresentationUiTest {
         val firstUpcoming = scheduleRecords.first { it.sellerId == "north-counter" && it.latest.pickup.isAfter(now) }
         rule.onNodeWithTag("seller_schedule_day_${firstUpcoming.latest.pickup.toLocalDate()}")
             .performScrollTo().assertExists()
-        rule.onNodeWithTag("seller_schedule_request_DEMO-NC-PAID-UNVERIFIED").assertDoesNotExist()
         rule.onAllNodesWithContentDescription("Requested pickup", substring = true)[0].assertExists()
         rule.onNodeWithTag("seller_schedule_request_${firstUpcoming.reference}").performScrollTo().performClick()
         assertEquals(firstUpcoming.reference, opened.get())

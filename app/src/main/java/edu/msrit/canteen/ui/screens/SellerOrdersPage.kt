@@ -38,7 +38,10 @@ import edu.msrit.canteen.customer.IndividualOrderPreview
 import edu.msrit.canteen.customer.SellerOrderTab
 import edu.msrit.canteen.customer.SellerRequestFilter
 import edu.msrit.canteen.customer.filterSellerRequests
-import edu.msrit.canteen.customer.groupSellerOrders
+import edu.msrit.canteen.customer.PickupKind
+import edu.msrit.canteen.customer.QuoteStage
+import edu.msrit.canteen.customer.SellerPickupOrder
+import edu.msrit.canteen.customer.groupSellerPickups
 import edu.msrit.canteen.customer.pickupPinFromScan
 import edu.msrit.canteen.ui.components.CatalogHeader
 import edu.msrit.canteen.ui.components.RitEmptyState
@@ -58,12 +61,12 @@ import java.util.Locale
 
 private val clockTime = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
 
-/** Which page section is open: one of the individual-order tabs, or bulk requests. */
+/** Which page section is open: one of the paid-order tabs, or bulk requests still being agreed. */
 private enum class OrdersSection { NEW, READY, DONE, BULK }
 
 /**
- * Seller "Orders" page. Paid orders flow New → Ready → (Confirm Pickup) → Completed, each card showing
- * exactly one next action. Bulk requests keep their own tab.
+ * Seller "Orders" page. Paid orders, individual and bulk, flow New → Ready → (Confirm Pickup) → Completed,
+ * each card showing exactly one next action. Bulk requests that are still being agreed keep their own tab.
  *
  * [onMarkReady] and [onConfirmPickup] call back with an error message, or null on success.
  */
@@ -73,17 +76,19 @@ fun SellerOrdersPage(
     bulkRecords: List<BulkRequestRecord>,
     sellerId: String,
     canRespond: Boolean,
-    onMarkReady: (orderId: String, onResult: (String?) -> Unit) -> Unit,
-    onConfirmPickup: (orderId: String, pin: String, onResult: (String?) -> Unit) -> Unit,
+    onMarkReady: (order: SellerPickupOrder, onResult: (String?) -> Unit) -> Unit,
+    onConfirmPickup: (order: SellerPickupOrder, pin: String, onResult: (String?) -> Unit) -> Unit,
     onOpenBulkRequest: (String) -> Unit,
     loadError: String? = null,
 ) {
     val colors = RitThemeTokens.colors
-    val grouped = remember(orders) { groupSellerOrders(orders) }
+    val grouped = remember(orders, bulkRecords, sellerId) {
+        groupSellerPickups(orders, bulkRecords.filter { it.sellerId == sellerId })
+    }
     var section by rememberSaveable { mutableStateOf(OrdersSection.NEW) }
     var busyOrderId by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
-    var pickupFor by remember { mutableStateOf<IndividualOrderPreview?>(null) }
+    var pickupFor by remember { mutableStateOf<SellerPickupOrder?>(null) }
     val newBulk = remember(bulkRecords, sellerId) {
         filterSellerRequests(bulkRecords, sellerId, SellerRequestFilter.NEEDS_ACTION).size
     }
@@ -109,7 +114,9 @@ fun SellerOrdersPage(
                 Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp).testTag("seller_orders_message"))
         }
         if (section == OrdersSection.BULK) {
-            Box(Modifier.weight(1f)) { SellerBulkRequestsList(bulkRecords, sellerId, onOpenBulkRequest) }
+            // Paid bulk orders are handled in New / Ready / Done like any other order.
+            Box(Modifier.weight(1f)) { SellerBulkRequestsList(bulkRecords.filter { it.thread.stage !in PAID_STAGES },
+                sellerId, onOpenBulkRequest) }
         } else {
             val tab = when (section) {
                 OrdersSection.READY -> SellerOrderTab.READY
@@ -122,7 +129,7 @@ fun SellerOrdersPage(
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (visible.isEmpty()) item {
                     when (tab) {
-                        SellerOrderTab.NEW -> RitEmptyState("No new orders", "Paid orders appear here as soon as customers place them.")
+                        SellerOrderTab.NEW -> RitEmptyState("No new orders", "Paid orders appear here as soon as customers pay.")
                         SellerOrderTab.READY -> RitEmptyState("Nothing waiting for pickup", "Orders you mark ready appear here.")
                         SellerOrderTab.DONE -> RitEmptyState("No completed orders yet", "Collected orders appear here.")
                     }
@@ -131,7 +138,7 @@ fun SellerOrdersPage(
                     SellerOrderCard(order, tab, canRespond, busy = busyOrderId == order.id,
                         onMarkReady = {
                             busyOrderId = order.id; message = null
-                            onMarkReady(order.id) { error ->
+                            onMarkReady(order) { error ->
                                 busyOrderId = null
                                 message = error ?: "${orderLabel(order)} is ready for pickup."
                             }
@@ -146,7 +153,7 @@ fun SellerOrdersPage(
         PickupConfirmDialog(order,
             onDismiss = { pickupFor = null },
             onSubmit = { pin, onError ->
-                onConfirmPickup(order.id, pin) { error ->
+                onConfirmPickup(order, pin) { error ->
                     if (error == null) {
                         pickupFor = null
                         message = "${orderLabel(order)} collected. Hand over the food."
@@ -156,8 +163,14 @@ fun SellerOrdersPage(
     }
 }
 
-private fun orderLabel(order: IndividualOrderPreview) =
-    if (order.pickupReference.isNotBlank()) "Order ${order.pickupReference}" else "Order"
+private val PAID_STAGES = setOf(QuoteStage.PAID, QuoteStage.READY, QuoteStage.COMPLETED)
+private val pickupDay = DateTimeFormatter.ofPattern("EEE d MMM, h:mm a", Locale.ENGLISH)
+
+private fun orderLabel(order: SellerPickupOrder) = when {
+    order.kind == PickupKind.BULK -> "Bulk order for ${order.customerName ?: "the customer"}"
+    order.reference.isNotBlank() -> "Order ${order.reference}"
+    else -> "Order"
+}
 
 @Composable
 private fun SectionTab(label: String, count: Int?, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
@@ -174,7 +187,7 @@ private fun SectionTab(label: String, count: Int?, selected: Boolean, modifier: 
 }
 
 @Composable
-private fun SellerOrderCard(order: IndividualOrderPreview, tab: SellerOrderTab, canRespond: Boolean, busy: Boolean,
+private fun SellerOrderCard(order: SellerPickupOrder, tab: SellerOrderTab, canRespond: Boolean, busy: Boolean,
                             onMarkReady: () -> Unit, onConfirmPickup: () -> Unit) {
     val colors = RitThemeTokens.colors
     val shape = RoundedCornerShape(RitRadii.card)
@@ -184,7 +197,10 @@ private fun SellerOrderCard(order: IndividualOrderPreview, tab: SellerOrderTab, 
             RitText(order.customerName ?: "Customer", RitType.title, modifier = Modifier.weight(1f), maxLines = 1)
             RitText(displayPaise(order.totalPaise), RitType.title, colors.accent)
         }
-        RitText(listOf(order.pickupReference.ifBlank { null }, placedLabel(order.placedAt)).filterNotNull()
+        if (order.scheduledPickup) {
+            RitText("Bulk order · pickup ${pickupDay.format(order.dueAt)}", RitType.label, colors.accent,
+                modifier = Modifier.testTag("seller_order_pickup_${order.id}"))
+        } else RitText(listOf(order.reference.ifBlank { null }, placedLabel(order.placedAt)).filterNotNull()
             .joinToString(" · "), RitType.small, colors.muted)
         Spacer(Modifier.height(2.dp))
         order.lines.forEach { line ->
@@ -220,7 +236,7 @@ private fun instantClock(iso: String): String = runCatching {
 }.getOrDefault(iso)
 
 @Composable
-private fun PickupConfirmDialog(order: IndividualOrderPreview, onDismiss: () -> Unit,
+private fun PickupConfirmDialog(order: SellerPickupOrder, onDismiss: () -> Unit,
                                 onSubmit: (pin: String, onError: (String) -> Unit) -> Unit) {
     val colors = RitThemeTokens.colors
     var enteringPin by remember { mutableStateOf(false) }

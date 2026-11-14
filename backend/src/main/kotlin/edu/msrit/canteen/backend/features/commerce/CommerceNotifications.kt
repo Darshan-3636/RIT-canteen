@@ -13,8 +13,8 @@ internal fun notifyBulkEvent(db: Connection, requestId: UUID, version: Int, even
     val customer = request.first
     val seller = request.second
     val customerEvents = setOf("COUNTEROFFER", "SELLER_APPROVED", "SPECIAL_PICKUP_DECIDED",
-        "REJECTED", "EXPIRED", "AGREED")
-    val sellerEvents = setOf("SUBMITTED", "CUSTOMER_APPROVED", "WITHDRAWN", "AGREED", "EXPIRED")
+        "REJECTED", "EXPIRED", "AGREED", "READY", "COMPLETED")
+    val sellerEvents = setOf("SUBMITTED", "CUSTOMER_APPROVED", "WITHDRAWN", "AGREED", "EXPIRED", "PAID")
     val title = when (event) {
         "SUBMITTED" -> "New bulk request"
         "COUNTEROFFER" -> "New bulk quote"
@@ -24,12 +24,18 @@ internal fun notifyBulkEvent(db: Connection, requestId: UUID, version: Int, even
         "REJECTED" -> "Bulk request declined"
         "WITHDRAWN" -> "Bulk request withdrawn"
         "EXPIRED" -> "Bulk quote expired"
+        "PAID" -> "Bulk order paid"
+        "READY" -> "Bulk order ready"
+        "COMPLETED" -> "Bulk order collected"
         else -> return
     }
     val body = when (event) {
         "SUBMITTED" -> "A customer sent a bulk request. Open the request queue to respond."
-        "COUNTEROFFER" -> "The seller sent an updated quote. Review it before the expiry time."
-        "AGREED" -> "Both sides agreed to the quote. Payment is still pending."
+        "COUNTEROFFER" -> "The canteen sent an updated quote. Review it before it expires."
+        "AGREED" -> "The canteen accepted your bulk order. Pay to confirm it."
+        "PAID" -> "A bulk order was paid. Prepare it for the pickup time."
+        "READY" -> "Your bulk order is ready. Show your pickup QR code or PIN at the counter."
+        "COMPLETED" -> "Your bulk order was collected."
         "REJECTED" -> "The bulk request was declined. Open the request for details."
         "WITHDRAWN" -> "The customer withdrew a bulk request."
         "EXPIRED" -> "The current bulk quote expired."

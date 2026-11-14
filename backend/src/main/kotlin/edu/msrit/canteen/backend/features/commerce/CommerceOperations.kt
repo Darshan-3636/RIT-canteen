@@ -119,6 +119,8 @@ internal fun createBulk(context:BackendContext,principal:AuthenticatedPrincipal,
             return@transaction loadBulk(c,previous.id) ?: throw conflict("IDEMPOTENCY_RESULT_MISSING","Previously saved request could not be loaded")
         }
         insertRevision(c,id,1,"SUBMITTED",pickupAt,reason,priced.first,principal.userId,now,expiry)
+        // Sending the request is the customer's approval of it; the canteen accepting it completes the agreement.
+        c.prepareStatement("INSERT INTO bulk_quote_approvals(request_id,version,actor_kind,actor_user_id) VALUES (?,1,'CUSTOMER',?)").use { s -> s.setObject(1,id);s.setObject(2,principal.userId);s.executeUpdate() }
         event(c,id,1,principal.userId,"SUBMITTED")
         loadBulk(c,id)!!
     }
@@ -150,6 +152,8 @@ internal fun counteroffer(context:BackendContext,principal:AuthenticatedPrincipa
         val priced=validateAndPrice(c,context,sellerId,terms.lines,terms.pickupAt,terms.specialPickupReason)
         val version=current.first+1; val now=context.clock.instant(); val expiry=now.plusSeconds(24*60*60L)
         insertRevision(c,id,version,"COUNTEROFFER",terms.pickupAt,terms.specialPickupReason,priced.first,principal.userId,now,expiry)
+        // Sending changes is the canteen's approval of them; the customer accepting them completes the agreement.
+        c.prepareStatement("INSERT INTO bulk_quote_approvals(request_id,version,actor_kind,actor_user_id) VALUES (?,?,'SELLER',?)").use { s -> s.setObject(1,id);s.setInt(2,version);s.setObject(3,principal.userId);s.executeUpdate() }
         event(c,id,version,principal.userId,"COUNTEROFFER")
         recordAudit(c,principal.userId,"SELLER","seller.bulk.counteroffer","BULK_REQUEST",id.toString(),sellerId)
         loadBulk(c,id)!!
@@ -163,7 +167,7 @@ private fun lockCustomer(c:Connection,id:UUID,user:UUID):Pair<Int,String> = c.pr
 }
 private fun checkEditable(c:Connection,id:UUID,row:Pair<Int,String>,expected:Int,context:BackendContext) {
     if(row.first!=expected) throw conflict("STALE_REVISION","Request changed; refresh the current revision")
-    if(row.second in setOf("EXPIRED","REJECTED","WITHDRAWN","AGREED_AWAITING_PAYMENT")) throw conflict("REQUEST_NOT_EDITABLE","This request can no longer be changed")
+    if(row.second in setOf("EXPIRED","REJECTED","WITHDRAWN","AGREED_AWAITING_PAYMENT","PAID","READY","COMPLETED")) throw conflict("REQUEST_NOT_EDITABLE","This request can no longer be changed")
     val expires=c.prepareStatement("SELECT expires_at FROM bulk_quote_revisions WHERE request_id=? AND version=?").use { s ->
         s.setObject(1,id);s.setInt(2,row.first);s.executeQuery().use { r -> if(r.next()) r.getTimestamp(1).toInstant() else throw CommerceFault(404,"REVISION_NOT_FOUND","Current revision not found") }
     }
@@ -244,20 +248,24 @@ private fun expire(c:Connection,id:UUID,version:Int) {
     c.prepareStatement("UPDATE bulk_quote_revisions SET status='EXPIRED' WHERE request_id=? AND version=?").use { s -> s.setObject(1,id);s.setInt(2,version);s.executeUpdate() }
 }
 
-internal fun loadBulk(c:Connection,id:UUID):BulkRequestDto? = c.prepareStatement("""SELECT r.id,r.seller_id,r.current_version,r.status,r.instructions,u.full_name AS customer_name,q.pickup_at,q.special_pickup_reason,q.subtotal_paise,q.expires_at,p.bulk_minimum_units
+/** [forCustomer] adds the pickup PIN, which only the customer may see. */
+internal fun loadBulk(c:Connection,id:UUID,forCustomer:Boolean=false):BulkRequestDto? = c.prepareStatement("""SELECT r.id,r.seller_id,r.current_version,r.status,r.instructions,u.full_name AS customer_name,q.pickup_at,q.special_pickup_reason,q.subtotal_paise,q.expires_at,p.bulk_minimum_units,r.pickup_code,r.paid_at,r.ready_at,r.handed_over_at
     FROM bulk_requests r JOIN users u ON u.id=r.customer_user_id JOIN bulk_quote_revisions q ON q.request_id=r.id AND q.version=r.current_version LEFT JOIN seller_ordering_policies p ON p.seller_id=r.seller_id WHERE r.id=?""").use { s ->
     s.setObject(1,id);s.executeQuery().use { r -> if(!r.next()) null else {
         val version=r.getInt("current_version")
         val approvals=c.prepareStatement("SELECT actor_kind FROM bulk_quote_approvals WHERE request_id=? AND version=?").use { q -> q.setObject(1,id);q.setInt(2,version);q.executeQuery().use { rs -> buildSet { while(rs.next()) add(rs.getString(1)) } } }
         val special=c.prepareStatement("SELECT approved FROM bulk_special_pickup_decisions WHERE request_id=? AND version=?").use { q -> q.setObject(1,id);q.setInt(2,version);q.executeQuery().use { rs -> if(rs.next()) rs.getBoolean(1) else null } }
         val lines=c.prepareStatement("SELECT item_id,item_name_snapshot,quantity,unit_price_paise FROM bulk_quote_lines WHERE request_id=? AND version=? ORDER BY item_id").use { q -> q.setObject(1,id);q.setInt(2,version);q.executeQuery().use { rs -> buildList { while(rs.next()) add(BulkQuoteLineDto(rs.getString(1),rs.getString(2),rs.getInt(3),rs.getLong(4))) } } }
-        BulkRequestDto(id.toString(),r.getString("seller_id"),version,r.getString("status"),r.getTimestamp("pickup_at").toInstant().toString(),r.getString("special_pickup_reason"),r.getLong("subtotal_paise"),r.getInt("bulk_minimum_units").takeIf { it>0 } ?: 8,r.getTimestamp("expires_at").toInstant().toString(),"CUSTOMER" in approvals,"SELLER" in approvals,special,lines,r.getString("instructions"),r.getString("customer_name"))
+        BulkRequestDto(id.toString(),r.getString("seller_id"),version,r.getString("status"),r.getTimestamp("pickup_at").toInstant().toString(),r.getString("special_pickup_reason"),r.getLong("subtotal_paise"),r.getInt("bulk_minimum_units").takeIf { it>0 } ?: 8,r.getTimestamp("expires_at").toInstant().toString(),"CUSTOMER" in approvals,"SELLER" in approvals,special,lines,r.getString("instructions"),r.getString("customer_name"),
+            pickupCode=if(forCustomer) r.getString("pickup_code") else null,
+            paidAt=r.getTimestamp("paid_at")?.toInstant()?.toString(),readyAt=r.getTimestamp("ready_at")?.toInstant()?.toString(),
+            handedOverAt=r.getTimestamp("handed_over_at")?.toInstant()?.toString())
     } }
 }
 
 internal fun customerBulk(context:BackendContext,user:UUID):BulkRequestListDto { expireDue(context);return context.dataSource.connection.use { c ->
     val ids=c.prepareStatement("SELECT id FROM bulk_requests WHERE customer_user_id=? ORDER BY created_at DESC").use { s -> s.setObject(1,user);s.executeQuery().use { r -> buildList { while(r.next()) add(r.getObject(1,UUID::class.java)) } } }
-    BulkRequestListDto(ids.mapNotNull { loadBulk(c,it) })
+    BulkRequestListDto(ids.mapNotNull { loadBulk(c,it,forCustomer=true) })
 } }
 internal fun sellerBulk(context:BackendContext,sellerId:String,status:String?):BulkRequestListDto { expireDue(context);return context.dataSource.connection.use { c ->
     val ids=c.prepareStatement("SELECT id FROM bulk_requests WHERE seller_id=? AND (? IS NULL OR status=?) ORDER BY created_at DESC").use { s -> s.setString(1,sellerId);s.setString(2,status);s.setString(3,status);s.executeQuery().use { r -> buildList { while(r.next()) add(r.getObject(1,UUID::class.java)) } } }
@@ -304,3 +312,36 @@ internal fun rejectBulk(context:BackendContext,principal:AuthenticatedPrincipal,
         loadBulk(c,id)!!
     }
 }
+
+/**
+ * PhonePe confirmed payment for the agreed quote: the order is now paid and gets its pickup PIN.
+ * Returns false when the request is not awaiting payment for that quote version (already paid, or changed).
+ */
+internal fun markBulkPaid(c:Connection,id:UUID,quoteVersion:Int):Boolean {
+    val updated=c.prepareStatement("""UPDATE bulk_requests SET status='PAID',paid_at=now(),updated_at=now(),
+        pickup_code=lpad(((('x'||substr(md5(gen_random_uuid()::TEXT),1,8))::BIT(32)::BIGINT % 10000))::TEXT,4,'0')
+        WHERE id=? AND status='AGREED_AWAITING_PAYMENT' AND current_version=?
+        RETURNING customer_user_id""").use { s -> s.setObject(1,id);s.setInt(2,quoteVersion);s.executeQuery().use { r -> if(r.next()) r.getObject(1,UUID::class.java) else null } }
+        ?: return false
+    event(c,id,quoteVersion,updated,"PAID")
+    return true
+}
+
+/** Canteen fulfilment of a paid bulk order: PAID -> READY -> COMPLETED (the customer's PIN must match). */
+internal fun fulfilBulk(context:BackendContext,principal:AuthenticatedPrincipal,sellerId:String,id:UUID,next:String,pickupCode:String?):BulkRequestDto =
+    context.transaction { c ->
+        if(!context.authorization.hasSellerCapability(c,principal,sellerId,"bulk.respond")) throw CommerceFault(403,"SELLER_CAPABILITY_REQUIRED","This seller action is not permitted")
+        val state=c.prepareStatement("SELECT status,pickup_code,current_version FROM bulk_requests WHERE id=? AND seller_id=? FOR UPDATE").use { s ->
+            s.setObject(1,id);s.setString(2,sellerId);s.executeQuery().use { r -> if(r.next()) Triple(r.getString(1),r.getString(2),r.getInt(3)) else null }
+        } ?: throw CommerceFault(404,"REQUEST_NOT_FOUND","Bulk request not found")
+        val allowed=when(next) { "READY" -> state.first=="PAID"; "COMPLETED" -> state.first=="READY"; else -> throw bad("INVALID_STATUS","Choose READY or COMPLETED") }
+        if(!allowed) throw conflict("INVALID_TRANSITION","This order has already moved on. Refresh to see its current status.")
+        if(next=="COMPLETED" && !MessageDigest.isEqual(state.second.toByteArray(Charsets.US_ASCII),
+                pickupCode?.trim()?.toByteArray(Charsets.US_ASCII) ?: byteArrayOf()))
+            throw rule("INVALID_PICKUP_CODE","That PIN doesn't match this order. Check it with the customer.")
+        val column=if(next=="READY") "ready_at" else "handed_over_at"
+        c.prepareStatement("UPDATE bulk_requests SET status=?,$column=now(),updated_at=now() WHERE id=?").use { s -> s.setString(1,next);s.setObject(2,id);s.executeUpdate() }
+        event(c,id,state.third,principal.userId,next)
+        recordAudit(c,principal.userId,"SELLER","seller.bulk.status","BULK_REQUEST",id.toString(),sellerId,mapOf("status" to next))
+        loadBulk(c,id)!!
+    }

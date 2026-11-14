@@ -33,8 +33,6 @@ import edu.msrit.canteen.customer.customerOrderStatus
 import edu.msrit.canteen.customer.isPaidOrder
 import edu.msrit.canteen.ui.components.RitPickupQr
 import edu.msrit.canteen.customer.SandboxPayment
-import edu.msrit.canteen.customer.DemoOrder
-import edu.msrit.canteen.customer.DemoOrderKind
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.QuoteStage
 import edu.msrit.canteen.ui.components.CatalogHeader
@@ -55,23 +53,13 @@ import java.time.format.DateTimeFormatter
 private enum class OrdersTab { ALL, INDIVIDUAL, BULK }
 private val orderDate = DateTimeFormatter.ofPattern("d MMM · h:mm a")
 
-private fun bulkPrimaryState(record: BulkRequestRecord): String = when (record.thread.stage) {
-    QuoteStage.SUBMITTED -> "Waiting for canteen review"
-    QuoteStage.COUNTEROFFER -> if (record.latest.actor == edu.msrit.canteen.customer.QuoteActor.SELLER)
-        "Review canteen's updated offer" else "Waiting for canteen's response"
-    QuoteStage.AGREED_AWAITING_PAYMENT -> "Agreed · awaiting payment"
-    QuoteStage.PAID_CONFIRMED -> "Paid"
-    QuoteStage.EXPIRED -> "Offer expired"
-    QuoteStage.REJECTED -> "Canteen declined"
-    QuoteStage.WITHDRAWN -> "Request withdrawn"
-}
+private fun bulkPrimaryState(record: BulkRequestRecord): String = edu.msrit.canteen.customer.customerBulkStatus(record)
 
 @Composable
 fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<BulkRequestRecord>,
                          onBack: () -> Unit, onIndividual: (String) -> Unit, onBulk: (String) -> Unit,
                          onCart: () -> Unit, onBottom: (RitBottomItem) -> Unit, cartCount: Int = 0,
-                         customerUserId: String = "debug-customer",
-                         demoOrders: List<DemoOrder> = emptyList(), onDemoOrder: (String) -> Unit = {}) {
+                         customerUserId: String = "debug-customer") {
     val colors = RitThemeTokens.colors
     var tab by remember { mutableStateOf(OrdersTab.ALL) }
     val bulkVisible = bulk.filter { it.customerUserId == customerUserId }
@@ -91,15 +79,7 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
             }
             if (tab != OrdersTab.BULK) {
                 item { RitText("Individual food", RitType.title); Spacer(Modifier.height(7.dp)) }
-                items(demoOrders.filter { it.customerId == customerUserId && it.kind == DemoOrderKind.INDIVIDUAL },
-                    key = { "demo_${it.reference}" }) { order ->
-                    OrderCard("Individual · ${PreviewCatalog.sellers.find { it.id == order.sellerId }?.name ?: "Canteen"}", order.state.name.lowercase().replace('_', ' '),
-                        order.lines.joinToString { "${it.quantity}× ${it.title}" },
-                        "${order.reference} · ${displayPaise(order.totalPaise)}",
-                        { onDemoOrder(order.reference) }, "orders_demo_${order.reference}", order.lines.firstOrNull()?.itemId)
-                }
-                if (individual.isEmpty() && demoOrders.none {
-                        it.customerId == customerUserId && it.kind == DemoOrderKind.INDIVIDUAL })
+                if (individual.isEmpty())
                     item { RitEmptyState("No individual orders", "Choose an item eligible for individual ordering.") }
                 items(individual, key = { it.id }) { record ->
                     OrderCard("Individual · ${PreviewCatalog.sellers.find { seller -> seller.id == PreviewCatalog.items.find { it.id == record.lines.firstOrNull()?.itemId }?.sellerId }?.name ?: "Canteen"}", if (record.locallySaved)
@@ -111,23 +91,12 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                 }
             }
             if (tab != OrdersTab.INDIVIDUAL) {
-                item { Spacer(Modifier.height(12.dp)); RitText("Bulk requests", RitType.title); Spacer(Modifier.height(7.dp)) }
-                items(demoOrders.filter { it.customerId == customerUserId && it.kind == DemoOrderKind.BULK },
-                    key = { "demo_${it.reference}" }) { order ->
-                    OrderCard("Bulk · ${PreviewCatalog.sellers.find { it.id == order.sellerId }?.name ?: "Canteen"}",
-                        order.state.name.lowercase().replace('_', ' '),
-                        order.lines.joinToString { "${it.quantity}× ${it.title}" },
-                        "${order.reference} · ${displayPaise(order.totalPaise)}",
-                        { onDemoOrder(order.reference) }, "orders_demo_${order.reference}", order.lines.firstOrNull()?.itemId)
-                }
-                if (bulkVisible.isEmpty() && demoOrders.none {
-                        it.customerId == customerUserId && it.kind == DemoOrderKind.BULK })
-                    item { RitEmptyState("No bulk requests", "Group requests and canteen offers will appear here.") }
+                item { Spacer(Modifier.height(12.dp)); RitText("Bulk orders", RitType.title); Spacer(Modifier.height(7.dp)) }
+                if (bulkVisible.isEmpty())
+                    item { RitEmptyState("No bulk orders", "Order food for a club, meeting or event from the Bulk tab in your cart.") }
                 items(bulkVisible, key = { it.reference }) { record ->
                     val seller = PreviewCatalog.sellers.find { it.id == record.sellerId }?.name ?: "Canteen"
-                    val simulated = demoOrders.find { it.reference == record.reference && it.customerId == customerUserId }
-                    OrderCard("Bulk quote · $seller", simulated?.state?.name?.lowercase()?.replace('_', ' ')
-                        ?: bulkPrimaryState(record),
+                    OrderCard("Bulk order · $seller", bulkPrimaryState(record),
                         "${record.latest.lines.sumOf { it.quantity }} items · pickup ${record.latest.pickup.format(orderDate)}",
                         "${record.reference} · ${displayPaise(record.latest.totalPaise)}",
                         { onBulk(record.reference) }, "orders_bulk_${record.reference}", record.latest.lines.firstOrNull()?.itemId)

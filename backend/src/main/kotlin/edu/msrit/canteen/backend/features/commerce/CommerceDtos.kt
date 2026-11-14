@@ -52,7 +52,10 @@ import kotlinx.serialization.Serializable
     val expiresAt: String, val customerApproved: Boolean, val sellerApproved: Boolean,
     val specialPickupApproved: Boolean?, val lines: List<BulkQuoteLineDto>, val instructions: String = "",
     val customerName: String? = null,
+    val pickupCode: String? = null, val paidAt: String? = null, val readyAt: String? = null,
+    val handedOverAt: String? = null,
 )
+@Serializable data class BulkStatusRequest(val status: String, val pickupCode: String? = null)
 @Serializable data class BulkRequestListDto(val requests: List<BulkRequestDto>)
 @Serializable data class CustomerDemoOrderRequest(val lines: List<DraftLine>)
 @Serializable data class IndividualCartReplaceRequest(val expectedVersion: Long, val lines: List<DraftLine>)

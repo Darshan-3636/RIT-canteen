@@ -66,7 +66,7 @@ fun validHours(hours: Map<DayOfWeek, List<BulkTimeWindow>>): Boolean =
 fun sellerPickupConflicts(records: List<BulkRequestRecord>, sellerId: String,
                           proposed: SellerBulkPolicy, now: LocalDateTime): List<String> = records
     .filter { it.sellerId == sellerId && it.thread.stage in setOf(QuoteStage.SUBMITTED,
-        QuoteStage.COUNTEROFFER, QuoteStage.AGREED_AWAITING_PAYMENT, QuoteStage.PAID_CONFIRMED) }
+        QuoteStage.COUNTEROFFER, QuoteStage.AGREED_AWAITING_PAYMENT, QuoteStage.PAID, QuoteStage.READY) }
     .filter { it.thread.specialAcceptedVersion != it.latest.version &&
         pickupWindow(proposed, it.latest.pickup, now) == PickupWindow.SPECIAL_REQUIRED }
     .map { it.reference }

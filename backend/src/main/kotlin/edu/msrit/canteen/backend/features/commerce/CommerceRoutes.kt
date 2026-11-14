@@ -210,7 +210,7 @@ fun Route.registerCommerceRoutes(context: BackendContext,
             val p=call.requireAuthenticatedUser(context) ?: return@commerce;val id=call.uuidParameter("requestId");expireDue(context)
             val value=context.dataSource.connection.use { c ->
                 c.prepareStatement("SELECT 1 FROM bulk_requests WHERE id=? AND customer_user_id=?").use { s -> s.setObject(1,id);s.setObject(2,p.userId);s.executeQuery().use { it.next() } }
-                    .let { owned -> if(owned) loadBulk(c,id) else null }
+                    .let { owned -> if(owned) loadBulk(c,id,forCustomer=true) else null }
             } ?: throw CommerceFault(404,"REQUEST_NOT_FOUND","Bulk request not found")
             call.respond(value)
         }
@@ -220,7 +220,7 @@ fun Route.registerCommerceRoutes(context: BackendContext,
             val seller=call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")
             if(call.requireSellerCapability(context,seller,"bulk.view")==null) return@commerce
             val status=call.request.queryParameters["status"]
-            if(status!=null && status !in setOf("SUBMITTED","COUNTEROFFER","AGREED_AWAITING_PAYMENT","EXPIRED","REJECTED","WITHDRAWN")) throw CommerceFault(400,"INVALID_STATUS","Unknown request status")
+            if(status!=null && status !in setOf("SUBMITTED","COUNTEROFFER","AGREED_AWAITING_PAYMENT","EXPIRED","REJECTED","WITHDRAWN","PAID","READY","COMPLETED")) throw CommerceFault(400,"INVALID_STATUS","Unknown request status")
             call.respond(sellerBulk(context,seller,status))
         }
     }
@@ -256,6 +256,14 @@ fun Route.registerCommerceRoutes(context: BackendContext,
             val actor=call.requireSellerCapability(context,seller,"bulk.respond") ?: return@commerce
             val request=call.receive<BulkRejectRequest>()
             call.respond(rejectBulk(context,actor,seller,call.uuidParameter("requestId"),request))
+        }
+    }
+    post("/sellers/{sellerId}/bulk/requests/{requestId}/status") {
+        call.commerce {
+            val seller=call.parameters["sellerId"] ?: throw CommerceFault(400,"SELLER_ID_REQUIRED","Seller id is required")
+            val actor=call.requireSellerCapability(context,seller,"bulk.respond") ?: return@commerce
+            val body=call.receive<BulkStatusRequest>()
+            call.respond(fulfilBulk(context,actor,seller,call.uuidParameter("requestId"),body.status,body.pickupCode))
         }
     }
     post("/bulk/requests/{requestId}/withdraw") {

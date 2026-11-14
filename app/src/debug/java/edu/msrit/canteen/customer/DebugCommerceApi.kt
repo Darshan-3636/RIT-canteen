@@ -208,6 +208,11 @@ object DebugCommerceApi {
         return bulkMutation("/api/v1/sellers/" + sellerId + "/bulk/requests/" + requestId + "/counteroffers", body)
     }
 
+    /** Canteen fulfilment of a paid bulk order: "READY", or "COMPLETED" with the customer's PIN. */
+    fun fulfilBulk(sellerId: String, requestId: String, status: String, pickupCode: String? = null): Result<BulkRequestRecord> =
+        bulkMutation("/api/v1/sellers/" + sellerId + "/bulk/requests/" + requestId + "/status",
+            JSONObject().put("status", status).apply { if (pickupCode != null) put("pickupCode", pickupCode) })
+
     fun withdraw(requestId: String, expectedVersion: Int): Result<BulkRequestRecord> =
         bulkMutation("/api/v1/bulk/requests/" + requestId + "/withdraw",
             JSONObject().put("expectedVersion", expectedVersion))
@@ -264,7 +269,9 @@ object DebugCommerceApi {
         val customerName = row.optString("customerName").takeIf { it.isNotBlank() && it != "null" } ?: "Customer"
         return BulkRequestRecord(thread, DevelopmentDemoAccounts.serverIdentity?.userId.orEmpty(),
             customerName, BulkDraft(sellerId, lines.map { BulkLine(it.itemId, it.quantity) }, pickup,
-                reason.isNotBlank(), reason, row.optString("instructions")), row.getInt("minimumUnits"), LocalDateTime.now(RIT_TIME_ZONE))
+                reason.isNotBlank(), reason, row.optString("instructions")), row.getInt("minimumUnits"), LocalDateTime.now(RIT_TIME_ZONE),
+            pickupCode = row.optString("pickupCode").takeUnless { it.isBlank() || it == "null" },
+            handedOverAt = row.optString("handedOverAt").takeUnless { it.isBlank() || it == "null" })
     }
 
     private fun local(instant: String): LocalDateTime =

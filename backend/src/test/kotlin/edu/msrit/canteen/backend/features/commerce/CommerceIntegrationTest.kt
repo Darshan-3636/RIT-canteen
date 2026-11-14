@@ -489,6 +489,59 @@ class CommerceIntegrationTest {
         } } finally { cleanup(f) }
     }
 
+    @Test fun bulkOrderIsPaidReadiedAndCollectedWithItsPickupPin() {
+        val f=fixture()
+        try { app(f) {
+            val pickup=Instant.now().plusSeconds(48*3600).toString()
+            val customer="Bearer ${f.customer.token}"; val seller="Bearer ${f.seller.token}"
+            val created=client.post("/api/v1/bulk/requests") { header(HttpHeaders.Authorization,customer);header("Idempotency-Key","bulk-fulfil-1")
+                contentType(ContentType.Application.Json);setBody("""{"sellerId":"north-counter","lines":[{"itemId":"north-lunch","quantity":8}],"pickupAt":"$pickup"}""") }
+            assertEquals(HttpStatusCode.Created,created.status)
+            val id=Regex("""\"id\":\"([^\"]+)\"""").find(created.bodyAsText())!!.groupValues[1]
+            // Sending the request is the customer's approval of it, so the canteen's acceptance completes the agreement.
+            assertTrue(created.bodyAsText().contains("\"customerApproved\":true"))
+            suspend fun status(next:String,pin:String?=null,auth:String=seller)=client.post("/api/v1/sellers/north-counter/bulk/requests/$id/status") {
+                header(HttpHeaders.Authorization,auth);contentType(ContentType.Application.Json)
+                setBody(if(pin==null) """{"status":"$next"}""" else """{"status":"$next","pickupCode":"$pin"}""") }
+            val accepted=client.post("/api/v1/sellers/north-counter/bulk/requests/$id/seller-approval") { header(HttpHeaders.Authorization,seller);contentType(ContentType.Application.Json);setBody("""{"expectedVersion":1}""") }
+            assertTrue(accepted.bodyAsText().contains("\"status\":\"AGREED_AWAITING_PAYMENT\""))
+            assertEquals(HttpStatusCode.Conflict,status("READY").status)
+            f.context.dataSource.connection.use { db -> db.autoCommit=false; assertTrue(markBulkPaid(db,UUID.fromString(id),1)); db.commit() }
+            f.context.dataSource.connection.use { db -> db.autoCommit=false; assertFalse(markBulkPaid(db,UUID.fromString(id),1)); db.commit() }
+            val paid=client.get("/api/v1/me/bulk/requests/$id") { header(HttpHeaders.Authorization,customer) }.bodyAsText()
+            assertTrue(paid.contains("\"status\":\"PAID\""))
+            val pin=Regex("""\"pickupCode\":\"([0-9]{4})\"""").find(paid)!!.groupValues[1]
+            // Only the customer sees the PIN; the canteen must get it from them at the counter.
+            assertFalse(client.get("/api/v1/sellers/north-counter/bulk/requests/$id") { header(HttpHeaders.Authorization,seller) }.bodyAsText().contains("\"pickupCode\":\"$pin\""))
+            assertEquals(HttpStatusCode.Conflict,client.post("/api/v1/bulk/requests/$id/withdraw") { header(HttpHeaders.Authorization,customer);contentType(ContentType.Application.Json);setBody("""{"expectedVersion":1}""") }.status)
+            assertEquals(HttpStatusCode.Forbidden,status("READY",auth="Bearer ${f.stranger.token}").status)
+            assertEquals(HttpStatusCode.Conflict,status("COMPLETED",pin).status)
+            assertTrue(status("READY").bodyAsText().contains("\"status\":\"READY\""))
+            val wrong=if(pin=="0000") "1111" else "0000"
+            val refused=status("COMPLETED",wrong)
+            assertEquals(HttpStatusCode.UnprocessableEntity,refused.status);assertTrue(refused.bodyAsText().contains("doesn't match"))
+            val done=status("COMPLETED",pin).bodyAsText()
+            assertTrue(done.contains("\"status\":\"COMPLETED\""));assertTrue(Regex("\"handedOverAt\":\"[^\"]+\"").containsMatchIn(done))
+        } } finally { cleanup(f) }
+    }
+
+    @Test fun canteenChangesNeedOnlyTheCustomersAcceptance() {
+        val f=fixture()
+        try { app(f) {
+            val pickup=Instant.now().plusSeconds(48*3600).toString()
+            val created=client.post("/api/v1/bulk/requests") { header(HttpHeaders.Authorization,"Bearer ${f.customer.token}");header("Idempotency-Key","bulk-changes-1")
+                contentType(ContentType.Application.Json);setBody("""{"sellerId":"north-counter","lines":[{"itemId":"north-lunch","quantity":8}],"pickupAt":"$pickup"}""") }
+            val id=Regex("""\"id\":\"([^\"]+)\"""").find(created.bodyAsText())!!.groupValues[1]
+            val changed=client.post("/api/v1/sellers/north-counter/bulk/requests/$id/counteroffers") { header(HttpHeaders.Authorization,"Bearer ${f.seller.token}")
+                contentType(ContentType.Application.Json);setBody("""{"expectedVersion":1,"lines":[{"itemId":"north-snack","quantity":8}],"pickupAt":"$pickup"}""") }
+            // Sending changes is the canteen's approval of them.
+            assertTrue(changed.bodyAsText().contains("\"sellerApproved\":true"))
+            val accepted=client.post("/api/v1/bulk/requests/$id/customer-approval") { header(HttpHeaders.Authorization,"Bearer ${f.customer.token}")
+                contentType(ContentType.Application.Json);setBody("""{"expectedVersion":2}""") }
+            assertTrue(accepted.bodyAsText().contains("\"status\":\"AGREED_AWAITING_PAYMENT\""))
+        } } finally { cleanup(f) }
+    }
+
     @Test fun sellerPolicyHoursAndRevisionBoundSpecialPickupApproval() {
         val f=fixture()
         f.context.dataSource.connection.use { c -> c.prepareStatement("DELETE FROM seller_hours WHERE seller_id='north-counter'").use { it.executeUpdate() } }

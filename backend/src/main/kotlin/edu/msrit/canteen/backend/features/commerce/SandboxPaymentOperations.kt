@@ -199,6 +199,13 @@ internal fun reconcileSandboxPayment(context: BackendContext, gateway: SandboxPa
                         notifyIndividualEvent(db, UUID.fromString(snapshot.sourceId), "DEMO_PAYMENT_SIMULATED")
                 }
             }
+            if (next == "SANDBOX_SUCCESS" && snapshot.sourceType == "BULK") {
+                // The payment is for the quote version it was started on; a changed request is not marked paid.
+                val version = db.prepareStatement("SELECT quote_version FROM sandbox_payment_attempts WHERE id=?").use { query ->
+                    query.setObject(1, id); query.executeQuery().use { rows -> if (rows.next()) rows.getInt(1) else null }
+                }
+                if (version != null) markBulkPaid(db, UUID.fromString(snapshot.sourceId), version)
+            }
         }
     }
     return customerSandboxPayment(context, principal, id, gateway.merchantId)
