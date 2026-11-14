@@ -93,7 +93,7 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                 item { RitText("Individual food", RitType.title); Spacer(Modifier.height(7.dp)) }
                 items(demoOrders.filter { it.customerId == customerUserId && it.kind == DemoOrderKind.INDIVIDUAL },
                     key = { "demo_${it.reference}" }) { order ->
-                    OrderCard("Individual · ${PreviewCatalog.sellers.find { it.id == order.sellerId }?.name ?: "Seller"}", order.state.name.lowercase().replace('_', ' '),
+                    OrderCard("Individual · ${PreviewCatalog.sellers.find { it.id == order.sellerId }?.name ?: "Canteen"}", order.state.name.lowercase().replace('_', ' '),
                         order.lines.joinToString { "${it.quantity}× ${it.title}" },
                         "${order.reference} · ${displayPaise(order.totalPaise)}",
                         { onDemoOrder(order.reference) }, "orders_demo_${order.reference}", order.lines.firstOrNull()?.itemId)
@@ -102,7 +102,7 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                         it.customerId == customerUserId && it.kind == DemoOrderKind.INDIVIDUAL })
                     item { RitEmptyState("No individual orders", "Choose an item eligible for individual ordering.") }
                 items(individual, key = { it.id }) { record ->
-                    OrderCard("Individual · ${PreviewCatalog.sellers.find { seller -> seller.id == PreviewCatalog.items.find { it.id == record.lines.firstOrNull()?.itemId }?.sellerId }?.name ?: "Seller"}", if (record.locallySaved)
+                    OrderCard("Individual · ${PreviewCatalog.sellers.find { seller -> seller.id == PreviewCatalog.items.find { it.id == record.lines.firstOrNull()?.itemId }?.sellerId }?.name ?: "Canteen"}", if (record.locallySaved)
                         customerOrderStatus(record.status)
                         else "Past order",
                         record.lines.joinToString { "${it.quantity}× ${it.title}" },
@@ -114,7 +114,7 @@ fun CustomerOrdersScreen(individual: List<IndividualOrderPreview>, bulk: List<Bu
                 item { Spacer(Modifier.height(12.dp)); RitText("Bulk requests", RitType.title); Spacer(Modifier.height(7.dp)) }
                 items(demoOrders.filter { it.customerId == customerUserId && it.kind == DemoOrderKind.BULK },
                     key = { "demo_${it.reference}" }) { order ->
-                    OrderCard("Bulk · ${PreviewCatalog.sellers.find { it.id == order.sellerId }?.name ?: "Seller"}",
+                    OrderCard("Bulk · ${PreviewCatalog.sellers.find { it.id == order.sellerId }?.name ?: "Canteen"}",
                         order.state.name.lowercase().replace('_', ' '),
                         order.lines.joinToString { "${it.quantity}× ${it.title}" },
                         "${order.reference} · ${displayPaise(order.totalPaise)}",

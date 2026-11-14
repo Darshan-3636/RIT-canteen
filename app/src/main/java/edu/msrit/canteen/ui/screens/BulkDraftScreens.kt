@@ -102,40 +102,6 @@ internal fun BulkTextBox(label: String, value: String, onChange: (String) -> Uni
 }
 
 @Composable
-fun BulkSellerPickerScreen(
-    session: BulkDraftSession,
-    policies: BulkPolicySource,
-    onBack: () -> Unit,
-    onSelected: () -> Unit,
-    catalog: CustomerCatalogSource = PreviewCatalog,
-) {
-    val colors = RitThemeTokens.colors
-    var blockedSeller by remember { mutableStateOf<String?>(null) }
-    Column(Modifier.fillMaxSize().background(colors.background).testTag("bulk_seller_picker")) {
-        CatalogHeader("Choose a canteen", onBack)
-        LazyColumn(Modifier.testTag("bulk_seller_list"), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp)) {
-            item {
-                BulkInfoCard("One canteen per request", "Prepared and packaged items can be combined only when they come from the same canteen. Each canteen sets its own minimum.")
-                Spacer(Modifier.height(18.dp))
-            }
-            items(catalog.sellers.filter { it.capabilities.bulk }, key = { it.id }) { seller ->
-                Column(Modifier.padding(bottom = 14.dp).testTag("bulk_choose_${seller.id}")) {
-                    CatalogSellerCard(seller, "Minimum ${policies.forSeller(seller.id)?.minimum ?: 8} combined units",
-                        onClick = {
-                            if (session.selectSeller(seller.id)) onSelected() else blockedSeller = seller.id
-                        })
-                }
-            }
-        }
-    }
-    blockedSeller?.let { target -> RitConfirmDialog("Switch canteen?",
-        "Your bulk cart has items from another canteen. Clear the bulk cart and start with this canteen?",
-        onDismiss = { blockedSeller = null }, onConfirm = {
-            session.clear(); session.selectSeller(target); blockedSeller = null; onSelected()
-        }) }
-}
-
-@Composable
 private fun BulkQuantityControl(item: MenuItem, quantity: Int, onQuantity: (Int) -> Unit) {
     val colors = RitThemeTokens.colors
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -382,8 +348,8 @@ fun BulkReviewScreen(
             item {
                 RitStatusIndicator(syncMessage ?: "Unsubmitted local draft · no canteen has seen this")
                 Spacer(Modifier.height(14.dp))
-                RitText(seller?.name ?: "Choose a canteen", RitType.heading)
-                RitText("One canteen · minimum ${policy?.minimum ?: seller?.bulkMinimumUnits ?: check.minimum} combined units", RitType.small, colors.muted)
+                RitText(seller?.name ?: "Canteen", RitType.heading)
+                RitText("Minimum ${policy?.minimum ?: seller?.bulkMinimumUnits ?: check.minimum} combined units", RitType.small, colors.muted)
                 Spacer(Modifier.height(14.dp))
                 BulkInfoCard("${check.totalUnits} units · ${displayPaise(check.provisionalPaise)} provisional", "Based on current menu prices. The canteen will send a final quote.")
                 Spacer(Modifier.height(12.dp))

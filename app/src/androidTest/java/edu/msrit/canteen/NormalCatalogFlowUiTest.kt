@@ -45,15 +45,14 @@ class NormalCatalogFlowUiTest {
         rule.onNodeWithTag("demo_login_password").performTextInput(password)
         rule.onNodeWithTag("demo_login_submit").performScrollTo().performClick()
         val destination = if (email.startsWith("owner.") || email.startsWith("staff."))
-            "seller_daily_overview" else "choose_seller"
+            "seller_daily_overview" else "seller_scoped_menu"
         rule.waitUntil(25_000) { rule.onAllNodesWithTag(destination).fetchSemanticsNodes().isNotEmpty() }
     }
 
     private fun customer() = login("student.arya@demo.ritcanteen.test", "RitDemo!Student01")
 
-    private fun chooseSeller(id: String) {
-        rule.onNodeWithTag("choose_seller_results").performScrollToNode(hasTestTag("choose_seller_card_$id"))
-        rule.onNodeWithTag("choose_seller_card_$id").performClick()
+    /** Customers land on the one canteen's menu; there is nothing to choose. */
+    private fun onMenu() {
         rule.onNodeWithTag("seller_scoped_menu").assertExists()
     }
 
@@ -63,26 +62,8 @@ class NormalCatalogFlowUiTest {
         rule.onNodeWithTag("catalog_category_$id").performClick()
     }
 
-    @Test fun pantryPackagedJuiceAndWaterAppearTogetherInBeverages() {
-        customer(); chooseSeller("campus-pantry"); selectCategory("drinks")
-        rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_pantry-juice"))
-        rule.onNodeWithTag("seller_menu_item_pantry-juice").assertExists().performClick()
-        rule.onNodeWithTag("food_details").assertExists()
-        rule.onNodeWithText("Fruit Juice Carton").assertExists()
-        rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
-        rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_pantry-water"))
-        rule.onNodeWithTag("seller_menu_item_pantry-water").assertExists().performClick()
-        rule.onNodeWithText("Water Bottle").assertExists()
-        rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
-        selectCategory("packs")
-        rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_potato-chips"))
-        rule.onNodeWithTag("seller_menu_item_potato-chips").assertExists()
-        rule.onNodeWithTag("seller_menu_item_pantry-juice").assertDoesNotExist()
-        rule.onNodeWithTag("debug_testing_hub").assertDoesNotExist()
-    }
-
     @Test fun mainCanteenBreakfastOpensNewPreparedFoodAndCart() {
-        customer(); chooseSeller("main-canteen"); selectCategory("breakfast")
+        customer(); onMenu(); selectCategory("breakfast")
         rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_idli"))
         rule.onNodeWithTag("seller_menu_item_idli").assertExists()
         rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_rava-idli"))
@@ -97,47 +78,12 @@ class NormalCatalogFlowUiTest {
     }
 
     @Test fun dualEligibleFoodCanBeAddedAsBulkAfterChoosingOrderType() {
-        customer(); chooseSeller("main-canteen"); selectCategory("breakfast")
+        customer(); onMenu(); selectCategory("breakfast")
         rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_idli"))
         rule.onNodeWithTag("seller_menu_item_idli").performClick()
         rule.onNodeWithTag("food_add_order").performClick()
         rule.onNodeWithTag("food_order_type_dialog").assertExists()
         rule.onNodeWithTag("food_choose_bulk_order").performClick()
-        rule.onNodeWithTag("customer_cart").assertExists()
-        rule.onNodeWithTag("cart_tab_bulk").assertExists()
-    }
-
-    @Test fun pantryMenuSearchDistinguishesJuiceFromWaterWithinOneSeller() {
-        customer(); chooseSeller("campus-pantry")
-        rule.onNodeWithTag("search_input").performTextInput("juice")
-        rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_pantry-juice"))
-        rule.onNodeWithTag("seller_menu_item_pantry-juice").assertExists()
-        rule.onNodeWithTag("seller_menu_item_pantry-water").assertDoesNotExist()
-        rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("search_input"))
-        rule.onNodeWithTag("search_input").performTextReplacement("water")
-        rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_pantry-water"))
-        rule.onNodeWithTag("seller_menu_item_pantry-water").assertExists()
-        rule.onNodeWithTag("seller_menu_item_orange-juice-bottle").assertDoesNotExist()
-    }
-
-    @Test fun bakeryPuffsAreDistinctAndStayWithinBakerySeller() {
-        customer(); chooseSeller("coffee-corner"); selectCategory("puffs")
-        rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_bakery-veg-puff"))
-        rule.onNodeWithTag("seller_menu_item_bakery-veg-puff").assertExists()
-        rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_bakery-paneer-puff"))
-        rule.onNodeWithTag("seller_menu_item_bakery-paneer-puff").performClick()
-        rule.onNodeWithText("Paneer Puff").assertExists()
-        rule.onNodeWithTag("food_add_order").assertExists()
-        rule.onNodeWithTag("seller_menu_item_masala-dosa").assertDoesNotExist()
-    }
-
-    @Test fun northCounterSnacksStayBulkOnly() {
-        customer(); chooseSeller("north-counter"); selectCategory("snacks")
-        rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_veg-samosa"))
-        rule.onNodeWithTag("seller_menu_item_veg-samosa").performClick()
-        rule.onNodeWithText("Veg Samosa").assertExists()
-        rule.onNodeWithTag("food_add_order").assertTextEquals("Add to Cart").performClick()
-        rule.onNodeWithTag("food_order_type_dialog").assertDoesNotExist()
         rule.onNodeWithTag("customer_cart").assertExists()
         rule.onNodeWithTag("cart_tab_bulk").assertExists()
     }
@@ -163,7 +109,7 @@ class NormalCatalogFlowUiTest {
         rule.onNodeWithTag("welcome_screen").assertExists()
         rule.onNodeWithTag("seller_menu_management").assertDoesNotExist()
         rule.onNodeWithTag("debug_testing_hub").assertDoesNotExist()
-        customer(); chooseSeller("main-canteen"); selectCategory("dosa")
+        customer(); onMenu(); selectCategory("dosa")
         rule.onNodeWithTag("seller_menu_list").performScrollToNode(hasTestTag("seller_menu_item_plain-dosa"))
         rule.onNodeWithText("Unavailable").assertExists()
         rule.runOnUiThread { DevelopmentSellerBusiness.reset() }

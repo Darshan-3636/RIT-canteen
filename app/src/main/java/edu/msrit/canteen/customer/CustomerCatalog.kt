@@ -114,8 +114,8 @@ data class Price(val rupees: Int) {
 data class OrderingCapabilities(val futureIndividualPrepared: Boolean, val bulk: Boolean)
 
 /**
- * The canteen customers order from. Today only one canteen uses the app, so customers go straight to
- * its menu; if more join, this picks the main canteen and the canteen picker can be brought back.
+ * The one canteen customers see and order from. Other sellers in the data stay for seller/admin
+ * screens but are never shown to customers.
  */
 fun primaryCanteenId(sellers: List<Seller>): String? =
     sellers.singleOrNull()?.id ?: sellers.firstOrNull { it.isMainCanteen }?.id ?: sellers.firstOrNull()?.id
@@ -185,9 +185,10 @@ fun itemEligibility(seller: Seller, item: MenuItem): ItemEligibility {
     }
 }
 
-fun CustomerCatalogSource.visibleItems(sellerId: String? = null, categoryId: String? = null, query: String = ""): List<MenuItem> =
-    items.filter { item ->
-        item.published &&
+fun CustomerCatalogSource.visibleItems(sellerId: String? = null, categoryId: String? = null, query: String = ""): List<MenuItem> {
+    val canteenId = primaryCanteenId(sellers)
+    return items.filter { item ->
+        item.published && item.sellerId == canteenId &&
             sellers.any { it.id == item.sellerId && item.categoryId in it.categoryIds } &&
             (item.availability == ItemAvailability.AVAILABLE || item.unavailableVisibility == UnavailableVisibility.SHOW) &&
             (sellerId == null || item.sellerId == sellerId) &&
@@ -197,14 +198,17 @@ fun CustomerCatalogSource.visibleItems(sellerId: String? = null, categoryId: Str
                 categories.find { it.id == item.categoryId }?.name?.contains(query, ignoreCase = true) == true ||
                 item.tags.any { it.contains(query, ignoreCase = true) })
     }
+}
 
-fun CustomerCatalogSource.visibleSellers(query: String = "", categoryId: String? = null): List<Seller> =
-    sellers.filter { seller ->
-        (categoryId == null || categoryId in seller.categoryIds) &&
+fun CustomerCatalogSource.visibleSellers(query: String = "", categoryId: String? = null): List<Seller> {
+    val canteenId = primaryCanteenId(sellers)
+    return sellers.filter { seller ->
+        seller.id == canteenId && (categoryId == null || categoryId in seller.categoryIds) &&
             (query.isBlank() || seller.name.contains(query, ignoreCase = true) ||
                 seller.description.contains(query, ignoreCase = true) ||
                 categories.any { it.id in seller.categoryIds && it.name.contains(query, ignoreCase = true) })
     }
+}
 
 /** Fictional identities and illustrative prices; never a live seller catalog. */
 object PreviewCatalog : CustomerCatalogSource {

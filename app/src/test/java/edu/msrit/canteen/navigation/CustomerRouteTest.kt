@@ -7,7 +7,7 @@ import org.junit.Test
 
 class CustomerRouteTest {
     @Test fun catalogDestinationsAreDebugOnly() {
-        listOf(Route.CustomerPreview, Route.OrderFood, Route.Sellers, Route.SellerProfile,
+        listOf(Route.CustomerPreview, Route.OrderFood, Route.SellerProfile,
             Route.SellerMenu, Route.FoodDetails, Route.CustomerUnavailable, Route.Search,
             Route.Favorites, Route.Promotions, Route.PromotionDetail, Route.QuickReorderEmpty,
             Route.QuickReorderSample).forEach {

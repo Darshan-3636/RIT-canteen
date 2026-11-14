@@ -72,34 +72,6 @@ fun RitBrandHeader(
 }
 
 @Composable
-fun RitQuickEntry(
-    title: String,
-    subtitle: String,
-    icon: RitIconKind,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    val colors = RitThemeTokens.colors
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(RitRadii.card))
-            .background(colors.warmCard)
-            .clickable(role = Role.Button, onClick = onClick)
-            .heightIn(min = 132.dp)
-            .padding(horizontal = 5.dp, vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(Modifier.size(40.dp).clip(CircleShape).background(colors.accent), contentAlignment = Alignment.Center) {
-            RitIcon(icon, colors.onAccent, size = 23.dp)
-        }
-        Spacer(Modifier.height(6.dp))
-        RitText(title, RitType.quickTitle.copy(textAlign = TextAlign.Center), modifier = Modifier.fillMaxWidth(), maxLines = 2)
-        Spacer(Modifier.height(2.dp))
-        RitText(subtitle, RitType.quickCaption.copy(textAlign = TextAlign.Center), colors.muted, modifier = Modifier.fillMaxWidth(), maxLines = 2)
-    }
-}
-
-@Composable
 fun RitFoodPreviewCard(name: String, caption: String, @DrawableRes image: Int, modifier: Modifier = Modifier) {
     val colors = RitThemeTokens.colors
     Column(

@@ -62,7 +62,7 @@ fun CustomerCatalogSource.discover(
         DiscoverySort.PRICE_LOW_TO_HIGH -> matchingItems.sortedWith(compareBy<MenuItem> { it.price.rupees }.thenBy { it.name })
         DiscoverySort.PRICE_HIGH_TO_LOW -> matchingItems.sortedWith(compareByDescending<MenuItem> { it.price.rupees }.thenBy { it.name })
     }
-    val matchingSellers = sellers.filter { seller ->
+    val matchingSellers = visibleSellers().filter { seller ->
         (filters.sellerId == null || seller.id == filters.sellerId) &&
             (filters.categoryId == null || filters.categoryId in seller.categoryIds) &&
             (filters.isEmpty || matchingItems.any { it.sellerId == seller.id }) &&

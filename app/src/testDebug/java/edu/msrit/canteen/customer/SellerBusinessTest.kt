@@ -29,6 +29,13 @@ class SellerBusinessTest {
     }
     @After fun tearDown() { if (!BuildConfig.RIT_CLOUD_DEMO) repo.reset() }
 
+    /** What customers would see if this seller were the one canteen (customers only see one). */
+    private fun customerView(): List<MenuItem> = object : CustomerCatalogSource {
+        override val sellers get() = PreviewCatalog.sellers.filter { it.id == seller }
+        override val categories get() = PreviewCatalog.categories
+        override val items get() = PreviewCatalog.items
+    }.visibleItems(seller)
+
     private fun item(id: String = "test-item") = MenuItem(id, seller, "combos", "Test lunch", "Sample",
         Price(50), FoodKind.PREPARED, Dietary.VEGETARIAN)
 
@@ -36,7 +43,7 @@ class SellerBusinessTest {
         assertTrue(repo.saveItem(owner, item()))
         assertTrue(repo.saveItem(owner, item().copy(name = "Revised lunch", price = Price(70))))
         assertEquals(1, PreviewCatalog.items.count { it.id == "test-item" })
-        assertEquals("Revised lunch", PreviewCatalog.visibleItems(seller).first { it.id == "test-item" }.name)
+        assertEquals("Revised lunch", customerView().first { it.id == "test-item" }.name)
     }
 
     @Test fun itemValidationBlocksBlankNameAndForeignCategory() {
@@ -58,13 +65,13 @@ class SellerBusinessTest {
     @Test fun availabilityVisibleHiddenAndUnpublishedPropagate() {
         val original = PreviewCatalog.items.first { it.id == "north-lunch" }
         assertTrue(repo.setItemState(owner, seller, original.id, false, true, true))
-        assertTrue(original.id in PreviewCatalog.visibleItems(seller).map { it.id })
+        assertTrue(original.id in customerView().map { it.id })
         assertEquals(ItemEligibility.UNAVAILABLE, itemEligibility(PreviewCatalog.sellers.first { it.id == seller },
             PreviewCatalog.items.first { it.id == original.id }))
         assertTrue(repo.setItemState(owner, seller, original.id, false, true, false))
-        assertFalse(original.id in PreviewCatalog.visibleItems(seller).map { it.id })
+        assertFalse(original.id in customerView().map { it.id })
         assertTrue(repo.setItemState(owner, seller, original.id, true, false, true))
-        assertFalse(original.id in PreviewCatalog.visibleItems(seller).map { it.id })
+        assertFalse(original.id in customerView().map { it.id })
     }
 
     @Test fun staffCannotMutateCatalogButDelegatedStaffCanChangeAvailability() {
@@ -90,9 +97,9 @@ class SellerBusinessTest {
         assertTrue(repo.saveItem(owner, item().copy(categoryId = category.id)))
         assertFalse(repo.removeCategory(owner, seller, category.id))
         assertTrue(repo.hideCategory(owner, seller, category.id, true))
-        assertFalse(PreviewCatalog.visibleItems(seller).any { it.id == "test-item" })
+        assertFalse(customerView().any { it.id == "test-item" })
         assertTrue(repo.hideCategory(owner, seller, category.id, false))
-        assertTrue(PreviewCatalog.visibleItems(seller).any { it.id == "test-item" })
+        assertTrue(customerView().any { it.id == "test-item" })
     }
 
     @Test fun categoryReorderIsSellerScoped() {

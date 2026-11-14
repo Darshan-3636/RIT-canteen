@@ -73,9 +73,6 @@ fun SellerProfileScreen(
                     Spacer(Modifier.height(16.dp))
                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         RitText(seller.name, RitType.heading, modifier = Modifier.weight(1f))
-                        if (favorites != null && customerId != null) CatalogFavoriteButton(seller.name,
-                            seller.id in favorites.sellerIds(customerId), { favorites.toggleSeller(customerId, seller.id) },
-                            "favorite_seller_${seller.id}")
                     }
                     RitText(seller.description, RitType.body, colors.muted)
                     Spacer(Modifier.height(10.dp))

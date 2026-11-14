@@ -65,7 +65,7 @@ class DemoLoginNavigationUiTest {
             password == "wrong-password" -> "demo_login_error"
             email.startsWith("admin.") -> "admin_demo_banner"
             email.startsWith("owner.") || email.startsWith("manager.") || email.startsWith("staff.") -> "seller_daily_overview"
-            else -> "choose_seller"
+            else -> "seller_scoped_menu"
         }
         rule.waitUntil(25_000) { rule.onAllNodesWithTag(destination).fetchSemanticsNodes().isNotEmpty() }
     }
@@ -73,9 +73,7 @@ class DemoLoginNavigationUiTest {
     @Test fun studentCanLoginFromLauncherSeeProfileAndSafelyLogout() {
         welcome()
         login("student.arya@demo.ritcanteen.test", "RitDemo!Student01")
-        rule.onNodeWithTag("choose_seller").assertExists()
-        rule.onNodeWithTag("catalog_category_all").assertDoesNotExist()
-        rule.onNodeWithTag("choose_seller_card_main-canteen").performScrollTo().performClick()
+        // Customers land straight on the one canteen's menu.
         rule.onNodeWithTag("seller_scoped_menu").assertExists()
         rule.onNodeWithTag("catalog_category_all").assertExists()
         rule.onNodeWithTag("customer_bottom_profile").performClick()
@@ -84,7 +82,7 @@ class DemoLoginNavigationUiTest {
         rule.onNodeWithTag("profile_account").performScrollTo().performClick()
         rule.onNodeWithTag("account_mock_signout").performScrollTo().performClick()
         rule.onNodeWithTag("welcome_screen").assertExists()
-        rule.onNodeWithTag("choose_seller").assertDoesNotExist()
+        rule.onNodeWithTag("seller_scoped_menu").assertDoesNotExist()
     }
 
     @Test fun ownerAndAdminReachCorrectDashboardsWithoutHub() {
@@ -107,7 +105,7 @@ class DemoLoginNavigationUiTest {
         welcome()
         login("student.arya@demo.ritcanteen.test", "wrong-password")
         rule.onNodeWithTag("demo_login_error").assertExists()
-        rule.onNodeWithTag("choose_seller").assertDoesNotExist()
+        rule.onNodeWithTag("seller_scoped_menu").assertDoesNotExist()
     }
 
     @Test fun customerCartKeepsPrimaryNavigationAndSellerDashboardHasNoRootBack() {
@@ -144,10 +142,10 @@ class DemoLoginNavigationUiTest {
     @Test fun signedInCustomerSurvivesActivityRecreation() {
         welcome()
         login("faculty.maya@demo.ritcanteen.test", "RitDemo!Faculty01")
-        rule.onNodeWithTag("choose_seller").assertExists()
+        rule.onNodeWithTag("seller_scoped_menu").assertExists()
         rule.activityRule.scenario.recreate()
-        rule.waitUntil(15_000) { rule.onAllNodesWithTag("choose_seller").fetchSemanticsNodes().isNotEmpty() }
-        rule.onNodeWithTag("choose_seller").assertExists()
+        rule.waitUntil(15_000) { rule.onAllNodesWithTag("seller_scoped_menu").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithTag("seller_scoped_menu").assertExists()
         rule.onNodeWithTag("customer_bottom_profile").performClick()
         rule.onNodeWithText("Dr Maya Iyer").assertExists()
         rule.onNodeWithTag("profile_account").performScrollTo().performClick()
@@ -157,7 +155,7 @@ class DemoLoginNavigationUiTest {
     @Test fun customerRootBackExitsRatherThanRevealingLogin() {
         welcome()
         login("student.arya@demo.ritcanteen.test", "RitDemo!Student01")
-        rule.onNodeWithTag("choose_seller").assertExists()
+        rule.onNodeWithTag("seller_scoped_menu").assertExists()
         val activity = rule.activity
         rule.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
         // A root Back may finish the activity, leaving no Compose hierarchy to query.
@@ -201,15 +199,15 @@ class DemoLoginNavigationUiTest {
         rule.onNodeWithTag("demo_login_email").performTextInput(email)
         rule.onNodeWithTag("demo_login_password").performTextInput("DemoPassword123")
         rule.onNodeWithTag("demo_login_submit").performScrollTo().performClick()
-        rule.waitUntil(25_000) { rule.onAllNodesWithTag("choose_seller").fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(25_000) { rule.onAllNodesWithTag("seller_scoped_menu").fetchSemanticsNodes().isNotEmpty() }
         createdId = DevelopmentDemoAccounts.activeAccount?.id
-        rule.onNodeWithTag("choose_seller").assertExists()
+        rule.onNodeWithTag("seller_scoped_menu").assertExists()
         rule.onNodeWithTag("customer_bottom_profile").performClick()
         rule.onNodeWithText("Anita Rao").assertExists()
         rule.onNodeWithTag("profile_account").performScrollTo().performClick()
         rule.onNodeWithTag("account_mock_signout").performScrollTo().performClick()
         rule.onNodeWithTag("welcome_screen").assertExists()
         login(email, "DemoPassword123")
-        rule.onNodeWithTag("choose_seller").assertExists()
+        rule.onNodeWithTag("seller_scoped_menu").assertExists()
     }
 }

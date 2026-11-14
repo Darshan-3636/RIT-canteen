@@ -240,7 +240,7 @@ fun RitSearchField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    hint: String = "Search for food, canteens or cuisines…",
+    hint: String = "Search for food or cuisines…",
     onFilterClick: (() -> Unit)? = null,
     onClearClick: (() -> Unit)? = null,
     inputModifier: Modifier = Modifier,

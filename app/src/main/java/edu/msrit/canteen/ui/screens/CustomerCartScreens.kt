@@ -171,7 +171,7 @@ fun CustomerCartScreen(individual: IndividualCartSession, bulk: BulkDraftSession
             } else {
                 item {
                     RitText(bulkSeller?.name ?: orderingCanteenName(catalog), RitType.title)
-                    RitText("One canteen per bulk request · estimate before the canteen's quote", RitType.small, colors.muted)
+                    RitText("Estimate before the canteen's quote", RitType.small, colors.muted)
                     if (bulkSyncStatus != null) RitText(bulkSyncStatus, RitType.small,
                         if (bulkSyncStatus.startsWith("Not saved")) colors.accent else colors.muted,
                         Modifier.testTag("bulk_cart_sync_status"))

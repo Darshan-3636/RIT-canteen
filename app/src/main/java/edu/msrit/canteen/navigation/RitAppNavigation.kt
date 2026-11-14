@@ -30,7 +30,6 @@ import edu.msrit.canteen.onboarding.OnboardingFlow
 import edu.msrit.canteen.onboarding.SharedPreferencesOnboardingPreference
 import edu.msrit.canteen.ui.screens.CustomerMenuScreen
 import edu.msrit.canteen.ui.screens.SellerScopedMenuScreen
-import edu.msrit.canteen.ui.screens.ExploreSellersScreen
 import edu.msrit.canteen.ui.screens.SellerProfileScreen
 import edu.msrit.canteen.ui.screens.FoodDetailsScreen
 import edu.msrit.canteen.ui.screens.CustomerUnavailableScreen
@@ -125,7 +124,6 @@ import edu.msrit.canteen.ui.screens.PlatformAdminScreen
 import edu.msrit.canteen.ui.screens.CustomerDemoRequestsScreen
 import edu.msrit.canteen.ui.screens.CustomerDemoRequestScreen
 import edu.msrit.canteen.ui.screens.DemoQuoteEditorScreen
-import edu.msrit.canteen.ui.screens.BulkSellerPickerScreen
 import edu.msrit.canteen.ui.screens.BulkCartScreen
 import edu.msrit.canteen.ui.screens.BulkPickupScreen
 import edu.msrit.canteen.ui.screens.BulkReviewScreen
@@ -165,7 +163,6 @@ internal object Route {
     fun customerAccount(page: String, id: String = "none") = "debug/customer/account/$page/$id"
     const val CustomerPreview = "debug/customer-home-preview"
     const val OrderFood = "debug/order-food"
-    const val Sellers = "debug/sellers"
     const val SellerProfile = "debug/sellers/{sellerId}"
     const val SellerMenu = "debug/sellers/{sellerId}/menu"
     const val FoodDetails = "debug/items/{itemId}"
@@ -255,7 +252,7 @@ internal object Route {
     fun foodDetails(id: String) = "debug/items/$id"
     fun unavailable(section: String) = "debug/customer-unavailable/$section"
 
-    val debugOnly = setOf(StoriesPreview, StoryDetail, CustomerAccount, CustomerPreview, OrderFood, Sellers, SellerProfile, SellerMenu,
+    val debugOnly = setOf(StoriesPreview, StoryDetail, CustomerAccount, CustomerPreview, OrderFood, SellerProfile, SellerMenu,
         FoodDetails, CustomerUnavailable, Search, Favorites, Promotions, PromotionDetail, QuickReorderEmpty,
         QuickReorderSample, Cart, IndividualReview, Orders, IndividualOrderDetail, DemoOrderDetail, DemoCheckout,
         BulkSellers, BulkCart, BulkPickup, BulkReview, BulkOrders, BulkOrdersDemo,
@@ -712,17 +709,6 @@ fun RitAppNavigation(appearance: AppearancePreference,
                         favorites = demoFavorites, customerId = demoCustomerId)
                 } }
             }
-            composable(Route.Sellers) {
-                InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) { ExploreSellersScreen(
-                    onBack = { navController.popBackStack() }, onSeller = { navController.navigate(Route.sellerProfile(it)) },
-                    onBottom = { item ->
-                        if (item == RitBottomItem.Home) {
-                            if (!navController.popBackStack(Route.CustomerPreview, false)) navController.navigate(Route.CustomerPreview)
-                        } else openCustomerBottom(item)
-                    },
-                    favorites = demoFavorites, customerId = demoCustomerId, cartCount = cartCount,
-                ) } }
-            }
             composable(Route.SellerProfile, arguments = listOf(navArgument("sellerId") { type = NavType.StringType })) { entry ->
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) { SellerProfileScreen(entry.arguments?.getString("sellerId").orEmpty(),
                     onBack = { navController.popBackStack() }, onMenu = {
@@ -747,7 +733,6 @@ fun RitAppNavigation(appearance: AppearancePreference,
                 } }
             }
             composable(Route.FoodDetails, arguments = listOf(navArgument("itemId") { type = NavType.StringType })) { entry ->
-                var pendingBulkItem by remember { mutableStateOf<String?>(null) }
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
                     FoodDetailsScreen(entry.arguments?.getString("itemId").orEmpty(), onBack = { navController.popBackStack() },
                         onAddIndividual = { itemId, done ->
@@ -763,24 +748,14 @@ fun RitAppNavigation(appearance: AppearancePreference,
                         onAddBulk = { itemId ->
                             val item = PreviewCatalog.items.firstOrNull { it.id == itemId }
                             if (item != null) {
-                                if (bulkDraft.selectSeller(item.sellerId)) {
-                                    val existing = bulkDraft.draft.lines.firstOrNull { it.itemId == item.id }?.quantity ?: 0
-                                    bulkDraft.setQuantity(item, existing + 1)
-                                    navController.navigate(Route.cart(CartMode.BULK))
-                                } else pendingBulkItem = item.id
+                                // One canteen: a bulk draft for anything else is stale, so start over.
+                                if (!bulkDraft.selectSeller(item.sellerId)) { bulkDraft.clear(); bulkDraft.selectSeller(item.sellerId) }
+                                val existing = bulkDraft.draft.lines.firstOrNull { it.itemId == item.id }?.quantity ?: 0
+                                bulkDraft.setQuantity(item, existing + 1)
+                                navController.navigate(Route.cart(CartMode.BULK))
                             }
                         },
                         favorites = demoFavorites, customerId = demoCustomerId) } }
-                pendingBulkItem?.let { itemId -> RitConfirmDialog("Switch canteen?",
-                    "This food is from a different canteen. Clear your bulk cart and start with this canteen?",
-                    { pendingBulkItem = null }, {
-                        val item = PreviewCatalog.items.find { it.id == itemId }
-                        if (item != null) {
-                            bulkDraft.clear(); bulkDraft.selectSeller(item.sellerId); bulkDraft.setQuantity(item, 1)
-                            navController.navigate(Route.cart(CartMode.BULK))
-                        }
-                        pendingBulkItem = null
-                    }) }
             }
             composable(Route.Search, arguments = listOf(
                 navArgument("categoryId") { type = NavType.StringType; defaultValue = "" },
@@ -1037,18 +1012,17 @@ fun RitAppNavigation(appearance: AppearancePreference,
             }
             composable(Route.BulkSellers) {
                 InsetScreen { DebugCustomerGate(onDenied = { returnToAuthorizedHome() }) {
-                    // One canteen: pick it automatically. The picker is shown only if that fails
-                    // (for example the bulk cart already holds another canteen's items).
-                    var showPicker by remember { mutableStateOf(false) }
+                    // Bulk orders go to the one canteen. A draft held for anything else is stale, so start over.
+                    var unavailable by remember { mutableStateOf(false) }
                     androidx.compose.runtime.LaunchedEffect(Unit) {
-                        val canteenId = edu.msrit.canteen.customer.primaryCanteenId(
-                            edu.msrit.canteen.customer.PreviewCatalog.sellers.filter { it.capabilities.bulk })
-                        if (canteenId != null && bulkDraft.selectSeller(canteenId)) navController.navigate(Route.BulkCart) {
+                        val canteen = edu.msrit.canteen.customer.primaryCanteenId(PreviewCatalog.sellers)
+                            ?.let { id -> PreviewCatalog.sellers.find { it.id == id } }?.takeIf { it.capabilities.bulk }
+                        if (canteen != null && !bulkDraft.selectSeller(canteen.id)) { bulkDraft.clear(); bulkDraft.selectSeller(canteen.id) }
+                        if (canteen != null) navController.navigate(Route.BulkCart) {
                             popUpTo(Route.BulkSellers) { inclusive = true }
-                        } else showPicker = true
+                        } else unavailable = true
                     }
-                    if (showPicker) BulkSellerPickerScreen(bulkDraft, DevelopmentBulkPreview,
-                        onBack = { navController.popBackStack() }, onSelected = { navController.navigate(Route.BulkCart) })
+                    if (unavailable) CustomerUnavailableScreen("bulk") { navController.popBackStack() }
                 } }
             }
             composable(Route.BulkCart) {

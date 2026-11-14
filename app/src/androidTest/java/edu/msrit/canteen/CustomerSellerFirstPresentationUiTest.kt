@@ -3,47 +3,19 @@ package edu.msrit.canteen
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
-import edu.msrit.canteen.ui.screens.ChooseSellerScreen
 import edu.msrit.canteen.ui.screens.CustomerPromotionsScreen
 import edu.msrit.canteen.ui.screens.SellerScopedMenuScreen
 import edu.msrit.canteen.ui.theme.RitTheme
 import edu.msrit.canteen.customer.PreviewCatalog
 import org.junit.Before
-import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
-import java.util.concurrent.atomic.AtomicReference
 
 class CustomerSellerFirstPresentationUiTest {
     @get:Rule val rule = createComposeRule()
     @Before fun restoreIsolatedPresentationFixture() { PreviewCatalog.resetDemoSnapshot() }
-
-    @Test fun sellerDirectoryFiltersAndReturnsTheChosenSellerId() {
-        val chosenSellerId = AtomicReference<String?>(null)
-        rule.setContent {
-            RitTheme {
-                ChooseSellerScreen(onSellerChosen = chosenSellerId::set, onBack = {})
-            }
-        }
-
-        rule.onNodeWithTag("choose_seller").assertExists()
-        rule.onNodeWithTag("customer_home_greeting").assertExists()
-        rule.onNodeWithTag("choose_seller_card_main-canteen").assertDoesNotExist()
-        rule.onNodeWithTag("canteen_selector").performClick()
-        rule.onNodeWithTag("canteen_selector_option_3").performClick()
-        rule.onNodeWithTag("choose_seller_card_campus-pantry").assertExists()
-        rule.onNodeWithTag("choose_seller_card_main-canteen").assertDoesNotExist()
-        rule.onNodeWithTag("canteen_selector").performClick()
-        rule.onNodeWithTag("canteen_selector_option_0").performClick()
-        rule.onNodeWithTag("choose_seller_card_main-canteen").performScrollTo().performClick()
-        assertEquals("main-canteen", chosenSellerId.get())
-
-        rule.onNodeWithTag("choose_seller_card_north-counter").assertDoesNotExist()
-        rule.onNodeWithText("Are you craving for food?").assertExists()
-    }
 
     @Test fun sellerMenuSearchStaysWithinTheSelectedSeller() {
         rule.setContent {
@@ -60,16 +32,14 @@ class CustomerSellerFirstPresentationUiTest {
         rule.onNodeWithTag("seller_menu_item_masala-dosa").assertDoesNotExist()
     }
 
-    @Test fun secondarySellerMenuContainsOnlyItsOwnItems() {
+    @Test fun otherSellersMenusAreNeverShownToCustomers() {
         rule.setContent {
             RitTheme {
                 SellerScopedMenuScreen(sellerId = "north-counter", onBack = {}, onFood = {})
             }
         }
 
-        rule.onNodeWithText("Bulk Only").assertDoesNotExist()
-        rule.onNodeWithTag("seller_menu_item_north-lunch").performScrollTo().assertExists()
-        rule.onNodeWithTag("seller_menu_item_masala-dosa").assertDoesNotExist()
+        rule.onNodeWithTag("seller_menu_item_north-lunch").assertDoesNotExist()
     }
 
     @Test fun offersLeadWithBenefitEligibilityAndClearAction() {

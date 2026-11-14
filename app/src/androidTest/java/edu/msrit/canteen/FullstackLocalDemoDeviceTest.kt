@@ -52,13 +52,13 @@ class FullstackLocalDemoDeviceTest {
         rule.onNodeWithTag("demo_login_password").performTextInput("RitDemo!Student01")
         rule.onNodeWithTag("demo_login_submit").performScrollTo().performClick()
         rule.waitUntil(25_000) {
-            rule.onAllNodesWithTag("choose_seller").fetchSemanticsNodes().isNotEmpty() ||
+            rule.onAllNodesWithTag("seller_scoped_menu").fetchSemanticsNodes().isNotEmpty() ||
                 rule.onAllNodesWithTag("demo_login_error").fetchSemanticsNodes().isNotEmpty()
         }
         assertTrue(if (rule.onAllNodesWithTag("demo_login_error").fetchSemanticsNodes().isNotEmpty())
                 rule.onNodeWithTag("demo_login_error").fetchSemanticsNode().config.toString()
             else DevelopmentDemoAccounts.connectionMessage ?: "Login remained on the entry screen",
-            rule.onAllNodesWithTag("choose_seller").fetchSemanticsNodes().isNotEmpty())
+            rule.onAllNodesWithTag("seller_scoped_menu").fetchSemanticsNodes().isNotEmpty())
         rule.runOnUiThread {
             assertEquals(72, PreviewCatalog.items.size)
             assertEquals(4, PreviewCatalog.sellers.size)

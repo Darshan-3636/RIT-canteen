@@ -38,6 +38,7 @@ import edu.msrit.canteen.customer.PromotionStatus
 import edu.msrit.canteen.customer.presentable
 import edu.msrit.canteen.customer.statusAt
 import edu.msrit.canteen.customer.visibleItems
+import edu.msrit.canteen.customer.visibleSellers
 import edu.msrit.canteen.ui.components.CatalogHeader
 import edu.msrit.canteen.ui.components.RitEmptyState
 import edu.msrit.canteen.ui.components.FoodPhotoContent
@@ -66,8 +67,9 @@ internal fun offerBenefit(promotion: Promotion): String = when (promotion.kind) 
 }
 
 private fun Promotion.hasVisibleTarget(catalog: CustomerCatalogSource): Boolean {
+    // Only the one canteen's offers are shown to customers.
+    val seller = catalog.visibleSellers().find { it.id == sellerId } ?: return false
     if (itemIds.isEmpty() && categoryIds.isEmpty()) return true
-    val seller = catalog.sellers.find { it.id == sellerId } ?: return false
     return itemIds.any { id -> catalog.visibleItems(sellerId).any { it.id == id } } ||
         categoryIds.any { it in seller.categoryIds }
 }

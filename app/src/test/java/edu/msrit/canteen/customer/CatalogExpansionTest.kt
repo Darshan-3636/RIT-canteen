@@ -40,16 +40,16 @@ class CatalogExpansionTest {
     }
 
     @Test fun pantryBeveragesAndPackagedSnacksAreDistinctFromFoodKind() {
-        val drinks = catalog.visibleItems("campus-pantry", "drinks")
+        // Seller data is kept even though customers only see the one canteen.
+        fun pantry(category: String) = catalog.items.filter { it.sellerId == "campus-pantry" && it.categoryId == category }
+        val drinks = pantry("drinks")
         assertEquals(10, drinks.size)
         assertTrue(drinks.all { it.kind == FoodKind.PACKAGED })
         assertTrue(drinks.map { it.id }.containsAll(listOf("pantry-juice", "pantry-water")))
-        val snacks = catalog.visibleItems("campus-pantry", "packs")
+        val snacks = pantry("packs")
         assertEquals(8, snacks.size)
         assertTrue(snacks.map { it.id }.containsAll(listOf("potato-chips", "granola-bar", "cracker-pack")))
         assertFalse(snacks.any { it.id == "pantry-juice" || it.id == "pantry-water" })
-        assertEquals(drinks.map { it.id }.toSet(), catalog.discover(filters = DiscoveryFilters(
-            sellerId = "campus-pantry", categoryId = "drinks", kind = FoodKind.PACKAGED)).items.map { it.id }.toSet())
     }
 
     @Test fun coffeeAndWaterShareBeverageCategoryButNotKind() {
@@ -61,19 +61,15 @@ class CatalogExpansionTest {
         assertEquals("cookies", catalog.items.single { it.id == "corner-biscuits" }.categoryId)
     }
 
-    @Test fun searchAndFiltersStaySellerScoped() {
-        val juice = catalog.discover("juice", DiscoveryFilters(sellerId = "campus-pantry")).items
-        assertTrue(juice.map { it.id }.containsAll(listOf("pantry-juice", "orange-juice-bottle", "mango-juice-bottle")))
-        assertTrue(juice.all { it.sellerId == "campus-pantry" && it.categoryId == "drinks" })
-        val water = catalog.discover("water", DiscoveryFilters(sellerId = "campus-pantry")).items
-        assertTrue(water.map { it.id }.containsAll(listOf("pantry-water", "sparkling-water", "coconut-water-pack")))
-        catalog.sellers.forEach { seller ->
-            assertEquals(18, catalog.visibleItems(seller.id).size)
-            catalog.categories.forEach { category ->
-                assertTrue(catalog.visibleItems(seller.id, category.id).all {
-                    it.sellerId == seller.id && it.categoryId == category.id
-                })
-            }
+    @Test fun customersOnlySeeTheOneCanteen() {
+        assertEquals(18, catalog.visibleItems(PreviewCatalog.MAIN_ID).size)
+        assertEquals(listOf(PreviewCatalog.MAIN_ID), catalog.visibleSellers().map { it.id })
+        catalog.sellers.filter { it.id != PreviewCatalog.MAIN_ID }.forEach { other ->
+            assertTrue(catalog.visibleItems(other.id).isEmpty())
+        }
+        assertTrue(catalog.discover("juice").items.all { it.sellerId == PreviewCatalog.MAIN_ID })
+        catalog.categories.forEach { category ->
+            assertTrue(catalog.visibleItems(PreviewCatalog.MAIN_ID, category.id).all { it.categoryId == category.id })
         }
     }
 

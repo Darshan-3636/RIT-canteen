@@ -10,7 +10,9 @@ class DiscoveryTest {
         assertTrue(PreviewCatalog.discover("  MASALA   dosa ").items.any { it.id == "masala-dosa" })
         assertTrue(PreviewCatalog.discover("campus meals").sellers.any { it.id == PreviewCatalog.MAIN_ID })
         assertTrue(PreviewCatalog.discover("rice").items.any { it.id == "veg-biryani" })
-        assertTrue(PreviewCatalog.discover("group requests").items.any { it.id == "north-lunch" })
+        // Customers only ever see the one canteen: other sellers' food never shows up in search.
+        assertTrue(PreviewCatalog.discover("group requests").items.none { it.sellerId != PreviewCatalog.MAIN_ID })
+        assertTrue(PreviewCatalog.discover("samosa").items.isEmpty())
         assertTrue(PreviewCatalog.discover("never-listed-food").items.isEmpty())
     }
 
@@ -34,7 +36,8 @@ class DiscoveryTest {
         assertTrue(individual.all { it.sellerId == PreviewCatalog.MAIN_ID && it.kind == FoodKind.PREPARED && it.availability == ItemAvailability.AVAILABLE })
         assertFalse(individual.any { it.id == "lemon-rice" || it.kind == FoodKind.PACKAGED })
         val bulk = PreviewCatalog.discover(filters = DiscoveryFilters(orderEligibility = OrderEligibilityFilter.BULK_REQUEST)).items
-        assertTrue(bulk.any { it.id == "north-lunch" })
+        assertTrue(bulk.any { it.id == "water-bottle" })
+        assertTrue(bulk.all { it.sellerId == PreviewCatalog.MAIN_ID })
         assertFalse(bulk.any { it.id == "lemon-rice" })
     }
 }

@@ -157,8 +157,8 @@ fun CustomerProfileScreen(repo: CustomerAccountRepository, onBack: () -> Unit, o
             AccountRow("Edit profile", "Name, affiliation, department and photo", onEdit, "profile_edit")
         }
         AccountRow("Orders and requests", "Your orders and bulk requests", onOrders, "profile_orders")
-        AccountRow("Favourites", "Your saved food and canteens", onFavorites, "profile_favorites")
-        AccountRow("My bulk-order templates", "One canteen per template", onTemplates, "profile_templates")
+        AccountRow("Favourites", "Your saved food", onFavorites, "profile_favorites")
+        AccountRow("My bulk-order templates", "Saved item mixes for group orders", onTemplates, "profile_templates")
         AccountRow("Notifications", "Order and account updates", onNotifications, "profile_notifications")
         AccountRow("Help & Support", "Report a problem or ask a question", onSupport, "profile_support")
         AccountRow("Settings & privacy", "Appearance, alerts and consent", onSettings, "profile_settings")
@@ -333,7 +333,7 @@ fun CustomerSupportScreen(repo: CustomerAccountRepository, onBack: () -> Unit,
                 { onTicket(ticket.id) }, "support_ticket_${ticket.id}")
         }
         Spacer(Modifier.height(10.dp))
-        RitMessageCard("Who handles what?", "Food and fulfillment issues route to the relevant canteen. Payment, account and app problems route to platform support. Canteen issues may be escalated.")
+        RitMessageCard("Who handles what?", "Food and pickup issues go to the canteen. Payment, account and app problems go to platform support. Canteen issues may be escalated.")
     }
 }
 
@@ -347,7 +347,8 @@ fun CustomerTicketFormScreen(repo: CustomerAccountRepository, userId: String?, o
     var subject by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var reference by remember { mutableStateOf("") }
-    var sellerId by remember { mutableStateOf<String?>(null) }
+    // Food and pickup issues go to the one canteen.
+    val sellerId = remember { edu.msrit.canteen.customer.primaryCanteenId(PreviewCatalog.sellers) }
     var attachmentUri by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val colors = RitThemeTokens.colors
@@ -363,14 +364,6 @@ fun CustomerTicketFormScreen(repo: CustomerAccountRepository, userId: String?, o
         CustomerIssueCategory.entries.forEach { option ->
             AccountRow("${if (category == option) "✓ " else ""}${option.label}", option.routedTo,
                 { category = option; error = null }, "ticket_category_${option.name.lowercase()}")
-        }
-        if (BuildConfig.RIT_CLOUD_DEMO && category in setOf(CustomerIssueCategory.FOOD, CustomerIssueCategory.SCHEDULE)) {
-            RitText("Related canteen", RitType.title)
-            PreviewCatalog.sellers.forEach { seller ->
-                AccountRow("${if (sellerId == seller.id) "✓ " else ""}${seller.name}",
-                    "Route this issue to ${seller.name}", { sellerId = seller.id; error = null },
-                    "ticket_seller_${seller.id}")
-            }
         }
         RitTextField(reference, { reference = it.take(60) }, "Related request/order (optional)", "Reference",
             Modifier.fillMaxWidth(), inputTag = "ticket_reference")
@@ -390,7 +383,7 @@ fun CustomerTicketFormScreen(repo: CustomerAccountRepository, userId: String?, o
             error = validateCustomerTicket(category, subject, description)
             if (error == null && BuildConfig.RIT_CLOUD_DEMO &&
                 category in setOf(CustomerIssueCategory.FOOD, CustomerIssueCategory.SCHEDULE) && sellerId == null)
-                error = "Choose the related canteen."
+                error = "The canteen isn't available right now. Try again later."
             if (error == null && !submitting && BuildConfig.RIT_CLOUD_DEMO) scope.launch {
                 submitting = true
                 val result = DevelopmentCustomerAccount.createCloudTicket(category!!, subject, description,
@@ -488,14 +481,14 @@ fun CustomerTemplatesScreen(repo: CustomerAccountRepository, userId: String?, dr
         onOpenCart()
     }
     CustomerShell("My bulk templates", "customer_templates", onBack) {
-        RitText("Save a one-canteen item mix. A template is not an order, and pickup and price are chosen again when you use it.",
+        RitText("Save an item mix for group orders. A template is not an order, and pickup and price are chosen again when you use it.",
             RitType.body, colors.muted)
         Spacer(Modifier.height(14.dp))
         RitPrimaryButton("Create New Template", onCreate, Modifier.fillMaxWidth().testTag("template_create"))
         Spacer(Modifier.height(14.dp))
         RitTextField(name, { name = it.take(60) }, "Template name", "e.g. Club snacks", Modifier.fillMaxWidth(), inputTag = "template_name")
         Spacer(Modifier.height(9.dp))
-        RitText("Current draft: ${draft.draft.lines.sumOf { it.quantity }} units · ${draft.draft.sellerId ?: "no seller"}",
+        RitText("Current bulk cart: ${draft.draft.lines.sumOf { it.quantity }} units",
             RitType.small, colors.muted)
         RitPrimaryButton("Save current draft as template", {
             feedback = validateBulkTemplate(name, draft.draft.sellerId, draft.draft.lines)
@@ -516,7 +509,7 @@ fun CustomerTemplatesScreen(repo: CustomerAccountRepository, userId: String?, dr
                 val item = PreviewCatalog.items.find { it.id == line.itemId }
                 item == null || seller == null || itemEligibility(seller, item) == ItemEligibility.UNAVAILABLE
             }
-            AccountRow(template.name, "${seller?.name ?: "Seller unavailable"} · ${template.lines.sumOf { it.quantity }} units" +
+            AccountRow(template.name, "${seller?.name ?: "Canteen unavailable"} · ${template.lines.sumOf { it.quantity }} units" +
                 if (stale.isNotEmpty()) " · ${stale.size} unavailable item(s)" else " · current catalog checked")
             RitSecondaryButton("Use in Bulk Cart", {
                 if (draft.draft.lines.isNotEmpty() &&
@@ -549,8 +542,10 @@ fun CustomerTemplateEditorScreen(repo: CustomerAccountRepository, userId: String
     var saving by remember { mutableStateOf(false) }
     val template = repo.templates.find { it.id == templateId }
     val local = remember(templateId, template) {
+        // Templates are for the one canteen; an old template for anything else starts empty.
+        val canteenId = edu.msrit.canteen.customer.primaryCanteenId(PreviewCatalog.sellers)
         BulkDraftSession().apply {
-            if (template != null && selectSeller(template.sellerId)) template.lines.forEach { line ->
+            if (canteenId != null && selectSeller(canteenId) && template?.sellerId == canteenId) template.lines.forEach { line ->
                 PreviewCatalog.items.find { it.id == line.itemId }?.let { setQuantity(it, line.quantity) }
             }
         }
@@ -558,24 +553,14 @@ fun CustomerTemplateEditorScreen(repo: CustomerAccountRepository, userId: String
     var name by remember(templateId, template?.name) { mutableStateOf(template?.name.orEmpty()) }
     var search by remember { mutableStateOf("") }
     var feedback by remember { mutableStateOf<String?>(null) }
-    var pendingSeller by remember { mutableStateOf<String?>(null) }
     val colors = RitThemeTokens.colors
     CustomerShell(if (template == null) "Create bulk template" else "Edit bulk template",
         "customer_template_editor", onBack) {
-        RitText("Pick any eligible items from one canteen. You can save below the canteen minimum and decide pickup later.",
+        RitText("Pick any eligible items. You can save below the canteen minimum and decide pickup later.",
             RitType.body, colors.muted)
         Spacer(Modifier.height(12.dp))
         RitTextField(name, { name = it.take(60) }, "Template name", "e.g. Department snacks",
             Modifier.fillMaxWidth(), inputTag = "template_editor_name")
-        Spacer(Modifier.height(14.dp))
-        RitText("Canteen", RitType.title)
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PreviewCatalog.sellers.filter { it.capabilities.bulk }.forEach { seller ->
-                RitChip(seller.name, local.draft.sellerId == seller.id, {
-                    if (!local.selectSeller(seller.id)) pendingSeller = seller.id
-                }, Modifier.testTag("template_seller_${seller.id}"))
-            }
-        }
         val seller = PreviewCatalog.sellers.find { it.id == local.draft.sellerId }
         if (seller != null) {
             Spacer(Modifier.height(14.dp))
@@ -583,7 +568,7 @@ fun CustomerTemplateEditorScreen(repo: CustomerAccountRepository, userId: String
                 Modifier.fillMaxWidth(), inputTag = "template_search")
             val menu = PreviewCatalog.visibleItems(seller.id, query = search)
                 .filter { itemEligibility(seller, it) != ItemEligibility.UNAVAILABLE }
-            if (menu.isEmpty()) RitEmptyState("No matching items", "Try another search or canteen.")
+            if (menu.isEmpty()) RitEmptyState("No matching items", "Try another search.")
             menu.forEach { item ->
                 val quantity = local.draft.lines.find { it.itemId == item.id }?.quantity ?: 0
                 Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -621,10 +606,6 @@ fun CustomerTemplateEditorScreen(repo: CustomerAccountRepository, userId: String
             }
         }, Modifier.fillMaxWidth().testTag("template_editor_save"), enabled = !saving)
     }
-    pendingSeller?.let { target -> RitConfirmDialog("Switch template canteen?",
-        "Changing canteens clears only the items in this unsaved template.", { pendingSeller = null }, {
-            local.clear(); local.selectSeller(target); pendingSeller = null
-        }, "Clear Items & Switch") }
 }
 
 @Composable
