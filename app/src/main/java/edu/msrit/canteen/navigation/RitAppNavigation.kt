@@ -508,6 +508,7 @@ fun RitAppNavigation(appearance: AppearancePreference,
     }
     NavHost(navController = navController, startDestination = Route.Splash) {
         composable(Route.Splash) {
+            startupRanThisProcess = true
             InsetScreen {
                 SplashScreen(
                     onStartupComplete = {
@@ -1537,7 +1538,18 @@ fun RitAppNavigation(appearance: AppearancePreference,
             }
         }
     }
+    // After Android kills the app in the background, reopening it restores the last screen but not the
+    // sign-in, which lives in memory and is only reloaded by Splash. Go through Splash once per process so
+    // the saved sign-in and its data are reloaded instead of showing "Sign in required" or empty screens.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (!startupRanThisProcess && navController.currentDestination?.route != Route.Splash) {
+            navController.navigate(Route.Splash) { popUpTo(navController.graph.id) { inclusive = true } }
+        }
+    }
 }
+
+/** False again whenever Android starts a new app process, even if it restores the previous screens. */
+private var startupRanThisProcess = false
 
 @Composable
 private fun SellerTabFrame(selected: SellerBottomItem, onSelect: (SellerBottomItem) -> Unit,
