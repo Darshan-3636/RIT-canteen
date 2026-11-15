@@ -52,8 +52,8 @@ fun CustomerCatalogSource.discover(
             (!filters.itemMarkedAvailableOnly || item.availability == ItemAvailability.AVAILABLE) &&
             when (filters.orderEligibility) {
                 null -> true
-                OrderEligibilityFilter.INDIVIDUAL_PLANNED -> eligibility == ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK
-                OrderEligibilityFilter.BULK_REQUEST -> seller.capabilities.bulk && eligibility != ItemEligibility.UNAVAILABLE
+                OrderEligibilityFilter.INDIVIDUAL_PLANNED -> eligibility in setOf(ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK, ItemEligibility.INDIVIDUAL_ONLY)
+                OrderEligibilityFilter.BULK_REQUEST -> eligibility in setOf(ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK, ItemEligibility.BULK_ONLY)
             } && matchesAll(tokens, item.name, item.description, categoriesById[item.categoryId]?.name.orEmpty(),
                 seller.name, seller.description, item.tags.joinToString(" "))
     }
@@ -62,7 +62,7 @@ fun CustomerCatalogSource.discover(
         DiscoverySort.PRICE_LOW_TO_HIGH -> matchingItems.sortedWith(compareBy<MenuItem> { it.price.rupees }.thenBy { it.name })
         DiscoverySort.PRICE_HIGH_TO_LOW -> matchingItems.sortedWith(compareByDescending<MenuItem> { it.price.rupees }.thenBy { it.name })
     }
-    val matchingSellers = sellers.filter { seller ->
+    val matchingSellers = visibleSellers().filter { seller ->
         (filters.sellerId == null || seller.id == filters.sellerId) &&
             (filters.categoryId == null || filters.categoryId in seller.categoryIds) &&
             (filters.isEmpty || matchingItems.any { it.sellerId == seller.id }) &&

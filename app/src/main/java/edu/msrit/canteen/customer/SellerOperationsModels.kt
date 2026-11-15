@@ -2,7 +2,7 @@ package edu.msrit.canteen.customer
 
 import java.time.LocalDateTime
 
-/** Presentation record; production must replace this with seller-scoped server responses. */
+/** A bulk request as loaded from the server. [pickupCode] is only present for the customer who placed it. */
 data class BulkRequestRecord(
     val thread: QuoteThread,
     val customerUserId: String,
@@ -10,7 +10,8 @@ data class BulkRequestRecord(
     val original: BulkDraft,
     val appliedMinimum: Int,
     val createdAt: LocalDateTime,
-    val verifiedPaidFixture: Boolean = false,
+    val pickupCode: String? = null,
+    val handedOverAt: String? = null,
 ) {
     val reference: String get() = thread.reference
     val sellerId: String get() = thread.sellerId
@@ -77,7 +78,8 @@ fun validateBulkProposal(
 enum class SellerRequestStatus(val label: String) {
     NEW("New request"), CUSTOMER_COUNTER("Customer revision · seller action"),
     SELLER_REVIEW("Seller approval needed"), WAITING_CUSTOMER("Awaiting customer approval"),
-    AGREED_UNPAID("Agreed · payment unverified"), PAID_FIXTURE("Verified-paid fixture"),
+    AGREED_UNPAID("Agreed · awaiting payment"), PAID("Paid · to prepare"), READY("Ready for pickup"),
+    COLLECTED("Collected"),
     EXPIRED("Expired"), WITHDRAWN("Withdrawn"), REJECTED("Rejected"),
 }
 
@@ -90,7 +92,9 @@ fun BulkRequestRecord.operationalStatus(): SellerRequestStatus = when (thread.st
         else -> SellerRequestStatus.SELLER_REVIEW
     }
     QuoteStage.AGREED_AWAITING_PAYMENT -> SellerRequestStatus.AGREED_UNPAID
-    QuoteStage.PAID_CONFIRMED -> SellerRequestStatus.PAID_FIXTURE
+    QuoteStage.PAID -> SellerRequestStatus.PAID
+    QuoteStage.READY -> SellerRequestStatus.READY
+    QuoteStage.COMPLETED -> SellerRequestStatus.COLLECTED
     QuoteStage.EXPIRED -> SellerRequestStatus.EXPIRED
     QuoteStage.WITHDRAWN -> SellerRequestStatus.WITHDRAWN
     QuoteStage.REJECTED -> SellerRequestStatus.REJECTED
@@ -98,7 +102,7 @@ fun BulkRequestRecord.operationalStatus(): SellerRequestStatus = when (thread.st
 
 enum class SellerRequestFilter(val label: String) {
     ALL("All"), NEEDS_ACTION("Needs action"), WAITING_CUSTOMER("Customer response"),
-    UNPAID("Unpaid"), PAID("Paid fixture"), CLOSED("Closed")
+    UNPAID("Unpaid"), PAID("Paid"), CLOSED("Closed")
 }
 
 fun filterSellerRequests(records: List<BulkRequestRecord>, sellerId: String,
@@ -112,7 +116,8 @@ fun filterSellerRequests(records: List<BulkRequestRecord>, sellerId: String,
                 SellerRequestStatus.CUSTOMER_COUNTER, SellerRequestStatus.SELLER_REVIEW)
             SellerRequestFilter.WAITING_CUSTOMER -> status == SellerRequestStatus.WAITING_CUSTOMER
             SellerRequestFilter.UNPAID -> status == SellerRequestStatus.AGREED_UNPAID
-            SellerRequestFilter.PAID -> status == SellerRequestStatus.PAID_FIXTURE
+            SellerRequestFilter.PAID -> status in setOf(SellerRequestStatus.PAID, SellerRequestStatus.READY,
+                SellerRequestStatus.COLLECTED)
             SellerRequestFilter.CLOSED -> status in setOf(SellerRequestStatus.EXPIRED,
                 SellerRequestStatus.WITHDRAWN, SellerRequestStatus.REJECTED)
         }
@@ -122,9 +127,9 @@ fun filterSellerRequests(records: List<BulkRequestRecord>, sellerId: String,
     }.sortedByDescending { it.createdAt }
 
 enum class DemoTransitionResult(val explanation: String) {
-    APPLIED("Saved in this debug-only scenario. Nothing was sent to a server."),
+    APPLIED("Saved."),
     NOT_FOUND("This request is not available in the current seller/customer context."),
-    UNAUTHORIZED("This mock role cannot perform that action for this seller."),
+    UNAUTHORIZED("You don't have permission to do that."),
     STALE_VERSION("The quote changed. Reopen the latest revision before responding."),
     INVALID_STATE("This request state does not permit that action."),
     INVALID_PROPOSAL("Review the seller, items, quantities, price, pickup and special-request details."),

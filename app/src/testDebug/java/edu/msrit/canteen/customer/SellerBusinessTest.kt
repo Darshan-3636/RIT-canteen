@@ -1,5 +1,7 @@
 package edu.msrit.canteen.customer
 
+import edu.msrit.canteen.BuildConfig
+import org.junit.Assume.assumeFalse
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -21,17 +23,27 @@ class SellerBusinessTest {
     private val staff = "debug-staff"
     private val ops = "debug-staff-ops"
 
-    @Before fun setUp() = repo.reset()
-    @After fun tearDown() = repo.reset()
+    @Before fun setUp() {
+        assumeFalse("Local seller fixtures are disabled in cloud mode", BuildConfig.RIT_CLOUD_DEMO)
+        repo.reset()
+    }
+    @After fun tearDown() { if (!BuildConfig.RIT_CLOUD_DEMO) repo.reset() }
 
-    private fun item(id: String = "test-item") = MenuItem(id, seller, "rice", "Test lunch", "Sample",
+    /** What customers would see if this seller were the one canteen (customers only see one). */
+    private fun customerView(): List<MenuItem> = object : CustomerCatalogSource {
+        override val sellers get() = PreviewCatalog.sellers.filter { it.id == seller }
+        override val categories get() = PreviewCatalog.categories
+        override val items get() = PreviewCatalog.items
+    }.visibleItems(seller)
+
+    private fun item(id: String = "test-item") = MenuItem(id, seller, "combos", "Test lunch", "Sample",
         Price(50), FoodKind.PREPARED, Dietary.VEGETARIAN)
 
     @Test fun itemCreateEditKeepsStableIdAndUpdatesSharedCatalog() {
         assertTrue(repo.saveItem(owner, item()))
         assertTrue(repo.saveItem(owner, item().copy(name = "Revised lunch", price = Price(70))))
         assertEquals(1, PreviewCatalog.items.count { it.id == "test-item" })
-        assertEquals("Revised lunch", PreviewCatalog.visibleItems(seller).first { it.id == "test-item" }.name)
+        assertEquals("Revised lunch", customerView().first { it.id == "test-item" }.name)
     }
 
     @Test fun itemValidationBlocksBlankNameAndForeignCategory() {
@@ -53,13 +65,13 @@ class SellerBusinessTest {
     @Test fun availabilityVisibleHiddenAndUnpublishedPropagate() {
         val original = PreviewCatalog.items.first { it.id == "north-lunch" }
         assertTrue(repo.setItemState(owner, seller, original.id, false, true, true))
-        assertTrue(original.id in PreviewCatalog.visibleItems(seller).map { it.id })
+        assertTrue(original.id in customerView().map { it.id })
         assertEquals(ItemEligibility.UNAVAILABLE, itemEligibility(PreviewCatalog.sellers.first { it.id == seller },
             PreviewCatalog.items.first { it.id == original.id }))
         assertTrue(repo.setItemState(owner, seller, original.id, false, true, false))
-        assertFalse(original.id in PreviewCatalog.visibleItems(seller).map { it.id })
+        assertFalse(original.id in customerView().map { it.id })
         assertTrue(repo.setItemState(owner, seller, original.id, true, false, true))
-        assertFalse(original.id in PreviewCatalog.visibleItems(seller).map { it.id })
+        assertFalse(original.id in customerView().map { it.id })
     }
 
     @Test fun staffCannotMutateCatalogButDelegatedStaffCanChangeAvailability() {
@@ -68,15 +80,15 @@ class SellerBusinessTest {
         assertTrue(repo.setItemState(ops, seller, "north-lunch", false, true, true))
     }
 
-    @Test fun sharedSeedCategoryRenameDoesNotAffectOtherSeller() {
-        assertTrue(repo.saveCategory(owner, seller, "rice", "North Rice"))
+    @Test fun sellerCategoryRenameDoesNotAffectOtherSeller() {
+        assertTrue(repo.saveCategory(owner, seller, "combos", "North Combos"))
         val north = PreviewCatalog.items.first { it.id == "north-lunch" }
         val main = PreviewCatalog.items.first { it.id == "veg-biryani" }
-        assertNotEquals("rice", north.categoryId)
-        assertEquals("North Rice", PreviewCatalog.categories.first { it.id == north.categoryId }.name)
+        assertEquals("combos", north.categoryId)
+        assertEquals("North Combos", PreviewCatalog.categories.first { it.id == north.categoryId }.name)
         assertEquals("rice", main.categoryId)
-        assertEquals("Rice", PreviewCatalog.categories.first { it.id == "rice" }.name)
-        assertTrue(north.categoryId in DevelopmentPromotions.promotions.first { it.id == "north-lunch-demo" }.categoryIds)
+        assertEquals("Rice Dishes", PreviewCatalog.categories.first { it.id == "rice" }.name)
+        assertTrue("combos" in DevelopmentPromotions.promotions.first { it.id == "north-lunch-demo" }.categoryIds)
     }
 
     @Test fun categoryCreateHideShowAndSafeRemoval() {
@@ -85,16 +97,16 @@ class SellerBusinessTest {
         assertTrue(repo.saveItem(owner, item().copy(categoryId = category.id)))
         assertFalse(repo.removeCategory(owner, seller, category.id))
         assertTrue(repo.hideCategory(owner, seller, category.id, true))
-        assertFalse(PreviewCatalog.visibleItems(seller).any { it.id == "test-item" })
+        assertFalse(customerView().any { it.id == "test-item" })
         assertTrue(repo.hideCategory(owner, seller, category.id, false))
-        assertTrue(PreviewCatalog.visibleItems(seller).any { it.id == "test-item" })
+        assertTrue(customerView().any { it.id == "test-item" })
     }
 
     @Test fun categoryReorderIsSellerScoped() {
         val old = PreviewCatalog.sellers.first { it.id == seller }.categoryIds.toList()
         assertTrue(repo.moveCategory(owner, seller, old[1], -1))
         assertEquals(old[1], PreviewCatalog.sellers.first { it.id == seller }.categoryIds.first())
-        assertEquals(listOf("dosa", "rice"), PreviewCatalog.sellers.first { it.id == PreviewCatalog.MAIN_ID }.categoryIds.take(2))
+        assertEquals(listOf("dosa", "breakfast"), PreviewCatalog.sellers.first { it.id == PreviewCatalog.MAIN_ID }.categoryIds.take(2))
     }
 
     @Test fun bulkMinimumAndHoursUseSamePolicySource() {
@@ -217,7 +229,9 @@ class SellerBusinessTest {
         assertTrue(repo.savePolicy(owner, DevelopmentBulkPreview.forSeller(seller)!!.copy(minimumOverride = 18), emptyList()))
         repo.reset()
         assertFalse(PreviewCatalog.items.any { it.id == "test-item" })
-        assertEquals(10, DevelopmentBulkPreview.forSeller(seller)?.minimum)
-        assertEquals(4, repo.employees.size)
+        assertEquals(8, DevelopmentBulkPreview.forSeller(seller)?.minimum)
+        assertEquals(8, repo.employees.size)
+        assertTrue(repo.employees.any { it.id == "demo-owner-main" && it.sellerId == "main-canteen" })
+        assertTrue(repo.employees.any { it.id == "demo-owner-north" && it.sellerId == "north-counter" })
     }
 }

@@ -1,5 +1,7 @@
 package edu.msrit.canteen.customer
 
+import edu.msrit.canteen.BuildConfig
+import org.junit.Assume.assumeFalse
 import edu.msrit.canteen.navigation.DevelopmentPreviewAccess
 import edu.msrit.canteen.navigation.DevelopmentRole
 import edu.msrit.canteen.navigation.ProtectedArea
@@ -15,10 +17,22 @@ import java.time.LocalDate
 
 class DevelopmentInsightsTest {
     private val range = InsightRange(LocalDate.now(RIT_TIME_ZONE).minusDays(30), LocalDate.now(RIT_TIME_ZONE))
-    private fun role(role: DevelopmentRole) = DevelopmentPreviewAccess.select(role).let {
-        DevelopmentPreviewAccess.activeIdentity!!.authorization }
-    @Before fun before() { DevelopmentSellerBusiness.reset(); DevelopmentInsights.reset(); DevelopmentPreviewAccess.reset() }
-    @After fun after() { DevelopmentSellerBusiness.reset(); DevelopmentInsights.reset(); DevelopmentPreviewAccess.reset() }
+    // Exercise the isolated analytics fixture without granting a runtime session.
+    private fun role(role: DevelopmentRole) =
+        DevelopmentPreviewAccess.identities.first { it.role == role }.authorization.let { fixture ->
+            fixture.copy(capabilitiesBySeller = fixture.capabilitiesBySeller.mapValues { (seller, grants) ->
+                grants + DevelopmentSellerBusiness.capabilities(fixture.userId, seller).map { it.wire }
+            })
+        }
+    @Before fun before() {
+        assumeFalse("Synthetic insights are disabled in cloud mode", BuildConfig.RIT_CLOUD_DEMO)
+        DevelopmentSellerBusiness.reset(); DevelopmentInsights.reset(); DevelopmentPreviewAccess.reset()
+    }
+    @After fun after() {
+        if (!BuildConfig.RIT_CLOUD_DEMO) {
+            DevelopmentSellerBusiness.reset(); DevelopmentInsights.reset(); DevelopmentPreviewAccess.reset()
+        }
+    }
 
     @Test fun ownerSeesOwnSyntheticSalesButNotAnotherSeller() {
         val owner = role(DevelopmentRole.SellerOwner)
@@ -124,7 +138,7 @@ class DevelopmentInsightsTest {
     }
     @Test fun activeMockRoleSeparationStillHolds() {
         role(DevelopmentRole.PlatformAdministrator)
-        assertTrue(DevelopmentPreviewAccess.allows(ProtectedArea.Administrator))
+        assertFalse(DevelopmentPreviewAccess.allows(ProtectedArea.Administrator))
         assertFalse(DevelopmentPreviewAccess.allows(ProtectedArea.Seller("north-counter", "catalog.edit")))
         role(DevelopmentRole.Customer)
         assertFalse(DevelopmentPreviewAccess.allows(ProtectedArea.Administrator))

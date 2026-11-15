@@ -5,7 +5,7 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@drawable/rit_logo"
-        android:label="RIT Canteen"
+        android:label="${appLabel}"
         android:supportsRtl="true"
         android:theme="@style/Theme.RITCanteen">
         <activity

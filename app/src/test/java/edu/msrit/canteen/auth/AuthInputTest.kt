@@ -27,5 +27,10 @@ class AuthInputTest {
         assertTrue(AuthInput.isFullNameValid("Ada Lovelace"))
         assertFalse(AuthInput.isFullNameValid("Ada"))
         assertFalse(AuthInput.isFullNameValid("A 1"))
+        assertTrue(AuthInput.isFullNameValid("Ada O'Neil"))
+        assertFalse(AuthInput.isRegistrationNameValid("Ada-Lovelace"))
+        assertFalse(AuthInput.isRegistrationNameValid("Ada O'Neil"))
+        assertFalse(AuthInput.isRegistrationNameValid("Ada 2"))
+        assertTrue(AuthInput.isRegistrationNameValid("Ada    Lovelace"))
     }
 }

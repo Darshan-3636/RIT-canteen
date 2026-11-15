@@ -18,6 +18,38 @@ class BulkOrderingTest {
         override fun forSeller(sellerId: String): SellerBulkPolicy? = if (sellerId == policy.sellerId) policy else null
     }
 
+    @Test fun cloudBulkSubmissionKeySurvivesRestartUntilDraftChanges() {
+        assertEquals(bulkSubmissionKeyForVersion(7), bulkSubmissionKeyForVersion(7))
+        assertTrue(bulkSubmissionKeyForVersion(7) != bulkSubmissionKeyForVersion(8))
+    }
+
+    @Test fun unchangedBulkDraftKeepsRetryKeyButEditsStartNewAttempt() {
+        val session = BulkDraftSession()
+        val initial = session.idempotencyKey()
+        assertEquals(initial, session.idempotencyKey())
+        assertTrue(session.selectSeller(PreviewCatalog.MAIN_ID))
+        val selected = session.idempotencyKey()
+        assertTrue(initial != selected)
+        assertEquals(selected, session.idempotencyKey())
+        session.setPickup(pickup)
+        assertTrue(selected != session.idempotencyKey())
+    }
+
+    @Test fun serverDraftHydrationDoesNotTriggerAnotherWrite() {
+        val session = BulkDraftSession()
+        var writes = 0
+        session.onChanged = { writes++ }
+        session.selectSeller(PreviewCatalog.MAIN_ID)
+        assertEquals(1, writes)
+        val saved = BulkDraft(PreviewCatalog.MAIN_ID, listOf(BulkLine("masala-dosa", 8)), pickup,
+            instructions = "Collect at the gate")
+        session.applyServer(BulkServerDraft(3, saved, 40_000, emptySet()))
+        assertEquals(saved, session.draft)
+        assertEquals(1, writes)
+        session.setInstructions("Collect from canteen")
+        assertEquals(2, writes)
+    }
+
     @Test fun combinedUnitsAndPackagedItemsCountForOneSeller() {
         val draft = BulkDraft(PreviewCatalog.MAIN_ID,
             listOf(BulkLine("masala-dosa", 3), BulkLine("water-bottle", 5)), pickup)

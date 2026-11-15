@@ -16,10 +16,11 @@ class DemoBulkScenario(
     private val policies: BulkPolicySource = DevelopmentBulkPreview,
 ) : BulkOperationsRepository {
     private var nextLocalNumber = 1
-    override var records by mutableStateOf(seed(clock()))
+    override var records by mutableStateOf(runCatching { seed(clock()) }.getOrDefault(emptyList()))
         private set
 
     override fun reset() { nextLocalNumber = 1; records = seed(clock()) }
+    fun applyServer(newRecords: List<BulkRequestRecord>) { records = newRecords }
 
     private fun update(reference: String, replacement: BulkRequestRecord) {
         records = records.map { if (it.reference == reference) replacement else it }
@@ -189,7 +190,7 @@ class DemoBulkScenario(
                    createdAt: LocalDateTime = now.minusHours(3), sellerId: String = north,
                    sellerAccepted: Int? = null, customerAccepted: Int? = null,
                    expires: LocalDateTime? = null, specialAccepted: Int? = null,
-                   paidFixture: Boolean = false): BulkRequestRecord {
+                   pickupCode: String? = null): BulkRequestRecord {
             val initial = revisions.first()
             return BulkRequestRecord(
                 QuoteThread(sellerId, reference, revisions, stage, sellerAccepted, customerAccepted,
@@ -198,7 +199,7 @@ class DemoBulkScenario(
                     initial.lines.map { BulkLine(it.itemId, it.quantity) }, initial.pickup,
                     initial.specialPickup, initial.specialReason, initial.note),
                 policies.forSeller(sellerId)?.minimum ?: DEFAULT_BULK_MINIMUM,
-                createdAt, paidFixture)
+                createdAt, pickupCode)
         }
         val specialRevision = QuoteRevision(1, QuoteActor.CUSTOMER,
             listOf(QuoteLineSnapshot("north-lunch", "North Counter Lunch", 10, 9_000)),
@@ -220,13 +221,33 @@ class DemoBulkScenario(
                 now.minusDays(2), sellerAccepted = 2, expires = now.minusHours(1)),
             record("DEMO-NC-WITHDRAWN", listOf(first), QuoteStage.WITHDRAWN, now.minusDays(3)),
             record("DEMO-NC-REJECTED", listOf(first), QuoteStage.REJECTED, now.minusDays(4)),
-            record("DEMO-NC-PAID", listOf(first, second), QuoteStage.PAID_CONFIRMED,
+            record("DEMO-NC-PAID", listOf(first, second), QuoteStage.PAID,
                 now.minusDays(1), sellerAccepted = 2, customerAccepted = 2,
-                expires = now.plusHours(1), paidFixture = true),
+                expires = now.plusHours(1), pickupCode = "4821"),
             record("DEMO-MAIN-NEW", listOf(mainRevision), QuoteStage.SUBMITTED,
                 now.minusHours(1), sellerId = PreviewCatalog.MAIN_ID),
         )
     }
 }
 
-object DevelopmentSellerOperations : BulkOperationsRepository by DemoBulkScenario()
+private val localScenario = DemoBulkScenario()
+object DevelopmentSellerOperations : BulkOperationsRepository by localScenario {
+    fun applyServer(newRecords: List<BulkRequestRecord>) = localScenario.applyServer(newRecords)
+    // The old in-memory transition engine is retained for unit tests, but the installed
+    // connected demo must never acknowledge a local-only commerce mutation as server state.
+    override fun submitLocalDemo(draft: BulkDraft, actor: AuthorizedIdentity?, now: LocalDateTime) =
+        DemoTransitionResult.INVALID_STATE to null
+    override fun propose(reference: String, expectedVersion: Int, proposal: BulkProposal,
+                         actor: AuthorizedIdentity?, now: LocalDateTime) = DemoTransitionResult.INVALID_STATE
+    override fun acceptSpecial(reference: String, expectedVersion: Int, actor: AuthorizedIdentity?,
+                               now: LocalDateTime) = DemoTransitionResult.INVALID_STATE
+    override fun rejectSpecial(reference: String, expectedVersion: Int, actor: AuthorizedIdentity?,
+                               now: LocalDateTime) = DemoTransitionResult.INVALID_STATE
+    override fun sellerApprove(reference: String, expectedVersion: Int, actor: AuthorizedIdentity?,
+                               now: LocalDateTime) = DemoTransitionResult.INVALID_STATE
+    override fun customerApprove(reference: String, expectedVersion: Int, actor: AuthorizedIdentity?,
+                                 now: LocalDateTime) = DemoTransitionResult.INVALID_STATE
+    override fun withdraw(reference: String, actor: AuthorizedIdentity?) = DemoTransitionResult.INVALID_STATE
+    override fun reject(reference: String, actor: AuthorizedIdentity?) = DemoTransitionResult.INVALID_STATE
+    override fun expire(reference: String, now: LocalDateTime) = DemoTransitionResult.INVALID_STATE
+}

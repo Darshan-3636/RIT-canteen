@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,6 +36,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextAlign
 import edu.msrit.canteen.R
@@ -68,34 +68,6 @@ fun RitBrandHeader(
                 contentAlignment = Alignment.Center,
             ) { RitIcon(RitIconKind.Person, colors.foreground) }
         }
-    }
-}
-
-@Composable
-fun RitQuickEntry(
-    title: String,
-    subtitle: String,
-    icon: RitIconKind,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    val colors = RitThemeTokens.colors
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(RitRadii.card))
-            .background(colors.warmCard)
-            .clickable(role = Role.Button, onClick = onClick)
-            .heightIn(min = 132.dp)
-            .padding(horizontal = 5.dp, vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(Modifier.size(40.dp).clip(CircleShape).background(colors.accent), contentAlignment = Alignment.Center) {
-            RitIcon(icon, colors.onAccent, size = 23.dp)
-        }
-        Spacer(Modifier.height(6.dp))
-        RitText(title, RitType.quickTitle.copy(textAlign = TextAlign.Center), modifier = Modifier.fillMaxWidth(), maxLines = 2)
-        Spacer(Modifier.height(2.dp))
-        RitText(subtitle, RitType.quickCaption.copy(textAlign = TextAlign.Center), colors.muted, modifier = Modifier.fillMaxWidth(), maxLines = 2)
     }
 }
 
@@ -196,6 +168,34 @@ enum class RitBottomItem(val label: String, val icon: RitIconKind) {
     Home("Home", RitIconKind.Home), Cart("Cart", RitIconKind.Cart), Orders("Orders", RitIconKind.Orders), Favourites("Saved", RitIconKind.Heart), Profile("Profile", RitIconKind.Person)
 }
 
+enum class SellerBottomItem(val label: String, val icon: RitIconKind) {
+    Dashboard("Dashboard", RitIconKind.Home), Orders("Orders", RitIconKind.Orders),
+    Menu("Menu", RitIconKind.Food), Insights("Insights", RitIconKind.Bulk),
+    Account("Account", RitIconKind.Person)
+}
+
+@Composable
+fun SellerBottomNavigation(selected: SellerBottomItem, onSelect: (SellerBottomItem) -> Unit,
+                           modifier: Modifier = Modifier, showInsights: Boolean = true) {
+    val colors = RitThemeTokens.colors
+    Row(modifier.fillMaxWidth().border(1.dp, colors.outline).background(colors.surface)
+        .padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+        SellerBottomItem.entries.filter { showInsights || it != SellerBottomItem.Insights }.forEach { item ->
+            val active = item == selected
+            Column(Modifier.weight(1f).heightIn(min = 54.dp)
+                .clickable(role = Role.Tab) { onSelect(item) }
+                .testTag("seller_bottom_${item.name.lowercase()}")
+                .semantics { stateDescription = if (active) "Selected" else "Not selected" },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center) {
+                RitIcon(item.icon, if (active) colors.accent else colors.muted, size = 23.dp)
+                Spacer(Modifier.height(2.dp))
+                RitText(item.label, RitType.small, if (active) colors.accent else colors.muted)
+            }
+        }
+    }
+}
+
 @Composable
 fun RitBottomNavigation(selected: RitBottomItem, onSelect: (RitBottomItem) -> Unit, modifier: Modifier = Modifier,
                         cartCount: Int = 0) {
@@ -208,6 +208,7 @@ fun RitBottomNavigation(selected: RitBottomItem, onSelect: (RitBottomItem) -> Un
             val active = item == selected
             Column(
                 modifier = Modifier.weight(1f).heightIn(min = 54.dp).clickable(role = Role.Tab) { onSelect(item) }
+                    .testTag("customer_bottom_${item.name.lowercase()}")
                     .semantics { stateDescription = if (active) "Selected" else "Not selected" },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,

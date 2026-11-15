@@ -22,7 +22,8 @@ fun CustomerUnavailableScreen(section: String, onBack: () -> Unit) {
         "orders" -> "Orders"
         "favourites" -> "Favourites"
         "profile" -> "Profile"
-        "access" -> "Mock access required"
+        "access" -> "Sign in required"
+        "payment" -> "Payment unavailable"
         else -> "Coming later"
     }
     Column(Modifier.fillMaxSize().background(RitThemeTokens.colors.background)) {
@@ -30,13 +31,14 @@ fun CustomerUnavailableScreen(section: String, onBack: () -> Unit) {
         Column(Modifier.padding(20.dp)) {
             RitText(title, RitType.heading)
             Spacer(Modifier.height(12.dp))
-            RitMessageCard("Not available in this preview", when (section) {
-                "bulk" -> "Group request and negotiation screens belong to the next development stage. No request can be submitted here."
-                "orders" -> "There is no connected order history yet. This preview has not placed any orders."
-                "favourites" -> "Saving favourites is planned for a later stage; nothing is stored by this preview."
-                "profile" -> "A verified customer account and profile require the email authentication service."
-                "access" -> "Select the Customer mock login in the debug Testing Hub. This is not a real account session."
-                else -> "This feature is not connected yet."
+            RitMessageCard("Not available", when (section) {
+                "bulk" -> "Bulk requests aren't available right now."
+                "orders" -> "You haven't placed any orders yet."
+                "favourites" -> "Favourites aren't available right now."
+                "profile" -> "Sign in to see your profile."
+                "access" -> "Sign in with your customer account to continue."
+                "payment" -> "Payment isn't available right now. Please try again later."
+                else -> "This isn't available right now."
             })
         }
     }

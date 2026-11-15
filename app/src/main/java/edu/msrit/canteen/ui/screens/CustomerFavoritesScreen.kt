@@ -14,13 +14,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import edu.msrit.canteen.BuildConfig
 import edu.msrit.canteen.customer.CustomerCatalogSource
 import edu.msrit.canteen.customer.FavoritesRepository
+import edu.msrit.canteen.customer.DevelopmentFavoritesRepository
 import edu.msrit.canteen.customer.PreviewCatalog
 import edu.msrit.canteen.customer.visibleItems
 import edu.msrit.canteen.ui.components.CatalogFoodCard
 import edu.msrit.canteen.ui.components.CatalogHeader
-import edu.msrit.canteen.ui.components.CatalogSellerCard
 import edu.msrit.canteen.ui.components.RitBottomItem
 import edu.msrit.canteen.ui.components.RitBottomNavigation
 import edu.msrit.canteen.ui.components.RitEmptyState
@@ -42,20 +43,20 @@ fun CustomerFavoritesScreen(
 ) {
     val colors = RitThemeTokens.colors
     val itemIds = favorites.itemIds(customerId)
-    val sellerIds = favorites.sellerIds(customerId)
     val foods = catalog.visibleItems().filter { it.id in itemIds }
-    val sellers = catalog.sellers.filter { it.id in sellerIds }
     Column(Modifier.fillMaxSize().background(colors.background).testTag("favorites_screen")) {
         CatalogHeader("Favourites", onBack)
         Column(Modifier.padding(horizontal = 20.dp)) {
             RitText("Saved for later", RitType.heading)
-            RitText("Only on this device in the debug preview.", RitType.body, colors.muted)
+            RitText("Food you've saved.", RitType.body, colors.muted)
             Spacer(Modifier.height(10.dp))
-            RitStatusIndicator("Demo Customer favourites · not account-synced")
+            if (BuildConfig.RIT_CLOUD_DEMO) (favorites as? DevelopmentFavoritesRepository)?.cloudError?.let {
+                RitText(it, RitType.body, colors.accent, Modifier.testTag("favorites_server_error"))
+            }
         }
-        if (foods.isEmpty() && sellers.isEmpty()) {
+        if (foods.isEmpty()) {
             Column(Modifier.weight(1f).testTag("favorites_empty")) {
-                RitEmptyState("No favourites yet", "Save a food or seller while browsing the preview catalog.")
+                RitEmptyState("No favourites yet", "Tap the heart on any food to save it here.")
             }
         } else {
             LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -68,20 +69,9 @@ fun CustomerFavoritesScreen(
                             isFavorite = true, onFavoriteClick = { favorites.toggleItem(customerId, food.id) })
                     }
                 }
-                if (sellers.isNotEmpty()) {
-                    item { RitText("Sellers", RitType.title, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) }
-                    items(sellers, key = { "seller:${it.id}" }) { seller ->
-                        val categories = catalog.categories.filter { it.id in seller.categoryIds }.joinToString(" · ") { it.name }
-                        Column(Modifier.padding(horizontal = 20.dp, vertical = 5.dp).testTag("favorite_saved_seller_${seller.id}")) {
-                            CatalogSellerCard(seller, categories, { onSeller(seller.id) },
-                                isFavorite = true, onFavoriteClick = { favorites.toggleSeller(customerId, seller.id) })
-                        }
-                    }
-                }
                 val staleItems = itemIds - foods.map { it.id }.toSet()
-                val staleSellers = sellerIds - sellers.map { it.id }.toSet()
-                if (staleItems.isNotEmpty() || staleSellers.isNotEmpty()) item {
-                    RitText("Some saved entries are no longer available in this preview catalog.", RitType.small,
+                if (staleItems.isNotEmpty()) item {
+                    RitText("Some saved entries are no longer available in the current catalog.", RitType.small,
                         colors.muted, Modifier.padding(20.dp).fillMaxWidth())
                 }
             }

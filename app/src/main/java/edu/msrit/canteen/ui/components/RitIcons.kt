@@ -14,7 +14,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-enum class RitIconKind { Home, Cart, Orders, Heart, Person, Search, Filter, Food, Bulk, Store, Arrow, Back, Mail, Close }
+enum class RitIconKind { Home, Cart, Orders, Heart, Person, Search, Filter, Food, Bulk, Store, Arrow, Back, Mail, Close, Eye, EyeOff }
 
 @Composable
 fun RitIcon(kind: RitIconKind, tint: Color, modifier: Modifier = Modifier, size: Dp = 24.dp) {
@@ -83,6 +83,11 @@ fun RitIcon(kind: RitIconKind, tint: Color, modifier: Modifier = Modifier, size:
                     moveTo(3f, 6f); lineTo(12f, 13f); lineTo(21f, 6f)
                 }
                 RitIconKind.Close -> { line(5f, 5f, 19f, 19f); line(19f, 5f, 5f, 19f) }
+                RitIconKind.Eye, RitIconKind.EyeOff -> {
+                    path { moveTo(2f, 12f); quadraticTo(12f, 1f, 22f, 12f); quadraticTo(12f, 23f, 2f, 12f) }
+                    drawCircle(tint, 3f, Offset(12f, 12f), style = stroke)
+                    if (kind == RitIconKind.EyeOff) line(3f, 21f, 21f, 3f)
+                }
             }
         }
     }

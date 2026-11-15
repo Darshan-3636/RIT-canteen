@@ -1,6 +1,7 @@
 package edu.msrit.canteen.ui.components
 
 import androidx.compose.foundation.Image
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -18,7 +20,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,55 +37,147 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.net.URL
 import edu.msrit.canteen.R
 import edu.msrit.canteen.customer.Dietary
 import edu.msrit.canteen.customer.FoodKind
 import edu.msrit.canteen.customer.FoodPhoto
-import edu.msrit.canteen.customer.ItemEligibility
 import edu.msrit.canteen.customer.MenuCategory
 import edu.msrit.canteen.customer.MenuItem
 import edu.msrit.canteen.customer.Seller
 import edu.msrit.canteen.customer.SellerPhoto
-import edu.msrit.canteen.customer.itemEligibility
 import edu.msrit.canteen.ui.theme.RitRadii
 import edu.msrit.canteen.ui.theme.RitThemeTokens
 import edu.msrit.canteen.ui.theme.RitType
 
 @Composable
-fun CatalogHeader(title: String, onBack: () -> Unit) {
+fun CatalogHeader(title: String, onBack: (() -> Unit)?) {
     val colors = RitThemeTokens.colors
     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).background(colors.warmCard)
-            .clickable(role = Role.Button, onClick = onBack).semantics { contentDescription = "Back" }, contentAlignment = Alignment.Center) {
-            RitIcon(RitIconKind.Back, colors.foreground)
+        if (onBack != null) {
+            Box(Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).background(colors.warmCard)
+                .clickable(role = Role.Button, onClick = onBack).semantics { contentDescription = "Back" }, contentAlignment = Alignment.Center) {
+                RitIcon(RitIconKind.Back, colors.foreground)
+            }
+            Spacer(Modifier.width(12.dp))
         }
-        Spacer(Modifier.width(12.dp))
         RitText(title, RitType.title)
     }
 }
 
 @Composable
 fun CatalogCategories(categories: List<MenuCategory>, selectedId: String?, onSelect: (String?) -> Unit) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp)) {
-        item(key = "all") { RitChip("All", selectedId == null, { onSelect(null) }) }
+    LazyRow(modifier = Modifier.testTag("catalog_categories"), horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp)) {
+        item(key = "all") { RitChip("All", selectedId == null, { onSelect(null) }, Modifier.testTag("catalog_category_all")) }
         items(categories, key = { it.id }) { category ->
-            RitChip(category.name, selectedId == category.id, { onSelect(category.id) })
+            RitChip(category.name, selectedId == category.id, { onSelect(category.id) },
+                Modifier.testTag("catalog_category_${category.id}"))
         }
     }
 }
 
+@DrawableRes
+fun foodPhotoResource(photo: FoodPhoto?): Int? = when (photo) {
+    FoodPhoto.DOSA -> R.drawable.catalog_dosa
+    FoodPhoto.BIRYANI -> R.drawable.catalog_biryani
+    FoodPhoto.COFFEE -> R.drawable.catalog_coffee
+    FoodPhoto.IDLI -> R.drawable.food_idli
+    FoodPhoto.LEMON_RICE -> R.drawable.food_lemon_rice
+    FoodPhoto.WATER_BOTTLE -> R.drawable.food_water_bottle
+    FoodPhoto.PLAIN_DOSA -> R.drawable.demo_food_plain_dosa
+    FoodPhoto.SET_DOSA -> R.drawable.demo_food_set_dosa
+    FoodPhoto.RAVA_IDLI -> R.drawable.demo_food_rava_idli
+    FoodPhoto.VADA_SAMBAR -> R.drawable.demo_food_vada_sambar
+    FoodPhoto.VEN_PONGAL -> R.drawable.demo_food_ven_pongal
+    FoodPhoto.POORI_SAGU -> R.drawable.demo_food_poori_sagu
+    FoodPhoto.VEG_PULAO -> R.drawable.demo_food_veg_pulao
+    FoodPhoto.CURD_RICE -> R.drawable.demo_food_curd_rice
+    FoodPhoto.BISI_BELE_BATH -> R.drawable.demo_food_bisi_bele_bath
+    FoodPhoto.CHAPATI_MEAL -> R.drawable.demo_food_chapati_meal
+    FoodPhoto.VEG_THALI -> R.drawable.demo_food_veg_thali
+    FoodPhoto.TOMATO_RICE -> R.drawable.demo_food_tomato_rice
+    FoodPhoto.NORTH_LUNCH -> R.drawable.food_north_lunch
+    FoodPhoto.NORTH_SNACK -> R.drawable.food_north_snack
+    FoodPhoto.VEG_SAMOSA -> R.drawable.demo_food_veg_samosa
+    FoodPhoto.KHASTA_KACHORI -> R.drawable.demo_food_khasta_kachori
+    FoodPhoto.ALOO_PUFF -> R.drawable.demo_food_aloo_puff
+    FoodPhoto.VEG_CUTLET -> R.drawable.demo_food_veg_cutlet
+    FoodPhoto.ONION_PAKORA -> R.drawable.demo_food_onion_pakora
+    FoodPhoto.BHEL_PURI -> R.drawable.demo_food_bhel_puri
+    FoodPhoto.SEV_PURI -> R.drawable.demo_food_sev_puri
+    FoodPhoto.MASALA_PURI -> R.drawable.demo_food_masala_puri
+    FoodPhoto.PANEER_ROLL -> R.drawable.demo_food_paneer_roll
+    FoodPhoto.VEG_SANDWICH -> R.drawable.demo_food_veg_sandwich
+    FoodPhoto.GRILLED_CHEESE_SANDWICH -> R.drawable.demo_food_grilled_cheese_sandwich
+    FoodPhoto.CORN_CHAAT -> R.drawable.demo_food_corn_chaat
+    FoodPhoto.BREAD_PAKORA -> R.drawable.demo_food_bread_pakora
+    FoodPhoto.BATATA_VADA -> R.drawable.demo_food_batata_vada
+    FoodPhoto.VEG_MOMOS -> R.drawable.demo_food_veg_momos
+    FoodPhoto.MASALA_FRIES -> R.drawable.demo_food_masala_fries
+    FoodPhoto.GROUP_COFFEE -> R.drawable.food_corner_coffee
+    FoodPhoto.BISCUITS -> R.drawable.food_corner_biscuits
+    FoodPhoto.BAKERY_VEG_PUFF -> R.drawable.demo_food_bakery_veg_puff
+    FoodPhoto.BAKERY_PANEER_PUFF -> R.drawable.demo_food_bakery_paneer_puff
+    FoodPhoto.BAKERY_MUSHROOM_PUFF -> R.drawable.demo_food_bakery_mushroom_puff
+    FoodPhoto.BUTTER_CROISSANT -> R.drawable.demo_food_butter_croissant
+    FoodPhoto.CHOCOLATE_CROISSANT -> R.drawable.demo_food_chocolate_croissant
+    FoodPhoto.CINNAMON_ROLL -> R.drawable.demo_food_cinnamon_roll
+    FoodPhoto.BANANA_BREAD -> R.drawable.demo_food_banana_bread
+    FoodPhoto.GARLIC_BUN -> R.drawable.demo_food_garlic_bun
+    FoodPhoto.CHEESE_BUN -> R.drawable.demo_food_cheese_bun
+    FoodPhoto.BLUEBERRY_MUFFIN -> R.drawable.demo_food_blueberry_muffin
+    FoodPhoto.CHOCOLATE_MUFFIN -> R.drawable.demo_food_chocolate_muffin
+    FoodPhoto.FUDGE_BROWNIE -> R.drawable.demo_food_fudge_brownie
+    FoodPhoto.VANILLA_PASTRY -> R.drawable.demo_food_vanilla_pastry
+    FoodPhoto.EGGLESS_CHOCOLATE_CAKE -> R.drawable.demo_food_eggless_chocolate_cake
+    FoodPhoto.SHORTBREAD_COOKIES -> R.drawable.demo_food_shortbread_cookies
+    FoodPhoto.ALMOND_COOKIES -> R.drawable.demo_food_almond_cookies
+    FoodPhoto.JUICE_CARTON -> R.drawable.food_pantry_juice
+    FoodPhoto.PANTRY_WATER -> R.drawable.food_pantry_water
+    FoodPhoto.ORANGE_JUICE_BOTTLE -> R.drawable.demo_food_orange_juice_bottle
+    FoodPhoto.MANGO_JUICE_BOTTLE -> R.drawable.demo_food_mango_juice_bottle
+    FoodPhoto.APPLE_JUICE_BOTTLE -> R.drawable.demo_food_apple_juice_bottle
+    FoodPhoto.LEMON_ICED_TEA -> R.drawable.demo_food_lemon_iced_tea
+    FoodPhoto.COLD_COFFEE_BOTTLE -> R.drawable.demo_food_cold_coffee_bottle
+    FoodPhoto.COCONUT_WATER_PACK -> R.drawable.demo_food_coconut_water_pack
+    FoodPhoto.SALTED_LASSI_PACK -> R.drawable.demo_food_salted_lassi_pack
+    FoodPhoto.SPARKLING_WATER -> R.drawable.demo_food_sparkling_water
+    FoodPhoto.TRAIL_MIX -> R.drawable.demo_food_trail_mix
+    FoodPhoto.ROASTED_PEANUTS -> R.drawable.demo_food_roasted_peanuts
+    FoodPhoto.POTATO_CHIPS -> R.drawable.demo_food_potato_chips
+    FoodPhoto.BANANA_CHIPS -> R.drawable.demo_food_banana_chips
+    FoodPhoto.PANTRY_BISCUIT_PACK -> R.drawable.demo_food_pantry_biscuit_pack
+    FoodPhoto.GRANOLA_BAR -> R.drawable.demo_food_granola_bar
+    FoodPhoto.ENERGY_BAR -> R.drawable.demo_food_energy_bar
+    FoodPhoto.CRACKER_PACK -> R.drawable.demo_food_cracker_pack
+    null -> null
+}
+
+@DrawableRes
+fun sellerPhotoResource(photo: SellerPhoto?): Int? = when (photo) {
+    SellerPhoto.CAMPUS_CONTEXT -> R.drawable.rit_campus
+    SellerPhoto.MAIN_CANTEEN -> R.drawable.seller_main_canteen
+    SellerPhoto.NORTH_COUNTER -> R.drawable.seller_north_counter
+    SellerPhoto.COFFEE_CORNER -> R.drawable.seller_coffee_corner
+    SellerPhoto.CAMPUS_PANTRY -> R.drawable.seller_campus_pantry
+    null -> null
+}
+
 @Composable
-fun FoodPhotoContent(photo: FoodPhoto?, description: String, modifier: Modifier = Modifier, localUri: String? = null) {
+fun FoodPhotoContent(photo: FoodPhoto?, description: String, modifier: Modifier = Modifier,
+                     localUri: String? = null, remoteUrl: String? = null) {
     val colors = RitThemeTokens.colors
-    val bitmap = rememberLocalBitmap(localUri)
-    val image = when (photo) {
-        FoodPhoto.DOSA -> R.drawable.catalog_dosa
-        FoodPhoto.BIRYANI -> R.drawable.catalog_biryani
-        FoodPhoto.COFFEE -> R.drawable.catalog_coffee
-        null -> null
-    }
+    val localBitmap = rememberLocalBitmap(localUri)
+    val remoteBitmap = rememberRemoteBitmap(if (localBitmap == null) remoteUrl else null)
+    val bitmap = localBitmap ?: remoteBitmap
+    val image = foodPhotoResource(photo)
     if (bitmap != null) {
-        Image(bitmap.asImageBitmap(), contentDescription = "$description · locally selected demo image",
+        Image(bitmap.asImageBitmap(), contentDescription = description,
             modifier = modifier, contentScale = ContentScale.Crop)
     } else if (image != null) {
         Image(painterResource(image), contentDescription = description, modifier = modifier, contentScale = ContentScale.Crop)
@@ -91,14 +189,47 @@ fun FoodPhotoContent(photo: FoodPhoto?, description: String, modifier: Modifier 
 }
 
 @Composable
+private fun rememberRemoteBitmap(url: String?): android.graphics.Bitmap? {
+    var bitmap by remember(url) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    LaunchedEffect(url) {
+        bitmap = if (url == null) null else withContext(Dispatchers.IO) {
+            runCatching {
+                val connection = URL(url).openConnection().apply {
+                    connectTimeout = 4_000
+                    readTimeout = 6_000
+                }
+                connection.getInputStream().use { input -> input.readLimited(2 * 1024 * 1024)?.let {
+                    android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size)
+                } }
+            }.getOrNull()
+        }
+    }
+    return bitmap
+}
+
+private fun InputStream.readLimited(maxBytes: Int): ByteArray? {
+    val output = ByteArrayOutputStream()
+    val buffer = ByteArray(8192)
+    while (true) {
+        val count = read(buffer)
+        if (count < 0) break
+        if (output.size() + count > maxBytes) return null
+        output.write(buffer, 0, count)
+    }
+    return output.toByteArray().takeIf { it.isNotEmpty() }
+}
+
+@Composable
 fun SellerPhotoContent(photo: SellerPhoto?, modifier: Modifier = Modifier, localUri: String? = null) {
     val colors = RitThemeTokens.colors
     val bitmap = rememberLocalBitmap(localUri)
     if (bitmap != null) {
-        Image(bitmap.asImageBitmap(), contentDescription = "Locally selected demo seller image", modifier = modifier,
+        Image(bitmap.asImageBitmap(), contentDescription = "Canteen photo", modifier = modifier,
             contentScale = ContentScale.Crop)
-    } else if (photo == SellerPhoto.CAMPUS_CONTEXT) {
-        Image(painterResource(R.drawable.rit_campus), contentDescription = "RIT campus concept image, not a verified seller photo", modifier = modifier, contentScale = ContentScale.Crop)
+    } else if (photo != null) {
+        val image = requireNotNull(sellerPhotoResource(photo))
+        Image(painterResource(image), contentDescription = "Canteen photo",
+            modifier = modifier, contentScale = ContentScale.Crop)
     } else {
         Box(modifier.background(colors.warmCard), contentAlignment = Alignment.Center) {
             RitIcon(RitIconKind.Store, colors.accent, size = 36.dp)
@@ -130,12 +261,6 @@ fun CatalogPill(label: String, modifier: Modifier = Modifier) {
     }
 }
 
-fun eligibilityLabel(seller: Seller, item: MenuItem): String = when (itemEligibility(seller, item)) {
-    ItemEligibility.UNAVAILABLE -> "Unavailable"
-    ItemEligibility.BULK_ONLY -> if (item.kind == FoodKind.PACKAGED) "Packaged · bulk only" else "Bulk only"
-    ItemEligibility.FUTURE_INDIVIDUAL_AND_BULK -> "Individual planned · bulk"
-}
-
 fun dietaryLabel(item: MenuItem): String = when (item.dietary) {
     Dietary.VEGETARIAN -> "Vegetarian"
     Dietary.NON_VEGETARIAN -> "Non-vegetarian"
@@ -158,49 +283,65 @@ fun CatalogFavoriteButton(name: String, selected: Boolean, onClick: () -> Unit, 
 fun CatalogFoodCard(item: MenuItem, seller: Seller, onClick: () -> Unit, modifier: Modifier = Modifier,
                     isFavorite: Boolean = false, onFavoriteClick: (() -> Unit)? = null) {
     val colors = RitThemeTokens.colors
-    Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(RitRadii.card)).border(1.dp, colors.outline, RoundedCornerShape(RitRadii.card))
-            .background(colors.card).clickable(role = Role.Button, onClick = onClick).padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    val shape = RoundedCornerShape(RitRadii.card)
+    Column(
+        modifier.fillMaxWidth().clip(shape).border(1.dp, colors.outline, shape)
+            .background(colors.card).clickable(role = Role.Button, onClick = onClick),
     ) {
-        FoodPhotoContent(item.photo, item.name + " illustrative preview image", Modifier.size(104.dp).clip(RoundedCornerShape(14.dp)), item.localImageUri)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            RitText(item.name, RitType.label, maxLines = 1)
-            RitText("${seller.name} · ${dietaryLabel(item)}", RitType.small, colors.muted, maxLines = 1)
-            RitText(item.description, RitType.small, colors.muted, maxLines = 2)
-            Spacer(Modifier.height(6.dp))
-            RitText(item.price.display, RitType.label, colors.accent)
-            RitText(eligibilityLabel(seller, item), RitType.small, colors.muted, maxLines = 1)
+        Box(Modifier.fillMaxWidth().height(158.dp)) {
+            FoodPhotoContent(item.photo, item.name + " photo",
+                Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = RitRadii.card, topEnd = RitRadii.card)),
+                item.localImageUri, item.remoteImageUrl)
+            if (onFavoriteClick != null) {
+                Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+                    CatalogFavoriteButton(item.name, isFavorite, onFavoriteClick, "favorite_item_${item.id}")
+                }
+            }
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            if (onFavoriteClick != null) CatalogFavoriteButton(item.name, isFavorite, onFavoriteClick, "favorite_item_${item.id}")
-            RitIcon(RitIconKind.Arrow, colors.accent, size = 17.dp)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                RitText(item.name, RitType.title, maxLines = 1)
+                RitText("${seller.name} · ${dietaryLabel(item)}", RitType.small, colors.muted, maxLines = 1)
+                Spacer(Modifier.height(5.dp))
+                RitText(item.description, RitType.small, colors.muted, maxLines = 2)
+                if (item.availability == edu.msrit.canteen.customer.ItemAvailability.UNAVAILABLE)
+                    RitText("Unavailable", RitType.small, colors.accent)
+            }
+            Spacer(Modifier.width(12.dp))
+            RitText(item.price.display, RitType.label, colors.accent)
         }
     }
 }
 
 @Composable
 fun CatalogSellerCard(seller: Seller, categoryNames: String, onClick: () -> Unit,
-                      isFavorite: Boolean = false, onFavoriteClick: (() -> Unit)? = null) {
+                      isFavorite: Boolean = false, onFavoriteClick: (() -> Unit)? = null,
+                      modifier: Modifier = Modifier) {
     val colors = RitThemeTokens.colors
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(RitRadii.card)).border(1.dp, colors.outline, RoundedCornerShape(RitRadii.card))
-        .background(colors.card).clickable(role = Role.Button, onClick = onClick)) {
-        SellerPhotoContent(seller.photo, Modifier.fillMaxWidth().height(120.dp), seller.localImageUri)
+        .background(colors.card).clickable(role = Role.Button, onClick = onClick).then(modifier)) {
+        Box(Modifier.fillMaxWidth().height(158.dp)) {
+            SellerPhotoContent(seller.photo, Modifier.fillMaxSize(), seller.localImageUri)
+            CatalogPill(if (seller.isMainCanteen) "M.S.R.I.T Canteen" else "Campus seller",
+                Modifier.align(Alignment.BottomStart).padding(10.dp))
+        }
         Column(Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RitText(seller.name, RitType.title, modifier = Modifier.weight(1f))
                 if (onFavoriteClick != null) CatalogFavoriteButton(seller.name, isFavorite, onFavoriteClick, "favorite_seller_${seller.id}")
-                RitIcon(RitIconKind.Arrow, colors.accent, size = 18.dp)
             }
             Spacer(Modifier.height(3.dp))
-            RitText(seller.description, RitType.body, colors.muted, maxLines = 2)
-            Spacer(Modifier.height(8.dp))
-            CatalogPill(if (seller.capabilities.futureIndividualPrepared) "Individual prepared food planned + Bulk" else "Bulk orders only")
+            RitText(seller.description.replace(" for group requests.", "."), RitType.body, colors.muted, maxLines = 2)
             Spacer(Modifier.height(8.dp))
             RitText(categoryNames, RitType.small, colors.muted, maxLines = 2)
-            RitText(seller.hours?.display?.let { "Demo hours: $it · live status unverified" }
-                ?: "Hours and live availability not verified", RitType.small, colors.muted, maxLines = 2)
+            RitText(seller.hours?.display?.let { "Hours: $it" }
+                ?: "Hours not set", RitType.small, colors.muted, maxLines = 2)
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RitText("View Menu", RitType.label, colors.accent)
+                Spacer(Modifier.width(5.dp))
+                RitIcon(RitIconKind.Arrow, colors.accent, size = 17.dp)
+            }
         }
     }
 }

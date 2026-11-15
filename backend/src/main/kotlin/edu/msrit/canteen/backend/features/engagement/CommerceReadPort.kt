@@ -1,0 +1,40 @@
+package edu.msrit.canteen.backend.features.engagement
+
+import java.time.LocalDate
+
+/**
+ * Read-only seam to the Commerce module (Backend 2). The lead wires a real adapter at integration;
+ * until then [UnavailableCommerceReadPort] makes item validation fail closed and analytics report no data.
+ */
+interface CommerceReadPort {
+    fun lookupItem(itemId: String): ItemLookup
+
+    /** Demo bulk request counts in seller-local dates (inclusive), or null when no source is wired. */
+    fun demoRequestCounts(sellerId: String?, from: LocalDate?, to: LocalDate?): DemoRequestCounts?
+
+    /** Fictional successful individual checkouts; never verified payments or revenue. */
+    fun simulatedSales(sellerId: String?, from: LocalDate?, to: LocalDate?): SimulatedSales? = null
+
+    /** PhonePe UAT-only successes, separate from click-through simulations and verified revenue. */
+    fun sandboxSales(sellerId: String?, from: LocalDate?, to: LocalDate?): SimulatedSales? = null
+
+    /** Persisted demo checkout records, always kept separate from paid-order and revenue metrics. */
+    fun savedIndividualOrderCount(sellerId: String?, from: LocalDate?, to: LocalDate?): Int? = null
+
+    /** Current seller menu items marked unavailable, or null if the source is unavailable. */
+    fun unavailableItemCount(sellerId: String?): Int? = null
+}
+
+sealed interface ItemLookup {
+    data class Found(val sellerId: String) : ItemLookup
+    data object Missing : ItemLookup
+    data object Unavailable : ItemLookup
+}
+
+data class DemoRequestCounts(val total: Int, val byStatus: Map<String, Int>)
+data class SimulatedSales(val orderCount: Int, val totalPaise: Long)
+
+object UnavailableCommerceReadPort : CommerceReadPort {
+    override fun lookupItem(itemId: String): ItemLookup = ItemLookup.Unavailable
+    override fun demoRequestCounts(sellerId: String?, from: LocalDate?, to: LocalDate?): DemoRequestCounts? = null
+}
