@@ -108,7 +108,6 @@ fun SellerDailyOperationsOverview(
     onOpenIndividual: (() -> Unit)? = null,
     onVerifyPickup: (() -> Unit)? = null,
     onOpenHours: (() -> Unit)? = null,
-    onOpenTeam: (() -> Unit)? = null,
     onOpenPromotions: (() -> Unit)? = null,
 ) {
     val colors = RitThemeTokens.colors
@@ -256,13 +255,11 @@ fun SellerDailyOperationsOverview(
                 }
             }
 
-            if (onOpenHours != null || onOpenTeam != null || onOpenPromotions != null) item {
+            if (onOpenHours != null || onOpenPromotions != null) item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     RitText("Quick management", RitType.title)
                     if (onOpenHours != null) RitSecondaryButton("Hours & closures", onOpenHours,
                         Modifier.fillMaxWidth().testTag("seller_dashboard_hours"))
-                    if (onOpenTeam != null) RitSecondaryButton("Team & permissions", onOpenTeam,
-                        Modifier.fillMaxWidth().testTag("seller_dashboard_team"))
                     if (onOpenPromotions != null) RitSecondaryButton("Promotions", onOpenPromotions,
                         Modifier.fillMaxWidth().testTag("seller_dashboard_promotions"))
                 }

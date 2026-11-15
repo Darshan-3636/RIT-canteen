@@ -181,12 +181,12 @@ fun CustomerProfileEditScreen(repo: CustomerAccountRepository, userId: String?, 
     }
     val colors = RitThemeTokens.colors
     CustomerShell("Edit profile", "customer_profile_edit", onBack) {
-        RitText("Profile details are saved on the local backend. Email and seller/admin roles cannot be changed here.",
+        RitText("Your email can't be changed here.",
             RitType.body, colors.muted)
         Spacer(Modifier.height(16.dp))
         CustomerAvatar(original.copy(fullName = name, photoUri = photoUri))
         Spacer(Modifier.height(10.dp))
-        RitSecondaryButton("Choose local photograph", { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        RitSecondaryButton("Choose photo", { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
             Modifier.fillMaxWidth())
         Spacer(Modifier.height(16.dp))
         RitTextField(name, { name = it; message = null }, "Full name", "Your name", Modifier.fillMaxWidth(), inputTag = "edit_profile_name")
@@ -212,7 +212,7 @@ fun CustomerProfileEditScreen(repo: CustomerAccountRepository, userId: String?, 
                 val result = withContext(Dispatchers.IO) { DebugCustomerAccountApi.updateProfile(updated) }
                 if (result.profile != null) {
                     repo.updateProfile(result.profile.copy(photoUri = photoUri), userId)
-                    message = "Saved on local backend. Photo remains on this device."
+                    message = if (photoUri != null) "Profile saved. Your photo is only shown on this phone." else "Profile saved."
                 } else message = result.error ?: "Profile update failed."
             }
         }, Modifier.fillMaxWidth().testTag("profile_save"))

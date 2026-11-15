@@ -1072,8 +1072,6 @@ fun RitAppNavigation(appearance: AppearancePreference,
                         onVerifyPickup = null,
                         onOpenHours = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "hours.edit")))
                             ({ navController.navigate(Route.SellerManageHours) }) else null,
-                        onOpenTeam = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "employees.manage")))
-                            ({ navController.navigate(Route.SellerManageEmployees) }) else null,
                         onOpenPromotions = if (DevelopmentPreviewAccess.allows(ProtectedArea.Seller(sellerId, "promotions.manage")))
                             ({ navController.navigate(Route.SellerManagePromotions) }) else null)
                 } }
