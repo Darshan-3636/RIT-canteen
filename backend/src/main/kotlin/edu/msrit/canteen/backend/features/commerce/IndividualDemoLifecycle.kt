@@ -137,13 +137,11 @@ internal fun simulateIndividualPayment(context: BackendContext, principal: Authe
     loadDemoIndividual(db, id, true)!!
 }
 
-/** Demo seller processing has no real fulfillment or financial consequence. */
+/** Seller fulfilment of a paid individual order: Ready, then handed over with the customer's PIN. */
 internal fun transitionIndividualDemo(context: BackendContext, principal: AuthenticatedPrincipal,
                                       sellerId: String, id: UUID, next: String,
                                       pickupCode: String?): IndividualDemoOrderDto =
     context.transaction { db ->
-        if (context.config.environment !in setOf(RuntimeEnvironment.LOCAL, RuntimeEnvironment.CLOUD_DEMO))
-            throw CommerceFault(404, "DEMO_ONLY", "Demo fulfillment simulation is unavailable")
         if (!context.authorization.hasSellerCapability(db, principal, sellerId, "bulk.respond"))
             throw CommerceFault(403, "SELLER_CAPABILITY_REQUIRED", "This seller action is not permitted")
         val state = db.prepareStatement("""SELECT status,pickup_code FROM individual_demo_orders

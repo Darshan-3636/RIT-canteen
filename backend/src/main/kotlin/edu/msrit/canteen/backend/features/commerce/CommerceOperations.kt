@@ -182,6 +182,8 @@ internal fun approveBulk(context:BackendContext,principal:AuthenticatedPrincipal
         lock(c,id,sellerId)
     }
     if(sellerId==null) requireLiveUser(c,principal,context)
+    // Both sides already agreed to this version (e.g. the other side accepted first): accepting again changes nothing.
+    if(row.second=="AGREED_AWAITING_PAYMENT" && row.first==expected) return@transaction loadBulk(c,id)!!
     checkEditable(c,id,row,expected,context)
     val revision=c.prepareStatement("SELECT status,expires_at,pickup_kind FROM bulk_quote_revisions WHERE request_id=? AND version=?").use { s -> s.setObject(1,id);s.setInt(2,expected);s.executeQuery().use { r -> if(r.next()) Triple(r.getString(1),r.getTimestamp(2).toInstant(),r.getString(3)) else throw CommerceFault(404,"REVISION_NOT_FOUND","Current revision not found") } }
     if(!revision.second.isAfter(context.clock.instant())) { expire(c,id,expected);throw conflict("REQUEST_EXPIRED","This quote revision has expired") }

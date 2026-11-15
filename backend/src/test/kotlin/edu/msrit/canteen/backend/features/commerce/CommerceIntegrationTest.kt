@@ -420,6 +420,34 @@ class CommerceIntegrationTest {
         } } finally { cleanup(f) }
     }
 
+    @Test fun sellerCanReadyAndHandOverPaidOrdersInProduction() {
+        val f=fixture()
+        val production=f.context.copy(config=f.context.config.copy(environment=RuntimeEnvironment.PRODUCTION,demoSeedEnabled=false))
+        try { app(f,production) {
+            f.context.dataSource.connection.use { db ->
+                db.prepareStatement("INSERT INTO seller_memberships(id,user_id,seller_id,role) VALUES (?,?,?,'OWNER')").use { q ->
+                    q.setObject(1,UUID.randomUUID());q.setObject(2,f.seller.user);q.setString(3,"main-canteen");q.executeUpdate()
+                }
+            }
+            val created=client.post("/api/v1/me/individual-demo-orders") {
+                header(HttpHeaders.Authorization,"Bearer ${f.customer.token}")
+                contentType(ContentType.Application.Json);setBody("""{"lines":[{"itemId":"masala-dosa","quantity":1}]}""")
+            }
+            assertEquals(HttpStatusCode.Created,created.status)
+            val id=Regex(""""id":"([^"]+)"""").find(created.bodyAsText())!!.groupValues[1]
+            val pin=Regex(""""pickupCode":"([0-9]{4})"""").find(created.bodyAsText())!!.groupValues[1]
+            // Paid by the payment provider (stand-in for its confirmation).
+            f.context.dataSource.connection.use { db -> db.prepareStatement("UPDATE individual_demo_orders SET status='DEMO_PAYMENT_SIMULATED' WHERE id=?").use { it.setObject(1,UUID.fromString(id));assertEquals(1,it.executeUpdate()) } }
+            suspend fun move(status:String,code:String?=null)=client.post("/api/v1/sellers/main-canteen/individual-demo-orders/$id/demo-status") {
+                header(HttpHeaders.Authorization,"Bearer ${f.seller.token}");contentType(ContentType.Application.Json)
+                setBody("""{"status":"$status","pickupCode":${if(code==null) "null" else "\"$code\""}}""")
+            }
+            assertEquals(HttpStatusCode.OK,move("DEMO_READY").status)
+            val done=move("DEMO_COMPLETED",pin)
+            assertEquals(HttpStatusCode.OK,done.status);assertTrue(done.bodyAsText().contains("\"status\":\"DEMO_COMPLETED\""))
+        } } finally { cleanup(f) }
+    }
+
     @Test fun bulkRequestIdempotencyRevisionApprovalsAndSellerAuthorizationAreAuthoritative() {
         val f=fixture()
         try { app(f) {
